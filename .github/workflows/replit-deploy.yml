@@ -1,0 +1,100 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  REUSABLE: Replit Deployment                                   ║
+# ║  Triggers a Replit deploy hook for any environment             ║
+# ║                                                                ║
+# ║  Required repo secrets:                                       ║
+# ║    REPLIT_DEPLOY_URL  — Replit deploy webhook URL              ║
+# ║    REPLIT_API_KEY     — (optional) Replit API key              ║
+# ╚══════════════════════════════════════════════════════════════════╝
+name: "Reusable: Replit Deploy"
+
+on:
+  workflow_call:
+    inputs:
+      system-name:
+        required: true
+        type: string
+        description: "System name for display"
+      environment:
+        required: true
+        type: string
+        description: "Deployment environment (test|uat|production)"
+      branch:
+        required: true
+        type: string
+        description: "Branch to deploy (test|uat|main)"
+    secrets:
+      REPLIT_DEPLOY_URL:
+        required: false
+        description: "Replit deploy webhook URL"
+      REPLIT_API_KEY:
+        required: false
+        description: "Replit API key"
+    outputs:
+      deployment_url:
+        description: "Replit deployment URL"
+        value: ${{ jobs.replit-deploy.outputs.deployment_url }}
+
+jobs:
+  replit-deploy:
+    name: "Deploy to Replit (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Replit (${{ inputs.environment }})
+        id: deploy
+        env:
+          REPLIT_DEPLOY_URL: ${{ secrets.REPLIT_DEPLOY_URL }}
+          REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
+        run: |
+          ENV_UPPER=$(echo "${{ inputs.environment }}" | tr '[:lower:]' '[:upper:]')
+
+          echo "╔══════════════════════════════════════════════╗"
+          echo "║   REPLIT DEPLOYMENT — ${ENV_UPPER}"
+          echo "╠══════════════════════════════════════════════╣"
+          echo "║ System:      ${{ inputs.system-name }}"
+          echo "║ Environment: ${{ inputs.environment }}"
+          echo "║ Branch:      ${{ inputs.branch }}"
+          echo "║ Commit:      ${{ github.sha }}"
+          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "╚══════════════════════════════════════════════╝"
+
+          if [ -z "${REPLIT_DEPLOY_URL}" ]; then
+            echo "⚠️ REPLIT_DEPLOY_URL secret not set. Skipping Replit deploy."
+            echo "deployment_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Build payload — include environment for production deploys
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            PAYLOAD="{\"branch\":\"${{ inputs.branch }}\",\"commit\":\"${{ github.sha }}\",\"environment\":\"production\"}"
+          else
+            PAYLOAD="{\"branch\":\"${{ inputs.branch }}\",\"commit\":\"${{ github.sha }}\"}"
+          fi
+
+          # Trigger Replit deployment via deploy hook
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${REPLIT_DEPLOY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "${PAYLOAD}" 2>&1 || true)
+
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -n 1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+
+          if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "201" ] || [ "${HTTP_CODE}" = "204" ]; then
+            echo "✅ Replit deploy triggered successfully (HTTP ${HTTP_CODE})"
+            DEPLOY_URL=$(echo "${BODY}" | jq -r '.url // empty' 2>/dev/null || true)
+            if [ -z "${DEPLOY_URL}" ]; then
+              DEPLOY_URL="${REPLIT_DEPLOY_URL}"
+            fi
+          else
+            echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"
+            echo "Response body: ${BODY}"
+            DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+
+          echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+          echo "📍 Deployment URL: ${DEPLOY_URL}"
