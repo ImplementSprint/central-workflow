@@ -39,8 +39,9 @@ concurrency:
 
 jobs:
   master-orchestrator:
+    if: ${{ github.event.repository.name != 'central-workflow' }}
     name: "Call Unified Master Orchestrator"
-    uses: ImplementSprint/CICD-Fe-Multi/.github/workflows/master-pipeline-fe.yml@main
+    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@main
     with:
       pipeline_mode: single
       run_deploy: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_deploy == 'true' }}
