@@ -180,7 +180,7 @@ jobs:
               ACTIVE="${SYSTEMS_JSON}"
             else
               ACTIVE=$(echo "${SYSTEMS_JSON}" | jq -c --argjson changed "${CHANGED_JSON}" '
-                map(select(any($changed[]; startswith((.dir | gsub("^\\./"; "") ) + "/"))))
+                map(select(. as $system | any($changed[]; startswith((($system.dir | gsub("^\\./"; "")) + "/")))))
               ')
             fi
           fi
