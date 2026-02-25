@@ -156,7 +156,6 @@ jobs:
             IMAGE_URL="${CANCELLED_IMAGE_URL}"
           fi
 
-          # Convert common Google Drive share links to direct-view links for Discord embeds.
           DRIVE_ID=""
           if echo "${IMAGE_URL}" | grep -Eq '^https://drive\.google\.com/file/d/[^/]+/view'; then
             DRIVE_ID=$(echo "${IMAGE_URL}" | sed -E 's#^https://drive\.google\.com/file/d/([^/]+)/view.*#\1#')
@@ -276,7 +275,6 @@ jobs:
               --arg title '${{ steps.prepare.outputs.emoji }} ${{ steps.prepare.outputs.title }}' \
               --arg systems '${{ inputs['system-dir'] }}' \
               --arg pipeline '${{ inputs['pipeline-type'] }}' \
-              --arg branch '${{ github.ref_name }}' \
               --arg actor '${{ github.actor }}' \
               --arg workflow '${{ steps.prepare.outputs.workflow_name }}' \
               --arg attempt '${{ steps.prepare.outputs.run_attempt }}' \
@@ -305,7 +303,6 @@ jobs:
                         {name:"Systems", value:$systems, inline:false},
                         {name:"Pipeline", value:$pipeline, inline:true},
                         {name:"Environment", value:$envLabel, inline:true},
-                        {name:"Branch", value:$branch, inline:true},
                         {name:"Workflow", value:$workflow, inline:true},
                         {name:"Run Attempt", value:$attempt, inline:true},
                         {name:"Short SHA", value:$shortSha, inline:true},
