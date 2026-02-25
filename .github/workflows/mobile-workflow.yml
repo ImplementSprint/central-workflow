@@ -1,8 +1,8 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  ORCHESTRATOR: Mobile CI/CD Pipeline                             ║
 # ║  Composes reusable workflows: test → lint → governance →       ║
-# ║  security → gradle → detox                                     ║
-# ║  Includes optional SonarCloud quality scan stage               ║
+# ║  security → sonar → detox → gradle                             ║
+# ║  Includes optional SonarCloud quality scan stage              ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Mobile CI/CD Pipeline"
 
@@ -162,26 +162,10 @@ jobs:
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
 
-  # ── Stage 2: Android Gradle Build ───────────────────────────────────────
-  mobile-gradle:
-    name: "Mobile — Gradle Build"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar]
-    if: |
-      always() &&
-      inputs.enable-gradle &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    uses: ./.github/workflows/mobile-gradle.yml
-    with:
-      working-directory: ${{ inputs.system-dir }}
-      system-name: ${{ inputs.system-name }}
-      node-version: ${{ inputs.node-version }}
-      java-version: ${{ inputs.java-version }}
-      gradle-task: ${{ inputs.gradle-task }}
-
-  # ── Stage 3: Detox E2E ──────────────────────────────────────────────────
+  # ── Stage 2: Detox E2E ──────────────────────────────────────────────────
   mobile-detox:
     name: "Mobile — Detox E2E"
-    needs: [mobile-gradle]
+    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar]
     if: |
       always() &&
       inputs.enable-detox &&
@@ -194,3 +178,19 @@ jobs:
       java-version: ${{ inputs.java-version }}
       detox-build-command: ${{ inputs.detox-build-command }}
       detox-test-command: ${{ inputs.detox-test-command }}
+
+  # ── Stage 3: Android Gradle Build ───────────────────────────────────────
+  mobile-gradle:
+    name: "Mobile — Gradle Build"
+    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar, mobile-detox]
+    if: |
+      always() &&
+      inputs.enable-gradle &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-gradle.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      java-version: ${{ inputs.java-version }}
+      gradle-task: ${{ inputs.gradle-task }}
