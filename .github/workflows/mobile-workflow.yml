@@ -154,7 +154,7 @@ jobs:
       system-name: ${{ inputs.system-name }}
       sources-path: .
       tests-path: tests,e2e
-      sources-exclusions: tests/**,e2e/**
+      sources-exclusions: tests/**,e2e/**,coverage/**,android/**,ios/**,.expo/**,node_modules/**
       coverage-report-path: coverage/lcov.info
       coverage-artifact-name: ${{ format('{0}-coverage', inputs.system-name) }}
       quality-gate-wait: true
