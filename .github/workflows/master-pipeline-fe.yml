@@ -180,7 +180,14 @@ jobs:
               ACTIVE="${SYSTEMS_JSON}"
             else
               ACTIVE=$(echo "${SYSTEMS_JSON}" | jq -c --argjson changed "${CHANGED_JSON}" '
-                map(select(. as $system | any($changed[]; startswith((($system.dir | gsub("^\\./"; "")) + "/")))))
+                map(select(
+                  . as $system
+                  | (($system.dir | gsub("^\\./"; "")) as $dir
+                    | if ($dir == "" or $dir == ".")
+                      then ($changed | length) > 0
+                      else any($changed[]; startswith($dir + "/"))
+                      end)
+                ))
               ')
             fi
           fi
@@ -578,6 +585,7 @@ jobs:
           RESULTS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg result "${RESULT_VALUE}" 'reduce .[] as $s ({}; .[$s.name] = $result)')
 
           VERSIONS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c 'reduce .[] as $s ({}; .[$s.name] = "N/A")')
+          MISSING_TEST_TAG=false
           while IFS=$'\t' read -r NAME STREAM; do
             if [ -z "${NAME}" ]; then
               continue
@@ -591,11 +599,18 @@ jobs:
 
             TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
             if [ -z "${TAG}" ]; then
+              echo "❌ Missing required ${PREFIX}<version> tag for system '${NAME}'."
+              MISSING_TEST_TAG=true
               TAG="N/A"
             fi
 
             VERSIONS_JSON=$(echo "${VERSIONS_JSON}" | jq -c --arg name "${NAME}" --arg tag "${TAG}" '. + {($name):$tag}')
           done < <(echo "${SYSTEMS_JSON}" | jq -r '.[] | "\(.name)\t\(.version_stream // "global")"')
+
+          if [ "${MISSING_TEST_TAG}" = "true" ]; then
+            echo "❌ UAT→Main promotion blocked: run TEST tagging first for all active systems/streams."
+            exit 1
+          fi
 
           echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
           echo "results_json=${RESULTS_JSON}" >> "$GITHUB_OUTPUT"

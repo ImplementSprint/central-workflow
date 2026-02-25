@@ -135,7 +135,14 @@ jobs:
               ACTIVE="${SYSTEMS_JSON}"
             else
               ACTIVE=$(echo "${SYSTEMS_JSON}" | jq -c --argjson changed "${CHANGED_JSON}" '
-                map(select(. as $system | any($changed[]; startswith((($system.dir | gsub("^\\./"; "")) + "/")))))
+                map(select(
+                  . as $system
+                  | (($system.dir | gsub("^\\./"; "")) as $dir
+                    | if ($dir == "" or $dir == ".")
+                      then ($changed | length) > 0
+                      else any($changed[]; startswith($dir + "/"))
+                      end)
+                ))
               ')
             fi
           fi
