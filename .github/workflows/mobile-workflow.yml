@@ -1,8 +1,8 @@
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║  ORCHESTRATOR: Mobile CI/CD Pipeline                           ║
+# ║  ORCHESTRATOR: Mobile CI/CD Pipeline                             ║
 # ║  Composes reusable workflows: test → lint → governance →       ║
 # ║  security → gradle → detox                                     ║
-# ║  Includes optional SonarCloud quality scan stage              ║
+# ║  Includes optional SonarCloud quality scan stage               ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Mobile CI/CD Pipeline"
 
@@ -96,7 +96,6 @@ on:
       SONAR_ORGANIZATION:
         required: false
 
-
 jobs:
   # ── Stage 1A: Unit Tests (Jest) ─────────────────────────────────
   mobile-unit-tests:
@@ -148,7 +147,7 @@ jobs:
   mobile-sonar:
     name: "Mobile — SonarCloud Scan"
     needs: [mobile-unit-tests]
-    if: ${{ inputs.enable-sonar && secrets.SONAR_TOKEN != '' && secrets.SONAR_PROJECT_KEY != '' && secrets.SONAR_ORGANIZATION != '' }}
+    if: ${{ inputs.enable-sonar }}
     uses: ./.github/workflows/sonarcloud-scan.yml
     with:
       working-directory: ${{ inputs.system-dir }}
