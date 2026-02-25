@@ -152,8 +152,8 @@ jobs:
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
-      sources-path: src
-      tests-path: tests
+      sources-path: .
+      tests-path: tests,e2e
       coverage-report-path: coverage/lcov.info
       coverage-artifact-name: ${{ format('{0}-coverage', inputs.system-name) }}
       quality-gate-wait: true

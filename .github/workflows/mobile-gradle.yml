@@ -61,6 +61,17 @@ jobs:
             CI=1 npx expo prebuild --platform android
           fi
 
+      - name: Normalize Kotlin Version
+        run: |
+          if [ -f "android/gradle.properties" ]; then
+            if grep -q '^kotlinVersion=' android/gradle.properties; then
+              sed -i 's/^kotlinVersion=.*/kotlinVersion=2.0.21/' android/gradle.properties
+            else
+              echo 'kotlinVersion=2.0.21' >> android/gradle.properties
+            fi
+            echo "✅ kotlinVersion set to 2.0.21"
+          fi
+
       - name: Setup JDK ${{ inputs.java-version }}
         uses: actions/setup-java@v4
         with:
