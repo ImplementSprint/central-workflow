@@ -170,9 +170,14 @@ jobs:
 
             CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}" || true)
             CHANGED_JSON=$(printf "%s\n" "${CHANGED_FILES}" | sed '/^$/d' | jq -R . | jq -s .)
+            SYSTEM_DIRS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c '[.[] | (.dir // "" | gsub("^\\./"; "")) | select(. != "" and . != ".")]')
 
             SHARED_CHANGED=false
             if printf "%s\n" "${CHANGED_FILES}" | grep -Eq '^(\.github/|package\.json$|sonar-project\.properties$)'; then
+              SHARED_CHANGED=true
+            elif echo "${CHANGED_JSON}" | jq -e --argjson dirs "${SYSTEM_DIRS_JSON}" '
+              any(.[]; . as $file | ([$dirs[]? | select($file | startswith(. + "/"))] | length) == 0)
+            ' >/dev/null; then
               SHARED_CHANGED=true
             fi
 
