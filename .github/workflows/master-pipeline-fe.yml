@@ -107,7 +107,18 @@ jobs:
           SYSTEMS_JSON="${SYSTEMS_JSON_VAR}"
 
           echo "${SYSTEMS_JSON}" | jq -e . >/dev/null
-          echo "${SYSTEMS_JSON}" | jq -e 'type == "array" and length > 0' >/dev/null
+
+          SYSTEMS_JSON_TYPE=$(echo "${SYSTEMS_JSON}" | jq -r 'type')
+          if [ "${SYSTEMS_JSON_TYPE}" = "object" ]; then
+            SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c '[.]')
+          elif [ "${SYSTEMS_JSON_TYPE}" = "array" ]; then
+            SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c .)
+          else
+            echo "❌ Systems JSON must be an object (single) or array (single/multi)."
+            exit 1
+          fi
+
+          echo "${SYSTEMS_JSON}" | jq -e 'length > 0' >/dev/null
           echo "${SYSTEMS_JSON}" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0) and (.image|type=="string" and length>0) and (.vercel_project_secret|type=="string" and length>0))' >/dev/null
 
           if [ -z "${PIPELINE_MODE}" ]; then
@@ -118,8 +129,6 @@ jobs:
               PIPELINE_MODE="single"
             fi
           fi
-
-          SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c .)
 
           SYSTEMS_LABEL=$(echo "${SYSTEMS_JSON}" | jq -r 'map(.name) | join(", ")')
 
