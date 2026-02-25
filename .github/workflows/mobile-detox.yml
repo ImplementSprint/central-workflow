@@ -58,7 +58,7 @@ jobs:
       - name: Ensure Android Native Project
         run: |
           if [ ! -d "android" ]; then
-            npx expo prebuild --platform android --non-interactive
+            CI=1 npx expo prebuild --platform android
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}

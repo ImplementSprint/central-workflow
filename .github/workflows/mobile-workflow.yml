@@ -2,7 +2,7 @@
 # ║  ORCHESTRATOR: Mobile CI/CD Pipeline                           ║
 # ║  Composes reusable workflows: test → lint → governance →       ║
 # ║  security → gradle → detox                                     ║
-# ║  SonarCloud runs once at the monorepo level (master-pipeline) ║
+# ║  Includes optional SonarCloud quality scan stage              ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Mobile CI/CD Pipeline"
 
@@ -43,6 +43,11 @@ on:
         type: boolean
         default: true
         description: "Run security scanning"
+      enable-sonar:
+        required: false
+        type: boolean
+        default: true
+        description: "Run SonarCloud scan"
       enable-governance:
         required: false
         type: boolean
@@ -85,6 +90,10 @@ on:
         description: "Detox test command"
     secrets:
       SONAR_TOKEN:
+        required: false
+      SONAR_PROJECT_KEY:
+        required: false
+      SONAR_ORGANIZATION:
         required: false
 
 
@@ -135,10 +144,29 @@ jobs:
       test-command: npx jest --coverage --verbose --ci --forceExit
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
+  # ── Stage 1E: SonarCloud Scan ─────────────────────────────────────────────
+  mobile-sonar:
+    name: "Mobile — SonarCloud Scan"
+    needs: [mobile-unit-tests]
+    if: ${{ inputs.enable-sonar && secrets.SONAR_TOKEN != '' && secrets.SONAR_PROJECT_KEY != '' && secrets.SONAR_ORGANIZATION != '' }}
+    uses: ./.github/workflows/sonarcloud-scan.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      sources-path: src
+      tests-path: tests
+      coverage-report-path: coverage/lcov.info
+      coverage-artifact-name: ${{ format('{0}-coverage', inputs.system-name) }}
+      quality-gate-wait: true
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+
   # ── Stage 2: Android Gradle Build ───────────────────────────────────────
   mobile-gradle:
     name: "Mobile — Gradle Build"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance]
+    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar]
     if: |
       always() &&
       inputs.enable-gradle &&
