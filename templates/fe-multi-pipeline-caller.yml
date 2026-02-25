@@ -8,23 +8,15 @@
 name: "Master Pipeline Caller — FE Multi"
 
 on:
+  push:
+    branches: [test, uat, main]
+  pull_request:
+    branches: [test, uat, main]
+  workflow_dispatch:
+    inputs:
+      run_deploy:
+        description: "Run deploy jobs"
         type: boolean
-  skip-if-central-workflow:
-    if: ${{ github.repository == 'ImplementSprint/central-workflow' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Skip workflow in central-workflow repo
-        run: echo "This workflow is not intended to run in the central-workflow repository."
-
-  master-orchestrator:
-    if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
-    name: "Call Master Orchestrator"
-    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe-multi.yml@main
-    with:
-      run_deploy: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_deploy == 'true' }}
-      run_promotion: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_promotion == 'true' }}
-      dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
-    secrets: inherit
         default: true
       run_promotion:
         description: "Run PR promotion jobs"
@@ -34,15 +26,6 @@ on:
         description: "Preview-only mode (skip deploy/tag push, print PR body)"
         type: boolean
         default: false
-
-jobs:
-  skip-if-central-workflow:
-    if: ${{ github.repository == 'ImplementSprint/central-workflow' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Skip workflow in central-workflow repo
-        run: echo "This workflow is not intended to run in the central-workflow repository."
-
 
 permissions:
   contents: write
@@ -55,6 +38,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  skip-if-central-workflow:
+    if: ${{ github.repository == 'ImplementSprint/central-workflow' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip workflow in central-workflow repo
+        run: echo "This workflow is not intended to run in the central-workflow repository."
+
   master-orchestrator:
     if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
     name: "Call Master Orchestrator"
