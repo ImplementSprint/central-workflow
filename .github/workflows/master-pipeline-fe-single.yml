@@ -55,10 +55,16 @@ jobs:
       - name: Resolve systems JSON
         id: resolve
         env:
-          SYSTEMS_JSON_VAR: ${{ vars.FE_SINGLE_SYSTEM_JSON }}
+          FE_SINGLE_SYSTEMS_JSON_VAR: ${{ vars.FE_SINGLE_SYSTEMS_JSON }}
+          FE_MULTI_SYSTEMS_JSON_VAR: ${{ vars.FE_MULTI_SYSTEMS_JSON }}
         run: |
+          SYSTEMS_JSON_VAR="${FE_SINGLE_SYSTEMS_JSON_VAR}"
           if [ -z "${SYSTEMS_JSON_VAR}" ]; then
-            echo "❌ Missing required repository variable FE_SINGLE_SYSTEM_JSON."
+            SYSTEMS_JSON_VAR="${FE_MULTI_SYSTEMS_JSON_VAR}"
+          fi
+
+          if [ -z "${SYSTEMS_JSON_VAR}" ]; then
+            echo "❌ Missing required repository variable FE_SINGLE_SYSTEMS_JSON (or FE_MULTI_SYSTEMS_JSON for backward compatibility)."
             exit 1
           fi
 
@@ -642,7 +648,7 @@ jobs:
       (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
     uses: ./.github/workflows/promotion.yml
     with:
-      pipeline-kind: multi
+      pipeline-kind: single
       direction: test-to-uat
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       deployment-urls-json: ${{ needs.prepare-promotion-test-payload.outputs.deployment_urls_json }}
@@ -671,7 +677,7 @@ jobs:
       (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
     uses: ./.github/workflows/promotion.yml
     with:
-      pipeline-kind: multi
+      pipeline-kind: single
       direction: uat-to-main
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       deployment-urls-json: ${{ needs.prepare-promotion-uat-payload.outputs.deployment_urls_json }}
@@ -739,7 +745,7 @@ jobs:
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
-      pipeline-kind: multi
+      pipeline-kind: single
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
       overall-result: ${{ needs.frontend.result }}
@@ -818,8 +824,8 @@ jobs:
     with:
       status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' && 'cancelled' || 'failure') }}
       system-dir: ${{ needs.active-systems.outputs.active_label }}
-      pipeline-type: FE Multi Master
-      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && 'Master FE multi pipeline reported failures.' || '' }}
+      pipeline-type: FE Single Master
+      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && 'Master FE single pipeline reported failures.' || '' }}
       deployment-url: ''
       deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-prod-payload.outputs.deployment_urls_json || (github.ref_name == 'uat' && needs.prepare-promotion-uat-payload.outputs.deployment_urls_json || (github.ref_name == 'test' && needs.prepare-promotion-test-payload.outputs.deployment_urls_json || '{}')) }}
       success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL != '' && vars.DISCORD_SUCCESS_IMAGE_URL || vars.DISCORD_SUCCESS }}
