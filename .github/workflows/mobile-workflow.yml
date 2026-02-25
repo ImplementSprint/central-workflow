@@ -1,6 +1,7 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  ORCHESTRATOR: Mobile CI/CD Pipeline                           ║
-# ║  Composes reusable workflows: test → lint → security → build  ║
+# ║  Composes reusable workflows: test → lint → governance →       ║
+# ║  security → gradle → detox                                     ║
 # ║  SonarCloud runs once at the monorepo level (master-pipeline) ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Mobile CI/CD Pipeline"
@@ -42,6 +43,11 @@ on:
         type: boolean
         default: true
         description: "Run security scanning"
+      enable-governance:
+        required: false
+        type: boolean
+        default: true
+        description: "Run governance checks"
       build-android:
         required: false
         type: boolean
@@ -52,6 +58,31 @@ on:
         type: string
         default: "assembleRelease"
         description: "Gradle build variant"
+      enable-gradle:
+        required: false
+        type: boolean
+        default: true
+        description: "Run Gradle Android build"
+      gradle-task:
+        required: false
+        type: string
+        default: "assembleDebug"
+        description: "Gradle task to execute"
+      enable-detox:
+        required: false
+        type: boolean
+        default: false
+        description: "Run Detox E2E tests"
+      detox-build-command:
+        required: false
+        type: string
+        default: "npx detox build --configuration android.emu.debug"
+        description: "Detox build command"
+      detox-test-command:
+        required: false
+        type: string
+        default: "npx detox test --configuration android.emu.debug --headless"
+        description: "Detox test command"
     secrets:
       SONAR_TOKEN:
         required: false
@@ -91,3 +122,48 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+
+  # ── Stage 1D: Governance Checks (parallel with tests/lint/security) ─────
+  mobile-governance:
+    name: "Mobile — Governance Checks"
+    if: ${{ inputs.enable-governance }}
+    uses: ./.github/workflows/governance-check.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      test-command: npx jest --coverage --verbose --ci --forceExit
+      coverage-threshold: ${{ inputs.coverage-threshold }}
+
+  # ── Stage 2: Android Gradle Build ───────────────────────────────────────
+  mobile-gradle:
+    name: "Mobile — Gradle Build"
+    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance]
+    if: |
+      always() &&
+      inputs.enable-gradle &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-gradle.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      java-version: ${{ inputs.java-version }}
+      gradle-task: ${{ inputs.gradle-task }}
+
+  # ── Stage 3: Detox E2E ──────────────────────────────────────────────────
+  mobile-detox:
+    name: "Mobile — Detox E2E"
+    needs: [mobile-gradle]
+    if: |
+      always() &&
+      inputs.enable-detox &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-detox.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      java-version: ${{ inputs.java-version }}
+      detox-build-command: ${{ inputs.detox-build-command }}
+      detox-test-command: ${{ inputs.detox-test-command }}
