@@ -33,6 +33,22 @@ on:
         description: "Preview-only mode (skip deploy/tag push, print PR body)"
         type: boolean
         default: false
+      systems_json_override:
+        description: "Optional systems JSON override (advanced; used by FE single wrapper)"
+        type: string
+        default: ""
+      pipeline_kind:
+        description: "Pipeline kind for downstream reusable jobs (single or multi)"
+        type: string
+        default: "multi"
+      pipeline_type_label:
+        description: "Pipeline label for notifications"
+        type: string
+        default: "FE Multi Master"
+      pipeline_error_details:
+        description: "Failure detail text for notifications"
+        type: string
+        default: "Master FE multi pipeline reported failures."
 
 permissions:
   contents: write
@@ -55,7 +71,7 @@ jobs:
       - name: Resolve systems JSON
         id: resolve
         env:
-          SYSTEMS_JSON_VAR: ${{ vars.FE_MULTI_SYSTEMS_JSON }}
+          SYSTEMS_JSON_VAR: ${{ (github.event_name == 'workflow_call' && inputs.systems_json_override != '') && inputs.systems_json_override || vars.FE_MULTI_SYSTEMS_JSON }}
         run: |
           if [ -z "${SYSTEMS_JSON_VAR}" ]; then
             echo "❌ Missing required repository variable FE_MULTI_SYSTEMS_JSON."
@@ -642,7 +658,7 @@ jobs:
       (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
     uses: ./.github/workflows/promotion.yml
     with:
-      pipeline-kind: multi
+      pipeline-kind: ${{ inputs.pipeline_kind }}
       direction: test-to-uat
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       deployment-urls-json: ${{ needs.prepare-promotion-test-payload.outputs.deployment_urls_json }}
@@ -671,7 +687,7 @@ jobs:
       (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
     uses: ./.github/workflows/promotion.yml
     with:
-      pipeline-kind: multi
+      pipeline-kind: ${{ inputs.pipeline_kind }}
       direction: uat-to-main
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       deployment-urls-json: ${{ needs.prepare-promotion-uat-payload.outputs.deployment_urls_json }}
@@ -739,7 +755,7 @@ jobs:
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
-      pipeline-kind: multi
+      pipeline-kind: ${{ inputs.pipeline_kind }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
       overall-result: ${{ needs.frontend.result }}
@@ -818,8 +834,8 @@ jobs:
     with:
       status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' && 'cancelled' || 'failure') }}
       system-dir: ${{ needs.active-systems.outputs.active_label }}
-      pipeline-type: FE Multi Master
-      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && 'Master FE multi pipeline reported failures.' || '' }}
+      pipeline-type: ${{ inputs.pipeline_type_label }}
+      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && inputs.pipeline_error_details || '' }}
       deployment-url: ''
       deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-prod-payload.outputs.deployment_urls_json || (github.ref_name == 'uat' && needs.prepare-promotion-uat-payload.outputs.deployment_urls_json || (github.ref_name == 'test' && needs.prepare-promotion-test-payload.outputs.deployment_urls_json || '{}')) }}
       success-image-url: ${{ vars.JED_SUCCESS_IMAGE_URL }}

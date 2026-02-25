@@ -7,6 +7,11 @@ on:
     branches: [test, uat, main]
   workflow_dispatch:
     inputs:
+      pipeline_mode:
+        description: "Pipeline mode (auto|single|multi)"
+        type: choice
+        options: [auto, single, multi]
+        default: auto
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -21,6 +26,10 @@ on:
         default: false
   workflow_call:
     inputs:
+      pipeline_mode:
+        description: "Pipeline mode (auto|single|multi)"
+        type: string
+        default: auto
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -51,20 +60,47 @@ jobs:
     outputs:
       systems_json: ${{ steps.resolve.outputs.systems_json }}
       systems_label: ${{ steps.resolve.outputs.systems_label }}
+      pipeline_mode: ${{ steps.resolve.outputs.pipeline_mode }}
     steps:
       - name: Resolve systems JSON
         id: resolve
         env:
           FE_SINGLE_SYSTEMS_JSON_VAR: ${{ vars.FE_SINGLE_SYSTEMS_JSON }}
           FE_MULTI_SYSTEMS_JSON_VAR: ${{ vars.FE_MULTI_SYSTEMS_JSON }}
+          REQUESTED_PIPELINE_MODE: ${{ inputs.pipeline_mode }}
         run: |
-          SYSTEMS_JSON_VAR="${FE_SINGLE_SYSTEMS_JSON_VAR}"
-          if [ -z "${SYSTEMS_JSON_VAR}" ]; then
-            SYSTEMS_JSON_VAR="${FE_MULTI_SYSTEMS_JSON_VAR}"
+          MODE_INPUT="${REQUESTED_PIPELINE_MODE}"
+          if [ -z "${MODE_INPUT}" ]; then
+            MODE_INPUT="auto"
+          fi
+
+          SYSTEMS_JSON_VAR=""
+          PIPELINE_MODE=""
+
+          if [ "${MODE_INPUT}" = "single" ]; then
+            if [ -n "${FE_SINGLE_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${FE_SINGLE_SYSTEMS_JSON_VAR}"
+            elif [ -n "${FE_MULTI_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${FE_MULTI_SYSTEMS_JSON_VAR}"
+            fi
+            PIPELINE_MODE="single"
+          elif [ "${MODE_INPUT}" = "multi" ]; then
+            if [ -n "${FE_MULTI_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${FE_MULTI_SYSTEMS_JSON_VAR}"
+            elif [ -n "${FE_SINGLE_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${FE_SINGLE_SYSTEMS_JSON_VAR}"
+            fi
+            PIPELINE_MODE="multi"
+          else
+            if [ -n "${FE_MULTI_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${FE_MULTI_SYSTEMS_JSON_VAR}"
+            elif [ -n "${FE_SINGLE_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${FE_SINGLE_SYSTEMS_JSON_VAR}"
+            fi
           fi
 
           if [ -z "${SYSTEMS_JSON_VAR}" ]; then
-            echo "❌ Missing required repository variable FE_SINGLE_SYSTEMS_JSON (or FE_MULTI_SYSTEMS_JSON for backward compatibility)."
+            echo "❌ Missing required repository variable FE_MULTI_SYSTEMS_JSON or FE_SINGLE_SYSTEMS_JSON."
             exit 1
           fi
 
@@ -74,12 +110,22 @@ jobs:
           echo "${SYSTEMS_JSON}" | jq -e 'type == "array" and length > 0' >/dev/null
           echo "${SYSTEMS_JSON}" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0) and (.image|type=="string" and length>0) and (.vercel_project_secret|type=="string" and length>0))' >/dev/null
 
+          if [ -z "${PIPELINE_MODE}" ]; then
+            SYSTEMS_COUNT=$(echo "${SYSTEMS_JSON}" | jq 'length')
+            if [ "${SYSTEMS_COUNT}" -gt 1 ]; then
+              PIPELINE_MODE="multi"
+            else
+              PIPELINE_MODE="single"
+            fi
+          fi
+
           SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c .)
 
           SYSTEMS_LABEL=$(echo "${SYSTEMS_JSON}" | jq -r 'map(.name) | join(", ")')
 
           echo "systems_json=${SYSTEMS_JSON}" >> "$GITHUB_OUTPUT"
           echo "systems_label=${SYSTEMS_LABEL}" >> "$GITHUB_OUTPUT"
+          echo "pipeline_mode=${PIPELINE_MODE}" >> "$GITHUB_OUTPUT"
 
   active-systems:
     name: "Detect Active Systems"
@@ -636,7 +682,7 @@ jobs:
 
   create-pr-to-uat:
     name: "Create PR → UAT"
-    needs: [frontend, sonarcloud, version-test, deploy-test, active-systems, prepare-promotion-test-payload]
+    needs: [systems-config, frontend, sonarcloud, version-test, deploy-test, active-systems, prepare-promotion-test-payload]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -648,7 +694,7 @@ jobs:
       (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
     uses: ./.github/workflows/promotion.yml
     with:
-      pipeline-kind: single
+      pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       direction: test-to-uat
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       deployment-urls-json: ${{ needs.prepare-promotion-test-payload.outputs.deployment_urls_json }}
@@ -666,7 +712,7 @@ jobs:
 
   create-pr-to-main:
     name: "Create PR → Main"
-    needs: [frontend, sonarcloud, deploy-uat, active-systems, prepare-promotion-uat-payload]
+    needs: [systems-config, frontend, sonarcloud, deploy-uat, active-systems, prepare-promotion-uat-payload]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -677,7 +723,7 @@ jobs:
       (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
     uses: ./.github/workflows/promotion.yml
     with:
-      pipeline-kind: single
+      pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       direction: uat-to-main
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       deployment-urls-json: ${{ needs.prepare-promotion-uat-payload.outputs.deployment_urls_json }}
@@ -741,11 +787,11 @@ jobs:
 
   pipeline-summary:
     name: "Pipeline Summary"
-    needs: [frontend, active-systems]
+    needs: [systems-config, frontend, active-systems]
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
-      pipeline-kind: single
+      pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
       overall-result: ${{ needs.frontend.result }}
@@ -818,19 +864,19 @@ jobs:
 
   notify-pipeline:
     name: "Notify Pipeline Status"
-    needs: [pipeline-summary, frontend, active-systems, auto-revert-on-failure, prepare-promotion-test-payload, prepare-promotion-uat-payload, prepare-notify-prod-payload]
+    needs: [systems-config, pipeline-summary, frontend, active-systems, auto-revert-on-failure, prepare-promotion-test-payload, prepare-promotion-uat-payload, prepare-notify-prod-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
       status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' && 'cancelled' || 'failure') }}
       system-dir: ${{ needs.active-systems.outputs.active_label }}
-      pipeline-type: FE Single Master
-      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && 'Master FE single pipeline reported failures.' || '' }}
+      pipeline-type: ${{ needs.systems-config.outputs.pipeline_mode == 'single' && 'FE Single Master' || 'FE Multi Master' }}
+      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && (needs.systems-config.outputs.pipeline_mode == 'single' && 'Master FE single pipeline reported failures.' || 'Master FE multi pipeline reported failures.') || '' }}
       deployment-url: ''
       deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-prod-payload.outputs.deployment_urls_json || (github.ref_name == 'uat' && needs.prepare-promotion-uat-payload.outputs.deployment_urls_json || (github.ref_name == 'test' && needs.prepare-promotion-test-payload.outputs.deployment_urls_json || '{}')) }}
-      success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL != '' && vars.DISCORD_SUCCESS_IMAGE_URL || vars.DISCORD_SUCCESS }}
-      failure-image-url: ${{ vars.DISCORD_FAIL_IMAGE_URL != '' && vars.DISCORD_FAIL_IMAGE_URL || vars.DISCORD_FAIL }}
-      cancelled-image-url: ${{ vars.DISCORD_CANCELLED_IMAGE_URL != '' && vars.DISCORD_CANCELLED_IMAGE_URL || vars.DISCORD_CANCELLED }}
+      success-image-url: ${{ vars.JED_SUCCESS_IMAGE_URL }}
+      failure-image-url: ${{ vars.JED_FAIL_IMAGE_URL }}
+      cancelled-image-url: ${{ vars.JED_CANCELLED_IMAGE_URL }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

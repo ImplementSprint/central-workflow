@@ -38,18 +38,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  skip-if-central-workflow:
-    if: ${{ github.repository == 'ImplementSprint/central-workflow' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Skip workflow in central-workflow repo
-        run: echo "This workflow is not intended to run in the central-workflow repository."
-
   master-orchestrator:
-    if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
-    name: "Call Master Orchestrator"
-    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe-single.yml@main
+    name: "Call Unified Master Orchestrator"
+    uses: ImplementSprint/CICD-Fe-Multi/.github/workflows/master-pipeline-fe-multi.yml@main
     with:
+      pipeline_mode: single
       run_deploy: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_deploy == 'true' }}
       run_promotion: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_promotion == 'true' }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
