@@ -84,6 +84,16 @@ jobs:
             TAG="${PREFIX}${NEXT_VERSION}"
           elif [ "${MODE}" = "main" ]; then
             LATEST_TEST=$(git tag -l "${TEST_PREFIX}*" | grep -E "^${TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+
+            if [ -z "${LATEST_TEST}" ] && [ "${STREAM_KEY}" != "global" ]; then
+              LEGACY_TEST_PREFIX="test-v"
+              LEGACY_LATEST_TEST=$(git tag -l "${LEGACY_TEST_PREFIX}*" | grep -E "^${LEGACY_TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+              if [ -n "${LEGACY_LATEST_TEST}" ]; then
+                LATEST_TEST="${LEGACY_LATEST_TEST}"
+                echo "ℹ️ No stream-specific test tag found for '${STREAM_KEY}'. Falling back to legacy '${LEGACY_TEST_PREFIX}*' tags for this release."
+              fi
+            fi
+
             if [ -z "${LATEST_TEST}" ]; then
               echo "❌ No test version tag found for stream '${STREAM_KEY}'. main release tag requires a prior test tag."
               exit 1
