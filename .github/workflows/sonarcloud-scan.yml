@@ -26,6 +26,11 @@ on:
         type: string
         default: "tests"
         description: "Test files path relative to working directory"
+      sources-exclusions:
+        required: false
+        type: string
+        default: ""
+        description: "Comma-separated exclusions for sonar.sources (e.g. tests/**,e2e/**)"
       coverage-report-path:
         required: false
         type: string
@@ -110,6 +115,7 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.sources=${{ inputs.sources-path }}
             -Dsonar.tests=${{ inputs.tests-path }}
+            -Dsonar.exclusions=${{ inputs.sources-exclusions }}
             -Dsonar.javascript.lcov.reportPaths=${{ inputs.coverage-report-path }}
             -Dsonar.qualitygate.wait=${{ inputs.quality-gate-wait }}
             -Dsonar.pullrequest.provider=GitHub
