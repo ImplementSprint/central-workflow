@@ -39,10 +39,14 @@ on:
         description: "Vercel deployment ID"
         value: ${{ jobs.vercel-deploy.outputs.id }}
 
+permissions:
+  contents: read
+
 jobs:
   vercel-deploy:
     name: "Deploy to Vercel (${{ inputs.environment }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     environment:
       name: ${{ inputs.environment }}
       url: ${{ steps.deploy.outputs.url }}

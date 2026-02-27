@@ -51,6 +51,9 @@ on:
         description: "E2E test pass/fail result"
         value: ${{ jobs.selenium-e2e.outputs.result }}
 
+permissions:
+  contents: read
+
 jobs:
   selenium-e2e:
     name: "Selenium E2E — ${{ inputs.system-name }}"

@@ -58,10 +58,14 @@ on:
         description: "SonarCloud quality gate status"
         value: ${{ jobs.sonarcloud-scan.outputs.status }}
 
+permissions:
+  contents: read
+
 jobs:
   sonarcloud-scan:
     name: "SonarCloud Analysis"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       status: ${{ steps.quality-gate.outputs.status }}
     steps:

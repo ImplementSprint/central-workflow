@@ -73,6 +73,21 @@ on:
         type: string
         default: "assembleDebug"
         description: "Gradle task to execute"
+      enable-docker-build:
+        required: false
+        type: boolean
+        default: false
+        description: "Build and optionally push Docker image"
+      docker-image-name:
+        required: false
+        type: string
+        default: ""
+        description: "Docker image name for GHCR (required when Docker build is enabled)"
+      dockerfile-path:
+        required: false
+        type: string
+        default: "Dockerfile"
+        description: "Path to Dockerfile relative to system-dir"
       enable-detox:
         required: false
         type: boolean
@@ -95,6 +110,9 @@ on:
         required: false
       SONAR_ORGANIZATION:
         required: false
+
+permissions:
+  contents: read
 
 jobs:
   # ── Stage 1A: Unit Tests (Jest) ─────────────────────────────────
@@ -195,3 +213,6 @@ jobs:
       node-version: ${{ inputs.node-version }}
       java-version: ${{ inputs.java-version }}
       gradle-task: ${{ inputs.gradle-task }}
+      enable-docker-build: ${{ inputs.enable-docker-build }}
+      docker-image-name: ${{ inputs.docker-image-name }}
+      dockerfile-path: ${{ inputs.dockerfile-path }}

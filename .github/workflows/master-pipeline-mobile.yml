@@ -1,0 +1,411 @@
+name: "Master Pipeline Orchestrator — Mobile"
+
+on:
+  push:
+    branches: [test, uat, main]
+  pull_request:
+    branches: [test, uat, main]
+  workflow_dispatch:
+    inputs:
+      pipeline_mode:
+        description: "Pipeline mode (auto|single|multi)"
+        type: choice
+        options: [auto, single, multi]
+        default: auto
+      run_deploy:
+        description: "Reserved for compatibility with FE callers"
+        type: boolean
+        default: true
+      run_promotion:
+        description: "Reserved for compatibility with FE callers"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Preview-only mode (skip version tag push)"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      pipeline_mode:
+        description: "Pipeline mode (auto|single|multi)"
+        type: string
+        default: auto
+      run_deploy:
+        description: "Reserved for compatibility with FE callers"
+        type: boolean
+        default: true
+      run_promotion:
+        description: "Reserved for compatibility with FE callers"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Preview-only mode (skip version tag push)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  security-events: write
+
+concurrency:
+  group: master-pipeline-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  systems-config:
+    name: "Resolve Mobile Systems Configuration"
+    if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      systems_json: ${{ steps.resolve.outputs.systems_json }}
+      systems_label: ${{ steps.resolve.outputs.systems_label }}
+      pipeline_mode: ${{ steps.resolve.outputs.pipeline_mode }}
+    steps:
+      - name: Resolve systems JSON
+        id: resolve
+        env:
+          MOBILE_SINGLE_SYSTEMS_JSON_VAR: ${{ vars.MOBILE_SINGLE_SYSTEMS_JSON }}
+          MOBILE_MULTI_SYSTEMS_JSON_VAR: ${{ vars.MOBILE_MULTI_SYSTEMS_JSON }}
+          REQUESTED_PIPELINE_MODE: ${{ inputs.pipeline_mode }}
+        run: |
+          MODE_INPUT="${REQUESTED_PIPELINE_MODE}"
+          if [ -z "${MODE_INPUT}" ]; then
+            MODE_INPUT="auto"
+          fi
+
+          SYSTEMS_JSON_VAR=""
+          PIPELINE_MODE=""
+
+          if [ "${MODE_INPUT}" = "single" ]; then
+            if [ -n "${MOBILE_SINGLE_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${MOBILE_SINGLE_SYSTEMS_JSON_VAR}"
+            elif [ -n "${MOBILE_MULTI_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${MOBILE_MULTI_SYSTEMS_JSON_VAR}"
+            fi
+            PIPELINE_MODE="single"
+          elif [ "${MODE_INPUT}" = "multi" ]; then
+            if [ -n "${MOBILE_MULTI_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${MOBILE_MULTI_SYSTEMS_JSON_VAR}"
+            elif [ -n "${MOBILE_SINGLE_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${MOBILE_SINGLE_SYSTEMS_JSON_VAR}"
+            fi
+            PIPELINE_MODE="multi"
+          else
+            if [ -n "${MOBILE_MULTI_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${MOBILE_MULTI_SYSTEMS_JSON_VAR}"
+            elif [ -n "${MOBILE_SINGLE_SYSTEMS_JSON_VAR}" ]; then
+              SYSTEMS_JSON_VAR="${MOBILE_SINGLE_SYSTEMS_JSON_VAR}"
+            fi
+          fi
+
+          if [ -z "${SYSTEMS_JSON_VAR}" ]; then
+            echo "❌ Missing required repository variable MOBILE_MULTI_SYSTEMS_JSON or MOBILE_SINGLE_SYSTEMS_JSON."
+            exit 1
+          fi
+
+          SYSTEMS_JSON="${SYSTEMS_JSON_VAR}"
+
+          echo "${SYSTEMS_JSON}" | jq -e . >/dev/null
+
+          SYSTEMS_JSON_TYPE=$(echo "${SYSTEMS_JSON}" | jq -r 'type')
+          if [ "${SYSTEMS_JSON_TYPE}" = "object" ]; then
+            SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c '[.]')
+          elif [ "${SYSTEMS_JSON_TYPE}" = "array" ]; then
+            SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c .)
+          else
+            echo "❌ Mobile systems JSON must be an object (single) or array (single/multi)."
+            exit 1
+          fi
+
+          echo "${SYSTEMS_JSON}" | jq -e 'length > 0' >/dev/null
+          echo "${SYSTEMS_JSON}" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0))' >/dev/null
+
+          SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c '
+            map(
+              . + {
+                version_stream: (
+                  ((.version_stream // .name // .dir // "mobile") | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-+|-+$)"; ""))
+                  | if length > 0 then . else "mobile" end
+                )
+              }
+            )
+          ')
+
+          if [ -z "${PIPELINE_MODE}" ]; then
+            SYSTEMS_COUNT=$(echo "${SYSTEMS_JSON}" | jq 'length')
+            if [ "${SYSTEMS_COUNT}" -gt 1 ]; then
+              PIPELINE_MODE="multi"
+            else
+              PIPELINE_MODE="single"
+            fi
+          fi
+
+          SYSTEMS_LABEL=$(echo "${SYSTEMS_JSON}" | jq -r 'map(.name) | join(", ")')
+
+          echo "systems_json=${SYSTEMS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "systems_label=${SYSTEMS_LABEL}" >> "$GITHUB_OUTPUT"
+          echo "pipeline_mode=${PIPELINE_MODE}" >> "$GITHUB_OUTPUT"
+
+  active-systems:
+    name: "Detect Active Mobile Systems"
+    needs: [systems-config]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      active_systems_json: ${{ steps.select.outputs.active_systems_json }}
+      active_count: ${{ steps.select.outputs.active_count }}
+      active_label: ${{ steps.select.outputs.active_label }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select active systems
+        id: select
+        env:
+          SYSTEMS_JSON: ${{ needs.systems-config.outputs.systems_json }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
+            ACTIVE="${SYSTEMS_JSON}"
+          else
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            else
+              BASE_SHA="${{ github.event.before }}"
+            fi
+
+            if [ -z "${BASE_SHA}" ] || [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+              BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)
+            fi
+
+            CHANGED_FILES=$(git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}" || true)
+            CHANGED_JSON=$(printf "%s\n" "${CHANGED_FILES}" | sed '/^$/d' | jq -R . | jq -s .)
+            SYSTEM_DIRS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c '[.[] | (.dir // "" | gsub("^\\./"; "")) | select(. != "" and . != ".")]')
+
+            SHARED_CHANGED=false
+            if printf "%s\n" "${CHANGED_FILES}" | grep -Eq '^(\.github/|package\.json$|settings\.gradle(\.kts)?$|build\.gradle(\.kts)?$|gradle\.properties$|sonar-project\.properties$)'; then
+              SHARED_CHANGED=true
+            elif echo "${CHANGED_JSON}" | jq -e --argjson dirs "${SYSTEM_DIRS_JSON}" '
+              any(.[]; . as $file | ([$dirs[]? | select($file | startswith(. + "/"))] | length) == 0)
+            ' >/dev/null; then
+              SHARED_CHANGED=true
+            fi
+
+            if [ "${SHARED_CHANGED}" = "true" ]; then
+              ACTIVE="${SYSTEMS_JSON}"
+            else
+              ACTIVE=$(echo "${SYSTEMS_JSON}" | jq -c --argjson changed "${CHANGED_JSON}" '
+                map(select(
+                  . as $system
+                  | (($system.dir | gsub("^\\./"; "")) as $dir
+                    | if ($dir == "" or $dir == ".")
+                      then ($changed | length) > 0
+                      else any($changed[]; startswith($dir + "/"))
+                      end)
+                ))
+              ')
+            fi
+          fi
+
+          ACTIVE_COUNT=$(echo "${ACTIVE}" | jq 'length')
+          if [ "${ACTIVE_COUNT}" -gt 0 ]; then
+            ACTIVE_LABEL=$(echo "${ACTIVE}" | jq -r 'map(.name) | join(", ")')
+          else
+            ACTIVE_LABEL="None"
+          fi
+
+          echo "active_systems_json=${ACTIVE}" >> "$GITHUB_OUTPUT"
+          echo "active_count=${ACTIVE_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "active_label=${ACTIVE_LABEL}" >> "$GITHUB_OUTPUT"
+
+  classify-systems:
+    name: "Classify Mobile Systems"
+    needs: [active-systems]
+    if: fromJson(needs.active-systems.outputs.active_count) > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      react_native_systems_json: ${{ steps.classify.outputs.react_native_systems_json }}
+      react_native_count: ${{ steps.classify.outputs.react_native_count }}
+      kotlin_systems_json: ${{ steps.classify.outputs.kotlin_systems_json }}
+      kotlin_count: ${{ steps.classify.outputs.kotlin_count }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Classify systems by stack
+        id: classify
+        env:
+          ACTIVE_SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+        run: |
+          RN_SYSTEMS='[]'
+          KOTLIN_SYSTEMS='[]'
+
+          while IFS= read -r system; do
+            [ -z "${system}" ] && continue
+
+            DIR=$(echo "${system}" | jq -r '.dir // "."')
+            DIR_CLEAN=$(echo "${DIR}" | sed 's#^\./##')
+            if [ -z "${DIR_CLEAN}" ]; then
+              DIR_CLEAN='.'
+            fi
+
+            STACK_DECLARED=$(echo "${system}" | jq -r '(.mobile_stack // .stack // .framework // "") | ascii_downcase | gsub("[ _]"; "-")')
+
+            HAS_NODE=false
+            if [ -f "${DIR_CLEAN}/package.json" ]; then
+              HAS_NODE=true
+            fi
+
+            HAS_GRADLE=false
+            if [ -f "${DIR_CLEAN}/build.gradle" ] || [ -f "${DIR_CLEAN}/build.gradle.kts" ] || [ -f "${DIR_CLEAN}/app/build.gradle" ] || [ -f "${DIR_CLEAN}/app/build.gradle.kts" ] || [ -f "${DIR_CLEAN}/android/build.gradle" ] || [ -f "${DIR_CLEAN}/android/build.gradle.kts" ]; then
+              HAS_GRADLE=true
+            fi
+
+            TARGET=""
+            case "${STACK_DECLARED}" in
+              kotlin|android-kotlin|native-kotlin)
+                TARGET="kotlin"
+                ;;
+              react-native|reactnative|rn|expo)
+                TARGET="react-native"
+                ;;
+              *)
+                if [ "${HAS_NODE}" = "true" ]; then
+                  TARGET="react-native"
+                elif [ "${HAS_GRADLE}" = "true" ]; then
+                  TARGET="kotlin"
+                else
+                  TARGET="react-native"
+                fi
+                ;;
+            esac
+
+            SYSTEM_WITH_TARGET=$(echo "${system}" | jq -c --arg target "${TARGET}" '. + { execution_target: $target }')
+
+            if [ "${TARGET}" = "kotlin" ]; then
+              KOTLIN_SYSTEMS=$(echo "${KOTLIN_SYSTEMS}" | jq -c --argjson item "${SYSTEM_WITH_TARGET}" '. + [$item]')
+            else
+              RN_SYSTEMS=$(echo "${RN_SYSTEMS}" | jq -c --argjson item "${SYSTEM_WITH_TARGET}" '. + [$item]')
+            fi
+          done < <(echo "${ACTIVE_SYSTEMS_JSON}" | jq -c '.[]')
+
+          echo "react_native_systems_json=${RN_SYSTEMS}" >> "$GITHUB_OUTPUT"
+          echo "react_native_count=$(echo "${RN_SYSTEMS}" | jq 'length')" >> "$GITHUB_OUTPUT"
+          echo "kotlin_systems_json=${KOTLIN_SYSTEMS}" >> "$GITHUB_OUTPUT"
+          echo "kotlin_count=$(echo "${KOTLIN_SYSTEMS}" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+  mobile-react-native:
+    name: "Mobile RN — ${{ matrix.system.name }}"
+    needs: [classify-systems]
+    if: fromJson(needs.classify-systems.outputs.react_native_count) > 0
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.react_native_systems_json) }}
+    uses: ./.github/workflows/mobile-workflow.yml
+    with:
+      system-dir: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
+      enable-lint: ${{ matrix.system.enable_lint != false }}
+      enable-security-scan: ${{ matrix.system.enable_security_scan != false }}
+      enable-sonar: ${{ matrix.system.enable_sonar != false }}
+      enable-governance: ${{ matrix.system.enable_governance != false }}
+      build-android: ${{ matrix.system.build_android == true }}
+      build-variant: ${{ matrix.system.build_variant || 'assembleRelease' }}
+      enable-gradle: ${{ matrix.system.enable_gradle != false }}
+      gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
+      enable-docker-build: ${{ matrix.system.enable_docker_build == true }}
+      docker-image-name: ${{ matrix.system.docker_image || '' }}
+      dockerfile-path: ${{ matrix.system.dockerfile_path || 'Dockerfile' }}
+      enable-detox: ${{ matrix.system.enable_detox == true }}
+      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build --configuration android.emu.debug' }}
+      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test --configuration android.emu.debug --headless' }}
+    secrets: inherit
+
+  kotlin-governance:
+    name: "Kotlin Governance — ${{ matrix.system.name }}"
+    needs: [classify-systems]
+    if: fromJson(needs.classify-systems.outputs.kotlin_count) > 0
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.kotlin_systems_json) }}
+    uses: ./.github/workflows/kotlin-governance-check.yml
+    with:
+      working-directory: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      governance-task: ${{ matrix.system.kotlin_governance_task || matrix.system.governance_task || 'check' }}
+      run-governance: ${{ matrix.system.enable_governance != false }}
+      upload-artifact: true
+
+  mobile-kotlin:
+    name: "Mobile Kotlin — ${{ matrix.system.name }}"
+    needs: [classify-systems, kotlin-governance]
+    if: >-
+      fromJson(needs.classify-systems.outputs.kotlin_count) > 0 &&
+      (needs.kotlin-governance.result == 'success' || needs.kotlin-governance.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.kotlin_systems_json) }}
+    uses: ./.github/workflows/mobile-gradle.yml
+    with:
+      working-directory: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      project-type: kotlin
+      gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
+      enable-docker-build: ${{ matrix.system.enable_docker_build == true }}
+      docker-image-name: ${{ matrix.system.docker_image || '' }}
+      dockerfile-path: ${{ matrix.system.dockerfile_path || 'Dockerfile' }}
+      upload-artifact: true
+
+  version-test:
+    name: "Version Tag — TEST (${{ matrix.system.name }})"
+    needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/test' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: test
+      stream: ${{ matrix.system.version_stream }}
+
+  version-main-release:
+    name: "Version Tag — MAIN Release (${{ matrix.system.name }})"
+    needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: release
+      stream: ${{ matrix.system.version_stream }}

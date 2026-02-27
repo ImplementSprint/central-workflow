@@ -56,6 +56,9 @@ on:
       SONAR_TOKEN:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   # ── Stage 1A: Unit Tests (NestJS/Jest) ─────────────────────────
   api-unit-tests:

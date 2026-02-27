@@ -59,11 +59,15 @@ on:
         description: "Code coverage percentage"
         value: ${{ jobs.mobile-unit-tests.outputs.coverage }}
 
+permissions:
+  contents: read
+
 jobs:
   # ── Unit Tests ───────────────────────────────────────────────────
   mobile-unit-tests:
     name: "Jest Unit Tests (Mobile)"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       result: ${{ steps.test-run.outcome }}
       coverage: ${{ steps.coverage-check.outputs.coverage }}
@@ -74,15 +78,60 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ inputs.node-version }}
+      - name: Detect package manager
+        id: detect-pm
+        run: |
+          if [ -f "yarn.lock" ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ package.json is required for React Native tests."
+            exit 1
+          fi
+
+      - name: Setup Node.js ${{ inputs.node-version }} (npm)
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
-          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Setup Node.js ${{ inputs.node-version }} (yarn)
+        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+          cache-dependency-path: |
+            **/yarn.lock
+
+      - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
+        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "pnpm"
+          cache-dependency-path: |
+            **/pnpm-lock.yaml
 
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+        run: |
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn install --frozen-lockfile --ignore-scripts
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          else
+            npm ci --ignore-scripts
+          fi
 
       - name: Run Jest Unit Tests
         id: test-run
@@ -128,6 +177,7 @@ jobs:
     if: ${{ inputs.build-android }}
     needs: mobile-unit-tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -135,12 +185,46 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ inputs.node-version }}
+      - name: Detect package manager
+        id: detect-pm
+        run: |
+          if [ -f "yarn.lock" ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ package.json is required for React Native Android builds."
+            exit 1
+          fi
+
+      - name: Setup Node.js ${{ inputs.node-version }} (npm)
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
-          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Setup Node.js ${{ inputs.node-version }} (yarn)
+        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+          cache-dependency-path: |
+            **/yarn.lock
+
+      - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
+        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "pnpm"
+          cache-dependency-path: |
+            **/pnpm-lock.yaml
 
       - name: Setup JDK ${{ inputs.java-version }}
         uses: actions/setup-java@v4
@@ -152,7 +236,18 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+        run: |
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn install --frozen-lockfile --ignore-scripts
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          else
+            npm ci --ignore-scripts
+          fi
 
       - name: Build Android APK
         run: |

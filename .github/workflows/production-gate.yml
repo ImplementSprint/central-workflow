@@ -33,10 +33,14 @@ on:
         description: "Audit trail ID"
         value: ${{ jobs.production-gate.outputs.audit-id }}
 
+permissions:
+  contents: read
+
 jobs:
   production-gate:
     name: "Production Readiness — ${{ inputs.system-dir }}"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: production
     outputs:

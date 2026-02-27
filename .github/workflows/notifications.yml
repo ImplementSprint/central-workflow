@@ -56,10 +56,14 @@ on:
       DISCORD_WEBHOOK_URL:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   notify:
     name: "Send Notification"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       HAS_SLACK: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
       HAS_DISCORD: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}

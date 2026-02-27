@@ -35,10 +35,14 @@ on:
         description: "Replit deployment URL"
         value: ${{ jobs.replit-deploy.outputs.deployment_url }}
 
+permissions:
+  contents: read
+
 jobs:
   replit-deploy:
     name: "Deploy to Replit (${{ inputs.environment }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
     steps:

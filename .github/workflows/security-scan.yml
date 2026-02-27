@@ -31,11 +31,15 @@ on:
         description: "npm audit result"
         value: ${{ jobs.dependency-audit.outputs.result }}
 
+permissions:
+  contents: read
+
 jobs:
   # ── Dependency Vulnerability Audit ───────────────────────────────
   dependency-audit:
     name: "Dependency Audit"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       result: ${{ steps.audit.outcome }}
     defaults:
@@ -78,6 +82,7 @@ jobs:
   license-check:
     name: "License Compliance"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}

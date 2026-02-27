@@ -24,7 +24,7 @@ on:
       test-command:
         required: false
         type: string
-        default: "npm run test"
+        default: "npm run test -- --coverage --coverageReporters=json-summary"
         description: "Test command to execute"
       coverage-threshold:
         required: false
@@ -44,10 +44,14 @@ on:
         description: "Code coverage percentage"
         value: ${{ jobs.frontend-unit-tests.outputs.coverage }}
 
+permissions:
+  contents: read
+
 jobs:
   frontend-unit-tests:
     name: "Frontend Unit Tests"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       result: ${{ steps.test-run.outcome }}
       coverage: ${{ steps.coverage-check.outputs.coverage }}
@@ -78,23 +82,37 @@ jobs:
         if: always()
         run: |
           if [ -f "coverage/coverage-summary.json" ]; then
-            COVERAGE=$(node -e "
+            read -r LINES_COVERAGE FUNCTIONS_COVERAGE BRANCHES_COVERAGE STATEMENTS_COVERAGE <<EOF
+            $(node -e "
               const data = require('./coverage/coverage-summary.json');
-              console.log(data.total.lines.pct);
+              const total = data.total || {};
+              const lines = total.lines?.pct;
+              const functions = total.functions?.pct;
+              const branches = total.branches?.pct;
+              const statements = total.statements?.pct;
+              if ([lines, functions, branches, statements].some(v => typeof v !== 'number' || Number.isNaN(v))) {
+                throw new Error('coverage-summary.json is missing one or more required numeric metrics (lines/functions/branches/statements).');
+              }
+              console.log([lines, functions, branches, statements].join(' '));
             ")
-            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-            echo "📊 Line Coverage: ${COVERAGE}%"
+            EOF
+
+            echo "coverage=$LINES_COVERAGE" >> $GITHUB_OUTPUT
+            echo "📊 Coverage — lines: ${LINES_COVERAGE}%, functions: ${FUNCTIONS_COVERAGE}%, branches: ${BRANCHES_COVERAGE}%, statements: ${STATEMENTS_COVERAGE}%"
 
             THRESHOLD=${{ inputs.coverage-threshold }}
-            if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
-              echo "❌ Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
+            if (( $(echo "$LINES_COVERAGE < $THRESHOLD" | bc -l) )) || \
+               (( $(echo "$FUNCTIONS_COVERAGE < $THRESHOLD" | bc -l) )) || \
+               (( $(echo "$BRANCHES_COVERAGE < $THRESHOLD" | bc -l) )) || \
+               (( $(echo "$STATEMENTS_COVERAGE < $THRESHOLD" | bc -l) )); then
+              echo "❌ Coverage is below threshold ${THRESHOLD}% (lines/functions/branches/statements must all pass)"
               exit 1
             else
-              echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
+              echo "✅ Coverage meets threshold ${THRESHOLD}% for lines/functions/branches/statements"
             fi
           else
-            echo "coverage=unknown" >> $GITHUB_OUTPUT
-            echo "⚠️ Coverage summary not found — skipping threshold check"
+            echo "❌ coverage/coverage-summary.json not found — failing coverage gate"
+            exit 1
           fi
 
       - name: Upload Coverage Artifact

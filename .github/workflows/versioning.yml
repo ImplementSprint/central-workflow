@@ -6,7 +6,7 @@ on:
       mode:
         required: true
         type: string
-        description: "Versioning mode: test or main"
+        description: "Versioning mode: test or release (main is accepted as alias)"
       stream:
         required: false
         type: string
@@ -24,6 +24,7 @@ jobs:
   version:
     name: "Create Version Tag"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       version_tag: ${{ steps.version.outputs.tag }}
     steps:
@@ -82,7 +83,7 @@ jobs:
             fi
 
             TAG="${PREFIX}${NEXT_VERSION}"
-          elif [ "${MODE}" = "main" ]; then
+          elif [ "${MODE}" = "release" ] || [ "${MODE}" = "main" ]; then
             LATEST_TEST=$(git tag -l "${TEST_PREFIX}*" | grep -E "^${TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
 
             if [ -z "${LATEST_TEST}" ] && [ "${STREAM_KEY}" != "global" ]; then
@@ -102,7 +103,7 @@ jobs:
             VERSION_FROM_TEST="${LATEST_TEST#${TEST_PREFIX}}"
             TAG="${MAIN_PREFIX}${VERSION_FROM_TEST}"
           else
-            echo "❌ Invalid mode: ${MODE}. Expected test or main."
+            echo "❌ Invalid mode: ${MODE}. Expected test or release (main alias is accepted)."
             exit 1
           fi
 

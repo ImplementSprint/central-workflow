@@ -55,7 +55,19 @@ on:
       SONAR_ORGANIZATION:
         required: false
 
+permissions:
+  contents: read
+
 jobs:
+  # ── Stage 0: Frontend Standards ────────────────────────────────
+  web-standards:
+    name: "Web — Standards Check"
+    uses: ./.github/workflows/frontend-standards-check.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+
   # ── Stage 1A: Unit Tests ─────────────────────────────────────────
   web-unit-tests:
     name: "Web — Unit Tests"
@@ -64,6 +76,7 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+      test-command: npm run test -- --coverage --coverageReporters=json-summary
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   # ── Stage 1B: Lint (parallel with tests) ────────────────────────
@@ -95,17 +108,18 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      test-command: npm run test
+      test-command: npm run test -- --coverage --coverageReporters=json-summary
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   # ── Stage 2: Build Web Application ─────────────────────────────
   web-build:
     name: "Web — Build"
-    needs: [web-unit-tests, web-lint, web-security, web-governance]
+    needs: [web-standards, web-unit-tests, web-lint, web-security, web-governance]
     if: |
       always() &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ./${{ inputs.system-dir }}
@@ -123,32 +137,6 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci --ignore-scripts
-
-      - name: Validate Next.js + TypeScript Standard
-        run: |
-          if [ ! -f "tsconfig.json" ]; then
-            echo "❌ tsconfig.json is required for frontend projects."
-            exit 1
-          fi
-
-          node -e "
-            const pkg = require('./package.json');
-            const hasNext = Boolean(pkg.dependencies?.next);
-            const hasTypeScript = Boolean(pkg.devDependencies?.typescript || pkg.dependencies?.typescript);
-
-            if (!hasNext) {
-              throw new Error('Frontend standard requires Next.js (dependency \"next\" missing).');
-            }
-
-            if (!hasTypeScript) {
-              throw new Error('Frontend standard requires TypeScript (dependency \"typescript\" missing).');
-            }
-          "
-
-          if [ -z "$(find . -type f \( -name '*.ts' -o -name '*.tsx' \) | head -n 1)" ]; then
-            echo "❌ Frontend standard requires TypeScript source files (.ts/.tsx)."
-            exit 1
-          fi
 
       - name: Build Application
         run: npm run build

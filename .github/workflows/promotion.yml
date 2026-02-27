@@ -95,10 +95,14 @@ on:
       PR_TOKEN:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   promote:
     name: "Create Promotion PR"
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - name: Validate PAT for PR creation
         env:

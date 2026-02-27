@@ -41,10 +41,14 @@ on:
         description: "Lint pass/fail"
         value: ${{ jobs.lint-check.outputs.result }}
 
+permissions:
+  contents: read
+
 jobs:
   lint-check:
     name: "Lint & Style Check"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       result: ${{ steps.lint.outcome }}
     defaults:
