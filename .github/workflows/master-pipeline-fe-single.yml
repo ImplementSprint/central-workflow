@@ -297,6 +297,7 @@ jobs:
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
     uses: ./.github/workflows/vercel-deploy.yml
     with:
+      system-name: ${{ matrix.system.name }}
       working-directory: ${{ matrix.system.dir }}
       environment: preview
     secrets:
@@ -321,6 +322,7 @@ jobs:
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
     uses: ./.github/workflows/vercel-deploy.yml
     with:
+      system-name: ${{ matrix.system.name }}
       working-directory: ${{ matrix.system.dir }}
       environment: preview
     secrets:
@@ -358,6 +360,7 @@ jobs:
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
     uses: ./.github/workflows/vercel-deploy.yml
     with:
+      system-name: ${{ matrix.system.name }}
       working-directory: ${{ matrix.system.dir }}
       environment: production
     secrets:
@@ -550,9 +553,13 @@ jobs:
               .[$name] = (
                 [ $data.deployments[]?
                   | select((.state // "") == "READY")
-                  | { n: ((.name // "") | ascii_downcase), u: (if (.url // "") == "" then "" else ("https://" + .url) end) }
+                  | {
+                      n: ((.name // "") | ascii_downcase),
+                      m: (((.meta.systemName // .meta.system // "") | tostring) | ascii_downcase),
+                      u: (if (.url // "") == "" then "" else ("https://" + .url) end)
+                    }
                   | select(.u != "")
-                  | select(.n == $nameLower or .n == $dirLower)
+                  | select(.m == $nameLower or .n == $nameLower or .n == $dirLower)
                   | .u
                 ] | first // $runUrl
               )
@@ -639,9 +646,13 @@ jobs:
               .[$name] = (
                 [ $data.deployments[]?
                   | select((.state // "") == "READY")
-                  | { n: ((.name // "") | ascii_downcase), u: (if (.url // "") == "" then "" else ("https://" + .url) end) }
+                  | {
+                      n: ((.name // "") | ascii_downcase),
+                      m: (((.meta.systemName // .meta.system // "") | tostring) | ascii_downcase),
+                      u: (if (.url // "") == "" then "" else ("https://" + .url) end)
+                    }
                   | select(.u != "")
-                  | select(.n == $nameLower or .n == $dirLower)
+                  | select(.m == $nameLower or .n == $nameLower or .n == $dirLower)
                   | .u
                 ] | first // $runUrl
               )
@@ -777,9 +788,13 @@ jobs:
               .[$name] = (
                 [ $data.deployments[]?
                   | select((.state // "") == "READY")
-                  | { n: ((.name // "") | ascii_downcase), u: (if (.url // "") == "" then "" else ("https://" + .url) end) }
+                  | {
+                      n: ((.name // "") | ascii_downcase),
+                      m: (((.meta.systemName // .meta.system // "") | tostring) | ascii_downcase),
+                      u: (if (.url // "") == "" then "" else ("https://" + .url) end)
+                    }
                   | select(.u != "")
-                  | select(.n == $nameLower or .n == $dirLower)
+                  | select(.m == $nameLower or .n == $nameLower or .n == $dirLower)
                   | .u
                 ] | first // $runUrl
               )

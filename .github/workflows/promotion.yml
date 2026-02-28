@@ -389,7 +389,7 @@ jobs:
           fi
 
           if [ -n "${EXISTING_PR}" ]; then
-            retry 3 3 gh pr edit "${EXISTING_PR}" --body "${PR_BODY}"
+            retry 3 3 gh pr edit "${EXISTING_PR}" --title "${TITLE}" --body "${PR_BODY}"
             echo "✅ Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
             exit 0
           fi

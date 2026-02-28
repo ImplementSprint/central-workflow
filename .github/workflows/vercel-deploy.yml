@@ -15,6 +15,11 @@ name: "Reusable: Vercel Deploy"
 on:
   workflow_call:
     inputs:
+      system-name:
+        required: false
+        type: string
+        default: ""
+        description: "System name used for deployment metadata mapping"
       working-directory:
         required: true
         type: string
@@ -130,11 +135,17 @@ jobs:
         id: deploy
         run: |
           BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          SYSTEM_NAME="${{ inputs.system-name }}"
+
+          META_ARGS=(--meta githubCommitRef="${BRANCH_NAME}" --meta githubCommitSha="${GITHUB_SHA}")
+          if [ -n "${SYSTEM_NAME}" ]; then
+            META_ARGS+=(--meta systemName="${SYSTEM_NAME}")
+          fi
 
           if [ "${{ inputs.environment }}" = "production" ]; then
-            DEPLOY_OUTPUT=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} --meta githubCommitRef="${BRANCH_NAME}" --meta githubCommitSha="${GITHUB_SHA}" 2>&1)
+            DEPLOY_OUTPUT=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} "${META_ARGS[@]}" 2>&1)
           else
-            DEPLOY_OUTPUT=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} --meta githubCommitRef="${BRANCH_NAME}" --meta githubCommitSha="${GITHUB_SHA}" 2>&1)
+            DEPLOY_OUTPUT=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} "${META_ARGS[@]}" 2>&1)
           fi
 
           URL=$(echo "${DEPLOY_OUTPUT}" | grep -Eo 'https://[^[:space:]]+' | tail -n 1 | tr -d '\r')
