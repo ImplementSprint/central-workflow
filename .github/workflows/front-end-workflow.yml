@@ -42,18 +42,6 @@ on:
         type: boolean
         default: true
         description: "Run governance checks"
-      enable-sonar:
-        required: false
-        type: boolean
-        default: true
-        description: "Run SonarCloud scan"
-    secrets:
-      SONAR_TOKEN:
-        required: false
-      SONAR_PROJECT_KEY:
-        required: false
-      SONAR_ORGANIZATION:
-        required: false
 
 permissions:
   contents: read

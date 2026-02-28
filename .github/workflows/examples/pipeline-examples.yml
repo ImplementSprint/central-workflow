@@ -46,9 +46,9 @@ name: "Single-System Frontend Pipeline Example"
 
 on:
   push:
-    branches: [test, uat, prod]
+    branches: [test, uat, main]
   pull_request:
-    branches: [test, uat, prod]
+    branches: [test, uat, main]
 
 permissions:
   contents: read
@@ -84,11 +84,11 @@ jobs:
       deploy-environment: uat                            # <-- deploy to UAT environment
     secrets: inherit
 
-  # ── Stage 3: Deploy to Prod (prod branch only) ──
+  # ── Stage 3: Deploy to Prod (main branch only) ──
   deploy-prod:
     name: "Prod — PadyakPH-Web"
     needs: [frontend]
-    if: github.ref == 'refs/heads/prod' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     uses: ./.github/workflows/deploy-staging.yml
     with:
       system-dir: "."
@@ -98,11 +98,11 @@ jobs:
       deploy-environment: prod                           # <-- deploy to Prod environment
     secrets: inherit
 
-  # ── Stage 4: Production Gate (prod branch only) ──
+  # ── Stage 4: Production Gate (main branch only) ──
   production-gate:
     name: "Production Gate"
     needs: [deploy-prod]
-    if: github.ref == 'refs/heads/prod' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     uses: ./.github/workflows/production-gate.yml
     with:
       system-dir: "."

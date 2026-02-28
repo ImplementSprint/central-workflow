@@ -85,12 +85,14 @@ jobs:
             TAG="${PREFIX}${NEXT_VERSION}"
           elif [ "${MODE}" = "release" ] || [ "${MODE}" = "main" ]; then
             LATEST_TEST=$(git tag -l "${TEST_PREFIX}*" | grep -E "^${TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+            EFFECTIVE_TEST_PREFIX="${TEST_PREFIX}"
 
             if [ -z "${LATEST_TEST}" ] && [ "${STREAM_KEY}" != "global" ]; then
               LEGACY_TEST_PREFIX="test-v"
               LEGACY_LATEST_TEST=$(git tag -l "${LEGACY_TEST_PREFIX}*" | grep -E "^${LEGACY_TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
               if [ -n "${LEGACY_LATEST_TEST}" ]; then
                 LATEST_TEST="${LEGACY_LATEST_TEST}"
+                EFFECTIVE_TEST_PREFIX="${LEGACY_TEST_PREFIX}"
                 echo "ℹ️ No stream-specific test tag found for '${STREAM_KEY}'. Falling back to legacy '${LEGACY_TEST_PREFIX}*' tags for this release."
               fi
             fi
@@ -100,7 +102,7 @@ jobs:
               exit 1
             fi
 
-            VERSION_FROM_TEST="${LATEST_TEST#${TEST_PREFIX}}"
+            VERSION_FROM_TEST="${LATEST_TEST#${EFFECTIVE_TEST_PREFIX}}"
             TAG="${MAIN_PREFIX}${VERSION_FROM_TEST}"
           else
             echo "❌ Invalid mode: ${MODE}. Expected test or release (main alias is accepted)."

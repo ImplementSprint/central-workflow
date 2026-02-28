@@ -328,7 +328,7 @@ jobs:
 
   prepare-payload:
     name: "Prepare Promotion/Notify Payload"
-    needs: [active-systems]
+    needs: [active-systems, mobile]
     if: fromJson(needs.active-systems.outputs.active_count) > 0
     runs-on: ubuntu-latest
     outputs:
@@ -460,9 +460,9 @@ jobs:
       error-details: ${{ needs.mobile.result != 'success' && needs.mobile.result != 'skipped' && 'Master mobile single pipeline reported failures.' || '' }}
       deployment-url: ''
       deployment-urls-json: ${{ needs.prepare-payload.outputs.deployment_urls_json }}
-      success-image-url: ${{ vars.JED_SUCCESS_IMAGE_URL }}
-      failure-image-url: ${{ vars.JED_FAIL_IMAGE_URL }}
-      cancelled-image-url: ${{ vars.JED_CANCELLED_IMAGE_URL }}
+      success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL != '' && vars.DISCORD_SUCCESS_IMAGE_URL || vars.JED_SUCCESS_IMAGE_URL }}
+      failure-image-url: ${{ vars.DISCORD_FAIL_IMAGE_URL != '' && vars.DISCORD_FAIL_IMAGE_URL || vars.JED_FAIL_IMAGE_URL }}
+      cancelled-image-url: ${{ vars.DISCORD_CANCELLED_IMAGE_URL != '' && vars.DISCORD_CANCELLED_IMAGE_URL || vars.JED_CANCELLED_IMAGE_URL }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

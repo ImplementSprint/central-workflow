@@ -409,3 +409,227 @@ jobs:
     with:
       mode: release
       stream: ${{ matrix.system.version_stream }}
+
+  aggregate-mobile-status:
+    name: "Aggregate Mobile Status"
+    needs: [active-systems, classify-systems, mobile-react-native, mobile-kotlin]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      overall_result: ${{ steps.aggregate.outputs.overall_result }}
+      error_details: ${{ steps.aggregate.outputs.error_details }}
+    steps:
+      - name: Compute overall status
+        id: aggregate
+        env:
+          ACTIVE_COUNT_RAW: ${{ needs.active-systems.outputs.active_count }}
+          RN_COUNT_RAW: ${{ needs.classify-systems.outputs.react_native_count }}
+          KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          RN_RESULT: ${{ needs.mobile-react-native.result }}
+          KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+        run: |
+          ACTIVE_COUNT="${ACTIVE_COUNT_RAW:-0}"
+          RN_COUNT="${RN_COUNT_RAW:-0}"
+          KOTLIN_COUNT="${KOTLIN_COUNT_RAW:-0}"
+
+          if ! [[ "${ACTIVE_COUNT}" =~ ^[0-9]+$ ]]; then ACTIVE_COUNT=0; fi
+          if ! [[ "${RN_COUNT}" =~ ^[0-9]+$ ]]; then RN_COUNT=0; fi
+          if ! [[ "${KOTLIN_COUNT}" =~ ^[0-9]+$ ]]; then KOTLIN_COUNT=0; fi
+
+          OVERALL="success"
+          DETAILS=""
+
+          if [ "${ACTIVE_COUNT}" -eq 0 ]; then
+            OVERALL="skipped"
+            DETAILS="No active mobile systems detected."
+          else
+            FAILED=false
+            CANCELLED=false
+
+            if [ "${RN_COUNT}" -gt 0 ]; then
+              case "${RN_RESULT}" in
+                success|skipped) ;;
+                cancelled) CANCELLED=true ;;
+                *) FAILED=true ;;
+              esac
+            fi
+
+            if [ "${KOTLIN_COUNT}" -gt 0 ]; then
+              case "${KOTLIN_RESULT}" in
+                success|skipped) ;;
+                cancelled) CANCELLED=true ;;
+                *) FAILED=true ;;
+              esac
+            fi
+
+            if [ "${RN_COUNT}" -eq 0 ] && [ "${KOTLIN_COUNT}" -eq 0 ]; then
+              OVERALL="skipped"
+              DETAILS="No applicable mobile execution targets were detected."
+            elif [ "${FAILED}" = "true" ]; then
+              OVERALL="failure"
+              DETAILS="One or more applicable mobile execution paths failed."
+            elif [ "${CANCELLED}" = "true" ]; then
+              OVERALL="cancelled"
+              DETAILS="At least one applicable mobile execution path was cancelled."
+            fi
+          fi
+
+          echo "overall_result=${OVERALL}" >> "$GITHUB_OUTPUT"
+          echo "error_details=${DETAILS}" >> "$GITHUB_OUTPUT"
+
+  prepare-notify-test-payload:
+    name: "Prepare Notify Payload (TEST)"
+    needs: [active-systems]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/test' &&
+      fromJson(needs.active-systems.outputs.active_count) > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      deployment_urls_json: ${{ steps.build.outputs.deployment_urls_json }}
+    steps:
+      - name: Build payload JSON
+        id: build
+        env:
+          SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
+          echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
+
+  prepare-notify-uat-payload:
+    name: "Prepare Notify Payload (UAT)"
+    needs: [active-systems]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/uat' &&
+      fromJson(needs.active-systems.outputs.active_count) > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      deployment_urls_json: ${{ steps.build.outputs.deployment_urls_json }}
+    steps:
+      - name: Build payload JSON
+        id: build
+        env:
+          SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
+          echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
+
+  prepare-notify-main-payload:
+    name: "Prepare Notify Payload (MAIN)"
+    needs: [active-systems]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      fromJson(needs.active-systems.outputs.active_count) > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      deployment_urls_json: ${{ steps.build.outputs.deployment_urls_json }}
+    steps:
+      - name: Build payload JSON
+        id: build
+        env:
+          SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
+          echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
+
+  pipeline-summary:
+    name: "Pipeline Summary"
+    needs: [systems-config, active-systems, aggregate-mobile-status]
+    if: always()
+    uses: ./.github/workflows/pipeline-summary.yml
+    with:
+      pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode != '' && needs.systems-config.outputs.pipeline_mode || 'multi' }}
+      systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
+      results-json: '{}'
+      overall-result: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
+
+  auto-revert-on-failure:
+    name: "Auto Revert on Failure"
+    needs:
+      [
+        systems-config,
+        active-systems,
+        classify-systems,
+        mobile-react-native,
+        kotlin-governance,
+        mobile-kotlin,
+        aggregate-mobile-status,
+        version-test,
+        version-main-release,
+        prepare-notify-test-payload,
+        prepare-notify-uat-payload,
+        prepare-notify-main-payload,
+        pipeline-summary,
+      ]
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.repository != 'ImplementSprint/central-workflow' &&
+      contains(needs.*.result, 'failure') &&
+      !contains(github.event.head_commit.message, '[skip-revert]') &&
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[ci skip]') &&
+      !startsWith(github.event.head_commit.message, 'Revert "')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Create rollback commit
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "${BRANCH_NAME}" --depth=50
+          git checkout -B "${BRANCH_NAME}" "origin/${BRANCH_NAME}"
+
+          export GIT_EDITOR=:
+
+          if git revert --no-edit "${GITHUB_SHA}"; then
+            git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
+            echo "✅ Created revert commit from ${GITHUB_SHA}."
+          elif git revert -m 1 --no-edit "${GITHUB_SHA}"; then
+            git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
+            echo "✅ Created merge-revert commit from ${GITHUB_SHA}."
+          else
+            git revert --abort || true
+            SHORT_SHA="${GITHUB_SHA:0:7}"
+            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]"
+            echo "⚠️ Automatic revert conflicted; created marker commit for manual rollback."
+          fi
+
+          git push origin "HEAD:${BRANCH_NAME}"
+
+  notify-pipeline:
+    name: "Notify Pipeline Status"
+    needs: [systems-config, pipeline-summary, active-systems, aggregate-mobile-status, auto-revert-on-failure, prepare-notify-test-payload, prepare-notify-uat-payload, prepare-notify-main-payload]
+    if: always()
+    uses: ./.github/workflows/notifications.yml
+    with:
+      status: ${{ needs.aggregate-mobile-status.outputs.overall_result != '' && needs.aggregate-mobile-status.outputs.overall_result || (needs.aggregate-mobile-status.result == 'cancelled' && 'cancelled' || 'failure') }}
+      system-dir: ${{ needs.active-systems.outputs.active_label != '' && needs.active-systems.outputs.active_label || 'None' }}
+      pipeline-type: ${{ needs.systems-config.outputs.pipeline_mode == 'single' && 'Mobile Single Master' || 'Mobile Multi Master' }}
+      error-details: ${{ needs.aggregate-mobile-status.outputs.error_details }}
+      deployment-url: ''
+      deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-main-payload.outputs.deployment_urls_json || (github.ref_name == 'uat' && needs.prepare-notify-uat-payload.outputs.deployment_urls_json || (github.ref_name == 'test' && needs.prepare-notify-test-payload.outputs.deployment_urls_json || '{}')) }}
+      success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL != '' && vars.DISCORD_SUCCESS_IMAGE_URL || vars.JED_SUCCESS_IMAGE_URL }}
+      failure-image-url: ${{ vars.DISCORD_FAIL_IMAGE_URL != '' && vars.DISCORD_FAIL_IMAGE_URL || vars.JED_FAIL_IMAGE_URL }}
+      cancelled-image-url: ${{ vars.DISCORD_CANCELLED_IMAGE_URL != '' && vars.DISCORD_CANCELLED_IMAGE_URL || vars.JED_CANCELLED_IMAGE_URL }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
