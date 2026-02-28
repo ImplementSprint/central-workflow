@@ -189,7 +189,6 @@ jobs:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
       enable-security-scan: true
-      enable-sonar: false
     secrets: inherit
 
   sonarcloud:
