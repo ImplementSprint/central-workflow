@@ -108,12 +108,29 @@ jobs:
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: ./${{ inputs.system-dir }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Validate build working directory
+        run: |
+          TARGET_DIR="${{ inputs.system-dir }}"
+          CLEAN_DIR="${TARGET_DIR#./}"
+          CLEAN_DIR="${CLEAN_DIR%/}"
+
+          if [ -z "${CLEAN_DIR}" ] || [ "${CLEAN_DIR}" = "." ]; then
+            echo "✅ Using repository root as build directory."
+            exit 0
+          fi
+
+          if [ ! -d "${CLEAN_DIR}" ]; then
+            echo "❌ Build directory not found: ${TARGET_DIR}"
+            echo "Repository root contents:"
+            ls -la
+            exit 1
+          fi
+
+          echo "✅ Build directory exists: ${TARGET_DIR}"
 
       - name: Setup Node.js ${{ inputs.node-version }}
         uses: actions/setup-node@v4
@@ -124,9 +141,11 @@ jobs:
             **/package-lock.json
 
       - name: Install Dependencies
+        working-directory: ./${{ inputs.system-dir }}
         run: npm ci --ignore-scripts
 
       - name: Build Application
+        working-directory: ./${{ inputs.system-dir }}
         run: npm run build
 
       - name: Upload Build Artifact

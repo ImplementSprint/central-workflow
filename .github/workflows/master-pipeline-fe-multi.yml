@@ -176,9 +176,44 @@ jobs:
           echo "active_count=${ACTIVE_COUNT}" >> "$GITHUB_OUTPUT"
           echo "active_label=${ACTIVE_LABEL}" >> "$GITHUB_OUTPUT"
 
+  validate-system-directories:
+    name: "Validate System Directories"
+    needs: [active-systems]
+    if: fromJson(needs.active-systems.outputs.active_count) > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate configured system directories exist
+        env:
+          ACTIVE_SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+        run: |
+          MISSING_LIST=""
+          while IFS=$'\t' read -r SYSTEM_NAME SYSTEM_DIR; do
+            [ -z "${SYSTEM_NAME}" ] && continue
+            CLEAN_DIR="${SYSTEM_DIR#./}"
+            CLEAN_DIR="${CLEAN_DIR%/}"
+            if [ -n "${CLEAN_DIR}" ] && [ "${CLEAN_DIR}" != "." ] && [ ! -d "${CLEAN_DIR}" ]; then
+              MISSING_LIST="${MISSING_LIST}\n- ${SYSTEM_NAME}: ${SYSTEM_DIR}"
+            fi
+          done < <(echo "${ACTIVE_SYSTEMS_JSON}" | jq -r '.[] | [(.name // "<unnamed>"), (.dir // ".")] | @tsv')
+
+          if [ -n "${MISSING_LIST}" ]; then
+            echo "❌ Invalid FE systems configuration: one or more configured directories do not exist in this repository."
+            printf "%b\n" "${MISSING_LIST}"
+            echo ""
+            echo "Update repository variable FE_MULTI_SYSTEMS_JSON with valid 'dir' values (use '.' for repo root)."
+            echo "Directory names are case-sensitive on Linux runners."
+            exit 1
+          fi
+
+          echo "✅ All configured FE system directories exist."
+
   frontend:
     name: "Frontend — ${{ matrix.system.name }}"
-    needs: [active-systems]
+    needs: [active-systems, validate-system-directories]
     if: fromJson(needs.active-systems.outputs.active_count) > 0
     strategy:
       fail-fast: false

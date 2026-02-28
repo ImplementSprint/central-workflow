@@ -235,23 +235,11 @@ jobs:
         env:
           ACTIVE_SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
         run: |
-          MISSING=$(echo "${ACTIVE_SYSTEMS_JSON}" | jq -r '
-            map(select(((.dir // ".") | gsub("^\\./"; "")) as $dir | ($dir != "" and $dir != ".") and (("./" + $dir) | test("^\\./") | not)))
-          ')
-
-          INVALID_DIRS=$(echo "${ACTIVE_SYSTEMS_JSON}" | jq -r '
-            [.[]
-             | (.name // "<unnamed>") as $name
-             | ((.dir // ".") | gsub("^\\./"; "")) as $dir
-             | select($dir != "" and $dir != ".")
-             | select(("./" + $dir) as $path | (input_filename | .) | false)
-            ] | length
-          ' 2>/dev/null || echo 0)
-
           MISSING_LIST=""
           while IFS=$'\t' read -r SYSTEM_NAME SYSTEM_DIR; do
             [ -z "${SYSTEM_NAME}" ] && continue
             CLEAN_DIR="${SYSTEM_DIR#./}"
+            CLEAN_DIR="${CLEAN_DIR%/}"
             if [ -n "${CLEAN_DIR}" ] && [ "${CLEAN_DIR}" != "." ] && [ ! -d "${CLEAN_DIR}" ]; then
               MISSING_LIST="${MISSING_LIST}\n- ${SYSTEM_NAME}: ${SYSTEM_DIR}"
             fi
@@ -262,6 +250,7 @@ jobs:
             printf "%b\n" "${MISSING_LIST}"
             echo ""
             echo "Update repository variable FE_MULTI_SYSTEMS_JSON / FE_SINGLE_SYSTEMS_JSON with valid 'dir' values (use '.' for repo root)."
+            echo "Directory names are case-sensitive on Linux runners."
             exit 1
           fi
 
