@@ -71,8 +71,7 @@ jobs:
       - name: Check Coverage Threshold
         run: |
           if [ -f "coverage/coverage-summary.json" ]; then
-            read -r LINES_COVERAGE FUNCTIONS_COVERAGE BRANCHES_COVERAGE STATEMENTS_COVERAGE <<EOF
-            $(node -e "
+            METRICS=$(node -e "
               const data = require('./coverage/coverage-summary.json');
               const total = data.total || {};
               const lines = total.lines?.pct;
@@ -84,7 +83,7 @@ jobs:
               }
               console.log([lines, functions, branches, statements].join(' '));
             ")
-            EOF
+            read -r LINES_COVERAGE FUNCTIONS_COVERAGE BRANCHES_COVERAGE STATEMENTS_COVERAGE <<< "${METRICS}"
 
             echo "📊 Coverage — lines: ${LINES_COVERAGE}%, functions: ${FUNCTIONS_COVERAGE}%, branches: ${BRANCHES_COVERAGE}%, statements: ${STATEMENTS_COVERAGE}%"
             THRESHOLD=${{ inputs.coverage-threshold }}
