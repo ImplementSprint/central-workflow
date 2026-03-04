@@ -31,7 +31,7 @@ on:
       selenium_run_only_on_branch:
         description: "Branch allowed for Selenium execution"
         type: string
-        default: "test"
+        default: "test,uat"
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
@@ -47,7 +47,7 @@ on:
       k6_run_only_on_branch:
         description: "Branch allowed for k6 execution"
         type: string
-        default: "uat"
+        default: "test,uat"
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -85,7 +85,7 @@ on:
       selenium_run_only_on_branch:
         description: "Branch allowed for Selenium execution"
         type: string
-        default: "test"
+        default: "test,uat"
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
@@ -101,7 +101,7 @@ on:
       k6_run_only_on_branch:
         description: "Branch allowed for k6 execution"
         type: string
-        default: "uat"
+        default: "test,uat"
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -227,6 +227,7 @@ jobs:
       - name: Resolve QA inputs
         id: resolve
         env:
+          EVENT_NAME: ${{ github.event_name }}
           IN_ENABLE_SELENIUM: ${{ inputs.enable_selenium }}
           IN_SELENIUM_MODE: ${{ inputs.selenium_mode }}
           IN_SELENIUM_BROWSERS: ${{ inputs.selenium_browsers }}
@@ -237,15 +238,23 @@ jobs:
           IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
           IN_K6_RUN_ONLY_ON_BRANCH: ${{ inputs.k6_run_only_on_branch }}
         run: |
-          ENABLE_SELENIUM="false"
-          ENABLE_GRAFANA_K6="false"
+          ENABLE_SELENIUM="${IN_ENABLE_SELENIUM}"
+          ENABLE_GRAFANA_K6="${IN_ENABLE_GRAFANA_K6}"
           SELENIUM_MODE="local"
 
-          if [ "${IN_ENABLE_SELENIUM}" = "true" ]; then
+          if [ -z "${ENABLE_SELENIUM}" ]; then
             ENABLE_SELENIUM="true"
           fi
 
-          if [ "${IN_ENABLE_GRAFANA_K6}" = "true" ]; then
+          if [ -z "${ENABLE_GRAFANA_K6}" ]; then
+            ENABLE_GRAFANA_K6="true"
+          fi
+
+          if [ "${ENABLE_SELENIUM}" != "true" ] && [ "${ENABLE_SELENIUM}" != "false" ]; then
+            ENABLE_SELENIUM="true"
+          fi
+
+          if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
             ENABLE_GRAFANA_K6="true"
           fi
 
@@ -268,7 +277,7 @@ jobs:
             SELENIUM_BROWSERS="${IN_SELENIUM_BROWSERS}"
           fi
 
-          SELENIUM_RUN_ONLY_ON_BRANCH="test"
+          SELENIUM_RUN_ONLY_ON_BRANCH="test,uat"
           if [ -n "${IN_SELENIUM_RUN_ONLY_ON_BRANCH}" ]; then
             SELENIUM_RUN_ONLY_ON_BRANCH="${IN_SELENIUM_RUN_ONLY_ON_BRANCH}"
           fi
@@ -278,7 +287,7 @@ jobs:
             K6_SCRIPT_PATH="${IN_K6_SCRIPT_PATH}"
           fi
 
-          K6_RUN_ONLY_ON_BRANCH="uat"
+          K6_RUN_ONLY_ON_BRANCH="test,uat"
           if [ -n "${IN_K6_RUN_ONLY_ON_BRANCH}" ]; then
             K6_RUN_ONLY_ON_BRANCH="${IN_K6_RUN_ONLY_ON_BRANCH}"
           fi
@@ -528,8 +537,8 @@ jobs:
     needs: [frontend, active-systems, sonarcloud, selenium-e2e]
     if: >-
       always() &&
-      github.ref == 'refs/heads/test' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || (inputs.run_deploy == true && inputs.dry_run != true)) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
@@ -554,8 +563,8 @@ jobs:
     needs: [frontend, active-systems, sonarcloud, selenium-e2e]
     if: >-
       always() &&
-      github.ref == 'refs/heads/uat' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'uat') || github.ref == 'refs/heads/uat') &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || (inputs.run_deploy == true && inputs.dry_run != true)) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
@@ -758,8 +767,8 @@ jobs:
     needs: [active-systems, frontend, deploy-test]
     if: >-
       always() &&
-      github.ref == 'refs/heads/test' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
@@ -859,8 +868,8 @@ jobs:
     needs: [active-systems, frontend, deploy-uat]
     if: >-
       always() &&
-      github.ref == 'refs/heads/uat' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'uat') || github.ref == 'refs/heads/uat') &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
@@ -960,7 +969,7 @@ jobs:
     needs: [qa-controls, active-systems, prepare-promotion-test-payload]
     if: >-
       always() &&
-      github.ref == 'refs/heads/test' &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       needs.qa-controls.outputs.enable_grafana_k6 == 'true' &&
       needs.prepare-promotion-test-payload.result == 'success'
@@ -987,7 +996,7 @@ jobs:
     needs: [active-systems, frontend, qa-controls, deploy-test, resolve-k6-target-test]
     if: >-
       always() &&
-      github.ref == 'refs/heads/test' &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped') &&
@@ -1007,7 +1016,7 @@ jobs:
     needs: [qa-controls, active-systems, prepare-promotion-uat-payload]
     if: >-
       always() &&
-      github.ref == 'refs/heads/uat' &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'uat') || github.ref == 'refs/heads/uat') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       needs.qa-controls.outputs.enable_grafana_k6 == 'true' &&
       needs.prepare-promotion-uat-payload.result == 'success'
@@ -1034,7 +1043,7 @@ jobs:
     needs: [active-systems, frontend, qa-controls, deploy-uat, resolve-k6-target-uat]
     if: >-
       always() &&
-      github.ref == 'refs/heads/uat' &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'uat') || github.ref == 'refs/heads/uat') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped') &&

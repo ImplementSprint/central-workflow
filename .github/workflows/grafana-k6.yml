@@ -50,9 +50,46 @@ permissions:
   contents: read
 
 jobs:
+  prepare:
+    name: "Prepare k6 Execution"
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+    steps:
+      - name: Resolve branch rule
+        id: resolve
+        env:
+          BRANCH_RULE: ${{ inputs.run-only-on-branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          SHOULD_RUN="false"
+          BRANCH_NAME="${REF_NAME}"
+
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "${BASE_REF}" ]; then
+            BRANCH_NAME="${BASE_REF}"
+          fi
+
+          if [ -z "${BRANCH_RULE}" ] || [ "${BRANCH_RULE}" = "*" ]; then
+            SHOULD_RUN="true"
+          else
+            IFS=',' read -r -a BRANCH_RULES <<< "${BRANCH_RULE}"
+            for RULE in "${BRANCH_RULES[@]}"; do
+              CLEAN_RULE=$(echo "${RULE}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+              if [ -n "${CLEAN_RULE}" ] && [ "${BRANCH_NAME}" = "${CLEAN_RULE}" ]; then
+                SHOULD_RUN="true"
+                break
+              fi
+            done
+          fi
+
+          echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
+
   k6:
     name: "Grafana k6 — ${{ inputs.system-name }}"
-    if: ${{ inputs.run-only-on-branch == '' || inputs.run-only-on-branch == '*' || github.ref_name == inputs.run-only-on-branch }}
+    needs: [prepare]
+    if: ${{ needs.prepare.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -112,7 +149,7 @@ jobs:
 
   finalize:
     name: "Finalize k6 Result"
-    needs: [k6]
+    needs: [prepare, k6]
     if: always()
     runs-on: ubuntu-latest
     outputs:
@@ -123,7 +160,9 @@ jobs:
         env:
           JOB_RESULT: ${{ needs.k6.result }}
         run: |
-          if [ "${JOB_RESULT}" = "success" ]; then
+          if [ "${{ needs.prepare.outputs.should_run }}" != "true" ]; then
+            RESULT="skipped"
+          elif [ "${JOB_RESULT}" = "success" ]; then
             RESULT="success"
           elif [ "${JOB_RESULT}" = "cancelled" ]; then
             RESULT="cancelled"

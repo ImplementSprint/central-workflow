@@ -100,9 +100,17 @@ jobs:
           SELENIUM_MODE_INPUT: ${{ inputs.selenium-mode }}
           BROWSER_LIST_INPUT: ${{ inputs.browser-list }}
           SELENIUM_GRID_URL_INPUT: ${{ inputs.selenium-grid-url }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           SHOULD_RUN="false"
           SELENIUM_MODE="local"
+          BRANCH_NAME="${REF_NAME}"
+
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "${BASE_REF}" ]; then
+            BRANCH_NAME="${BASE_REF}"
+          fi
 
           if [ -n "${SELENIUM_MODE_INPUT}" ]; then
             SELENIUM_MODE="${SELENIUM_MODE_INPUT}"
@@ -118,8 +126,17 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${BRANCH_RULE}" ] || [ "${BRANCH_RULE}" = "*" ] || [ "${GITHUB_REF_NAME}" = "${BRANCH_RULE}" ]; then
+          if [ -z "${BRANCH_RULE}" ] || [ "${BRANCH_RULE}" = "*" ]; then
             SHOULD_RUN="true"
+          else
+            IFS=',' read -r -a BRANCH_RULES <<< "${BRANCH_RULE}"
+            for RULE in "${BRANCH_RULES[@]}"; do
+              CLEAN_RULE=$(echo "${RULE}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+              if [ -n "${CLEAN_RULE}" ] && [ "${BRANCH_NAME}" = "${CLEAN_RULE}" ]; then
+                SHOULD_RUN="true"
+                break
+              fi
+            done
           fi
 
           RAW="${BROWSER_LIST_INPUT}"
