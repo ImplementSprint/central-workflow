@@ -1389,6 +1389,15 @@ jobs:
       success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL }}
       failure-image-url: ${{ vars.DISCORD_FAIL_IMAGE_URL }}
       cancelled-image-url: ${{ vars.DISCORD_CANCELLED_IMAGE_URL }}
+      tests-status: ${{ needs.frontend.result }}
+      lint-status: ${{ needs.frontend.result }}
+      security-status: ${{ needs.frontend.result }}
+      sonar-status: ${{ needs.sonarcloud.result }}
+      selenium-status: ${{ needs.selenium-e2e.result }}
+      grafana-status: ${{ github.ref_name == 'test' && needs.grafana-k6-test-postdeploy.result || (github.ref_name == 'uat' && needs.grafana-k6-uat-postdeploy.result || 'skipped') }}
+      enforce-gate-status: ${{ needs.enforce-e2e-k6.result }}
+      versions-json: ${{ github.ref_name == 'test' && needs.prepare-promotion-test-payload.outputs.versions_json || (github.ref_name == 'uat' && needs.prepare-promotion-uat-payload.outputs.versions_json || '{}') }}
+      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && needs.enforce-e2e-k6.result == 'success' && 'success' || 'failure' }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

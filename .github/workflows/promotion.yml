@@ -304,6 +304,31 @@ jobs:
             if [ -z "${GRAFANA_STATUS}" ]; then GRAFANA_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${PIPELINE_RESULT}" ]; then PIPELINE_RESULT="${DEFAULT_RESULT}"; fi
 
+          # ── Status icon helper ──
+          status_icon() {
+            case "$1" in
+              success) echo "✅";;
+              failure) echo "❌";;
+              cancelled) echo "⚠️";;
+              skipped) echo "⏭️";;
+              *) echo "⬜";;
+            esac
+          }
+
+          # ── Compute readiness badge ──
+          ALL_GATES_PASSED="true"
+          for _gate in "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${SELENIUM_STATUS}" "${GRAFANA_STATUS}"; do
+            if [ "${_gate}" != "success" ] && [ "${_gate}" != "skipped" ]; then
+              ALL_GATES_PASSED="false"
+              break
+            fi
+          done
+          if [ "${ALL_GATES_PASSED}" = "true" ] && [ "${PIPELINE_RESULT}" = "success" ]; then
+            READINESS_BADGE="> 🟢 **READY FOR REVIEW** — All quality gates passed"
+          else
+            READINESS_BADGE="> 🔴 **NOT READY** — One or more quality gates failed"
+          fi
+
             DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
               reduce .[] as $s ({};
                 .[$s.name] = ((($urls[$s.name] // "") | tostring) | if length > 0 then . else $runUrl end)
@@ -319,55 +344,86 @@ jobs:
                 .[$s.name] = ((($versions[$s.name] // "") | tostring) | if length > 0 then . else (if ($defaultVersion | length) > 0 then $defaultVersion else "N/A" end) end)
               )')
 
-          CHECKLIST=$(echo "${SYSTEMS_JSON}" | jq -r --arg label "${CONTEXT_LABEL}" 'map("- [ ] Verified \(.name) on \($label)") | join("\n")')
-          ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
-            .[]
-            | (($urls[.name] // "") | tostring) as $raw
-            | (if ($raw | length) > 0 then $raw else $runUrl end) as $url
-            | "| \(.name) | [Open deployment](" + $url + ") |"
-          ')
-
+          # ── Pre-merge checklist ──
+          CHECKLIST="- [ ] Reviewed the [changes between branches](${COMPARE_URL})"
+          CHECKLIST+=$'\n'"$(echo "${SYSTEMS_JSON}" | jq -r --arg label "${CONTEXT_LABEL}" 'map("- [ ] Verified **" + .name + "** deployment on " + $label) | join("\n")')"
           if [ "${DIRECTION}" = "test-to-uat" ]; then
             CHECKLIST+=$'\n- [ ] Ready for UAT validation'
           else
             CHECKLIST+=$'\n- [ ] All acceptance criteria met'
+            CHECKLIST+=$'\n- [ ] Production readiness confirmed'
           fi
 
-          AVAILABLE_LINKS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
-            [.[]
-              | (($urls[.name] // "") | tostring) as $raw
-              | (if ($raw | length) > 0 then $raw else $runUrl end)
-              | select(length > 0)
-            ] | length
+          # ── Deployment links table rows ──
+          ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
+            .[]
+            | (($urls[.name] // "") | tostring) as $raw
+            | (if ($raw | length) > 0 then $raw else $runUrl end) as $url
+            | "| \(.name) | [🔗 Open deployment](" + $url + ") |"
           ')
 
-          EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" '.[] | "| CI — \(.name) | " + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + " |"')
-          EVIDENCE_ROWS=$(printf "%s\n| Deployment Links | %s available |" "${EVIDENCE_ROWS}" "${AVAILABLE_LINKS}")
-          VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "| Version — \(.name) | " + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + " |"')
-          EVIDENCE_ROWS=$(printf "%s\n%s" "${EVIDENCE_ROWS}" "${VERSION_ROWS}")
+          # ── Quality gates table with emoji ──
+          QG_TESTS_ICON=$(status_icon "${TESTS_STATUS}")
+          QG_LINT_ICON=$(status_icon "${LINT_STATUS}")
+          QG_SEC_ICON=$(status_icon "${SECURITY_STATUS}")
+          QG_SONAR_ICON=$(status_icon "${SONAR_STATUS}")
+          QG_SELENIUM_ICON=$(status_icon "${SELENIUM_STATUS}")
+          QG_GRAFANA_ICON=$(status_icon "${GRAFANA_STATUS}")
+          QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | \`%s\` |\n| Lint | %s | \`%s\` |\n| Security | %s | \`%s\` |\n| SonarCloud | %s | \`%s\` |\n| Selenium E2E | %s | \`%s\` |\n| Grafana k6 | %s | \`%s\` |" \
+            "${QG_TESTS_ICON}" "${TESTS_STATUS}" \
+            "${QG_LINT_ICON}" "${LINT_STATUS}" \
+            "${QG_SEC_ICON}" "${SECURITY_STATUS}" \
+            "${QG_SONAR_ICON}" "${SONAR_STATUS}" \
+            "${QG_SELENIUM_ICON}" "${SELENIUM_STATUS}" \
+            "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
 
+          # ── Version tags table ──
+          VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "| " + .name + " | \`" + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + "\` |"')
+
+          # ── CI results table ──
+          EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" '.[] | "| \(.name) | \`" + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + "\` |"')
+
+          # ── Release summary ──
           RELEASE_VERSION_VALUE="${VERSION_TAG:-N/A}"
           if [ "${PIPELINE_KIND}" = "multi" ]; then
-            RELEASE_VERSION_VALUE="Per-system (see Evidence)"
+            RELEASE_VERSION_VALUE="Per-system (see Version Tags)"
           fi
+          PIPELINE_ICON=$(status_icon "${PIPELINE_RESULT}")
+          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s \`%s\` |\n| Version Tag | \`%s\` |\n| Short SHA | [\`%s\`](https://github.com/${{ github.repository }}/commit/%s) |\n| Compare | [View changes ↗](%s) |" \
+            "${PIPELINE_ICON}" "${PIPELINE_RESULT}" \
+            "${RELEASE_VERSION_VALUE}" \
+            "${SHORT_SHA}" "${GITHUB_SHA}" \
+            "${COMPARE_URL}")
 
-          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Version Tag | %s |\n| Short SHA | %s |\n| Compare | [View changes](%s) |\n| Pipeline Result | %s |" "${RELEASE_VERSION_VALUE}" "${SHORT_SHA}" "${COMPARE_URL}" "${PIPELINE_RESULT}")
-          QUALITY_GATES=$(printf -- "| Gate | Status |\n|------|--------|\n| Tests | %s |\n| Lint | %s |\n| Security | %s |\n| Sonar | %s |\n| Selenium | %s |\n| Grafana k6 | %s |" "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${SELENIUM_STATUS}" "${GRAFANA_STATUS}")
-
-          DETAILS=$(printf -- "- **Source branch:** %s\n- **Target branch:** %s" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
+          # ── Details section ──
+          DETAILS=$(printf -- "- **Source branch:** \`%s\`\n- **Target branch:** \`%s\`" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
           if [ "${PIPELINE_KIND}" = "multi" ]; then
-            VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "  - **" + .name + "**: `" + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + "`"')
+            VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "  - **" + .name + "**: \`" + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + "\`"')
             DETAILS=$(printf "%s\n- **Version tags per system:**\n%s" "${DETAILS}" "${VERSION_DETAILS}")
           else
             DETAILS=$(printf "%s\n- **Version tag:** \`%s\`" "${DETAILS}" "${VERSION_TAG:-N/A}")
           fi
           TRIGGERED_BY="${GITHUB_TRIGGERING_ACTOR:-${GITHUB_ACTOR}}"
-          DETAILS=$(printf "%s\n- **Commit:** \`%s\`\n- **Compare:** [View changes](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" "${DETAILS}" "${SHORT_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
+          DETAILS=$(printf "%s\n- **Commit:** [\`%s\`](https://github.com/${{ github.repository }}/commit/%s)\n- **Compare:** [View changes ↗](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run ↗](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" "${DETAILS}" "${SHORT_SHA}" "${GITHUB_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
 
+          # ── How to review section ──
+          HOW_TO_REVIEW="1. Check the **Quality Gates** table — all gates should show ✅"
+          HOW_TO_REVIEW+=$'\n'"2. Open each **Deployment Link** and verify the changes visually"
+          HOW_TO_REVIEW+=$'\n'"3. Review the [code diff between branches](${COMPARE_URL})"
+          HOW_TO_REVIEW+=$'\n'"4. Complete all items in the **Pre-merge Checklist** above"
+
+          # ── Assemble PR body ──
           PR_BODY=$(cat <<ENDOFBODY
           ${HEADER}
 
+          ${READINESS_BADGE}
+
           ${INTRO}
+
+          ---
+
+          ### 🛡️ Quality Gates
+          ${QUALITY_GATES}
 
           ### 📋 Pre-merge Checklist
           ${CHECKLIST}
@@ -377,19 +433,29 @@ jobs:
           |--------|------------------|
           ${ROWS}
 
-          ### ✅ Evidence
-          | Check | Status |
-          |-------|--------|
+          ### 🏷️ Version Tags
+          | System | Tag |
+          |--------|-----|
+          ${VERSION_ROWS}
+
+          ### 📊 CI Results
+          | System | Result |
+          |--------|--------|
           ${EVIDENCE_ROWS}
 
           ### 🧾 Release Summary
           ${RELEASE_SUMMARY}
 
-          ### 🛡️ Quality Gates
-          ${QUALITY_GATES}
-
           ### 🔍 Details
+          <details>
+          <summary>Click to expand pipeline details</summary>
+
           ${DETAILS}
+
+          </details>
+
+          ### 📖 How to Review
+          ${HOW_TO_REVIEW}
 
           ---
           ${FOOTER}

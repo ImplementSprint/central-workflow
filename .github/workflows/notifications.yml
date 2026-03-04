@@ -50,6 +50,51 @@ on:
         type: string
         default: ""
         description: "Discord image URL shown when status=cancelled"
+      tests-status:
+        required: false
+        type: string
+        default: ""
+        description: "Tests job result (success|failure|cancelled|skipped)"
+      lint-status:
+        required: false
+        type: string
+        default: ""
+        description: "Lint job result"
+      security-status:
+        required: false
+        type: string
+        default: ""
+        description: "Security job result"
+      sonar-status:
+        required: false
+        type: string
+        default: ""
+        description: "SonarCloud job result"
+      selenium-status:
+        required: false
+        type: string
+        default: ""
+        description: "Selenium E2E job result"
+      grafana-status:
+        required: false
+        type: string
+        default: ""
+        description: "Grafana k6 job result"
+      enforce-gate-status:
+        required: false
+        type: string
+        default: ""
+        description: "Enforcement gate job result"
+      versions-json:
+        required: false
+        type: string
+        default: "{}"
+        description: "Version tags JSON object {system: tag}"
+      pipeline-result:
+        required: false
+        type: string
+        default: ""
+        description: "Overall pipeline result"
     secrets:
       SLACK_WEBHOOK_URL:
         required: false
@@ -272,6 +317,8 @@ jobs:
             done
           }
 
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
           retry 3 3 curl -sS -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
@@ -280,44 +327,93 @@ jobs:
               --arg systems '${{ inputs['system-dir'] }}' \
               --arg pipeline '${{ inputs['pipeline-type'] }}' \
               --arg actor '${{ github.actor }}' \
+              --arg branch '${{ github.ref_name }}' \
               --arg workflow '${{ steps.prepare.outputs.workflow_name }}' \
               --arg attempt '${{ steps.prepare.outputs.run_attempt }}' \
+              --arg runNumber '${{ github.run_number }}' \
               --arg shortSha '${{ steps.prepare.outputs.short_sha }}' \
               --arg compareUrl '${{ steps.prepare.outputs.compare_url }}' \
               --arg runUrl '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' \
+              --arg repoUrl '${{ github.server_url }}/${{ github.repository }}' \
+              --arg commitSha '${{ github.sha }}' \
               --arg envLabel '${{ steps.prepare.outputs.env_emoji }} ${{ steps.prepare.outputs.env_label }}' \
               --arg deploymentUrl '${{ inputs['deployment-url'] }}' \
               --arg deploymentUrlsJson '${{ inputs['deployment-urls-json'] }}' \
               --arg details '${{ inputs['error-details'] }}' \
+              --arg testsStatus '${{ inputs['tests-status'] }}' \
+              --arg lintStatus '${{ inputs['lint-status'] }}' \
+              --arg securityStatus '${{ inputs['security-status'] }}' \
+              --arg sonarStatus '${{ inputs['sonar-status'] }}' \
+              --arg seleniumStatus '${{ inputs['selenium-status'] }}' \
+              --arg grafanaStatus '${{ inputs['grafana-status'] }}' \
+              --arg enforceStatus '${{ inputs['enforce-gate-status'] }}' \
+              --arg versionsJson '${{ inputs['versions-json'] }}' \
+              --arg pipelineResult '${{ inputs['pipeline-result'] }}' \
               --argjson envColor ${{ steps.prepare.outputs.env_color }} \
               --arg imageUrl '${{ steps.prepare.outputs.image_url }}' \
-              '((try ($deploymentUrlsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $deploymentEntries |
-              ($deploymentEntries | map("• " + .key + ": " + (.value | tostring)) | join("\n")) as $deploymentLines |
+              --arg timestamp "${TIMESTAMP}" \
+              'def icon: if . == "success" then "✅" elif . == "failure" then "❌" elif . == "cancelled" then "⚠️" elif . == "skipped" then "⏭️" else "⬜" end;
+
+              # Build pipeline result line
+              (if ($pipelineResult | length) > 0 then
+                "**Pipeline Result:** " + ($pipelineResult | icon) + " `" + $pipelineResult + "`\n\n"
+              else "" end) as $resultLine |
+
+              # Build quality gates section
+              (if ($testsStatus | length) > 0 then
+                "**Quality Gates**\n" +
+                ($testsStatus | icon) + " Tests · " +
+                ($lintStatus | icon) + " Lint · " +
+                ($securityStatus | icon) + " Security\n" +
+                ($sonarStatus | icon) + " SonarCloud · " +
+                ($seleniumStatus | icon) + " Selenium E2E · " +
+                ($grafanaStatus | icon) + " Grafana k6" +
+                (if ($enforceStatus | length) > 0 then
+                  "\n🔒 Enforcement Gate: " + ($enforceStatus | icon) + " `" + $enforceStatus + "`"
+                else "" end)
+              else "" end) as $gatesBlock |
+
+              # Assemble description
+              ($resultLine + $gatesBlock +
+                (if ($details | length) > 0 then "\n\n⚠️ **Error:** " + $details else "" end)
+              ) as $description |
+
+              # Deployments
+              ((try ($deploymentUrlsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $deploymentEntries |
+              ($deploymentEntries | map("• **" + .key + "**: " + (.value | tostring)) | join("\n")) as $deploymentLines |
               ($deploymentEntries | length) as $deploymentCount |
               ($deploymentEntries[0].value // "" | tostring) as $firstDeploymentUrl |
+
+              # Versions
+              ((try ($versionsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $versionEntries |
+              ($versionEntries | map("• **" + .key + "**: `" + (.value | tostring) + "`") | join("\n")) as $versionLines |
+
               {
                 content: $mention,
                 embeds: [
                   {
                     title: $title,
                     color: $envColor,
-                    description: (if ($details | length) > 0 then ("**Details:** " + $details) else "" end),
+                    description: $description,
                     fields: (
                       [
-                        {name:"Systems", value:$systems, inline:false},
-                        {name:"Pipeline", value:$pipeline, inline:true},
-                        {name:"Environment", value:$envLabel, inline:true},
-                        {name:"Workflow", value:$workflow, inline:true},
-                        {name:"Run Attempt", value:$attempt, inline:true},
-                        {name:"Short SHA", value:$shortSha, inline:true},
-                        {name:"Actor", value:$actor, inline:true},
-                        {name:"Compare", value:$compareUrl, inline:false}
+                        {name: "📦 Systems", value: $systems, inline: false},
+                        {name: "Pipeline", value: $pipeline, inline: true},
+                        {name: "Environment", value: $envLabel, inline: true},
+                        {name: "Branch", value: ("`" + $branch + "`"), inline: true},
+                        {name: "Commit", value: ("[`" + $shortSha + "`](" + $repoUrl + "/commit/" + $commitSha + ")"), inline: true},
+                        {name: "Actor", value: $actor, inline: true},
+                        {name: "Run Attempt", value: $attempt, inline: true}
                       ]
-                      + (if ($deploymentUrl | length) > 0 then [{name:"Deployment", value:$deploymentUrl, inline:false}] else [] end)
-                      + (if ($deploymentLines | length) > 0 and ($deploymentCount > 1 or ($deploymentUrl | length) == 0 or $firstDeploymentUrl != $deploymentUrl) then [{name:"Deployments", value:$deploymentLines, inline:false}] else [] end)
+                      + (if ($versionLines | length) > 0 then [{name: "🏷️ Versions", value: $versionLines, inline: false}] else [] end)
+                      + (if ($deploymentUrl | length) > 0 then [{name: "🔗 Deployment", value: $deploymentUrl, inline: false}] else [] end)
+                      + (if ($deploymentLines | length) > 0 and ($deploymentCount > 1 or ($deploymentUrl | length) == 0 or $firstDeploymentUrl != $deploymentUrl) then [{name: "🔗 Deployments", value: $deploymentLines, inline: false}] else [] end)
+                      + [{name: "🔗 Links", value: ("[View Run ↗](" + $runUrl + ") · [Compare ↗](" + $compareUrl + ")"), inline: false}]
                     ),
-                    image: (if ($imageUrl | length) > 0 then {url:$imageUrl} else null end),
-                    url: $runUrl
+                    image: (if ($imageUrl | length) > 0 then {url: $imageUrl} else null end),
+                    url: $runUrl,
+                    footer: {text: ($workflow + " · Run #" + $runNumber)},
+                    timestamp: $timestamp
                   }
                 ]
               }')"
