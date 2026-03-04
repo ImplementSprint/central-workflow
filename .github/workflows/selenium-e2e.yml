@@ -46,21 +46,11 @@ on:
         type: string
         default: "test"
         description: "Branch name allowed to run Selenium (default: test)"
-      selenium-mode:
-        required: false
-        type: string
-        default: "local"
-        description: "Selenium execution mode (local|grid)"
       browser-list:
         required: false
         type: string
         default: '["chrome"]'
         description: "Browser list as JSON array or CSV (e.g. [\"chrome\",\"firefox\"] or chrome,firefox)"
-      selenium-grid-url:
-        required: false
-        type: string
-        default: ""
-        description: "Selenium Grid URL (required when selenium-mode=grid)"
       parallel-mode:
         required: false
         type: string
@@ -90,40 +80,22 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
-      selenium_mode: ${{ steps.resolve.outputs.selenium_mode }}
       browsers_json: ${{ steps.resolve.outputs.browsers_json }}
     steps:
       - name: Resolve execution settings
         id: resolve
         env:
           BRANCH_RULE: ${{ inputs.run-only-on-branch }}
-          SELENIUM_MODE_INPUT: ${{ inputs.selenium-mode }}
           BROWSER_LIST_INPUT: ${{ inputs.browser-list }}
-          SELENIUM_GRID_URL_INPUT: ${{ inputs.selenium-grid-url }}
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           BASE_REF: ${{ github.base_ref }}
         run: |
           SHOULD_RUN="false"
-          SELENIUM_MODE="local"
           BRANCH_NAME="${REF_NAME}"
 
           if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "${BASE_REF}" ]; then
             BRANCH_NAME="${BASE_REF}"
-          fi
-
-          if [ -n "${SELENIUM_MODE_INPUT}" ]; then
-            SELENIUM_MODE="${SELENIUM_MODE_INPUT}"
-          fi
-
-          if [ "${SELENIUM_MODE}" != "local" ] && [ "${SELENIUM_MODE}" != "grid" ]; then
-            echo "❌ Invalid selenium-mode='${SELENIUM_MODE}'. Allowed: local, grid."
-            exit 1
-          fi
-
-          if [ "${SELENIUM_MODE}" = "grid" ] && [ -z "${SELENIUM_GRID_URL_INPUT}" ]; then
-            echo "❌ selenium-grid-url is required when selenium-mode=grid."
-            exit 1
           fi
 
           if [ -z "${BRANCH_RULE}" ] || [ "${BRANCH_RULE}" = "*" ]; then
@@ -154,15 +126,12 @@ jobs:
             BROWSERS_JSON='["chrome"]'
           fi
 
-          if [ "${SELENIUM_MODE}" = "local" ]; then
-            BROWSERS_JSON=$(echo "${BROWSERS_JSON}" | jq -c 'map(select(. == "chrome" or . == "chromium" or . == "firefox"))')
-            if [ "$(echo "${BROWSERS_JSON}" | jq 'length')" -eq 0 ]; then
-              BROWSERS_JSON='["chrome"]'
-            fi
+          BROWSERS_JSON=$(echo "${BROWSERS_JSON}" | jq -c 'map(select(. == "chrome" or . == "chromium" or . == "firefox"))')
+          if [ "$(echo "${BROWSERS_JSON}" | jq 'length')" -eq 0 ]; then
+            BROWSERS_JSON='["chrome"]'
           fi
 
           echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
-          echo "selenium_mode=${SELENIUM_MODE}" >> "$GITHUB_OUTPUT"
           echo "browsers_json=${BROWSERS_JSON}" >> "$GITHUB_OUTPUT"
 
   selenium-e2e:
@@ -206,20 +175,13 @@ jobs:
         id: run-e2e
         env:
           SELENIUM_BROWSER: ${{ matrix.browser }}
-          SELENIUM_MODE: ${{ needs.prepare.outputs.selenium_mode }}
-          SELENIUM_GRID_URL: ${{ inputs.selenium-grid-url }}
           SELENIUM_PARALLEL_MODE: ${{ inputs.parallel-mode }}
           E2E_BASE_URL: ${{ inputs.e2e-base-url }}
         run: |
           CMD='${{ inputs.test-command }}'
           CMD="${CMD//\{browser\}/${{ matrix.browser }}}"
-          echo "Selenium mode: ${SELENIUM_MODE}"
           echo "Running browser: ${{ matrix.browser }}"
-          if [ "${SELENIUM_MODE}" = "grid" ] && [ -n "${SELENIUM_GRID_URL}" ]; then
-            echo "Using Selenium Grid endpoint: ${SELENIUM_GRID_URL}"
-          else
-            echo "Using local browser execution"
-          fi
+          echo "Using local browser execution"
           eval "${CMD}"
 
       - name: Upload E2E Artifacts

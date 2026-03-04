@@ -43,9 +43,9 @@ If running local Chrome mode in CI, ensure browser/driver availability is handle
 ## 3) Runtime environment variables (provided by central workflow)
 
 - `SELENIUM_BROWSER` (`chrome`, `firefox`, etc.)
-- `SELENIUM_MODE` (`local` or `grid`)
-- `SELENIUM_GRID_URL` (required when mode is `grid`)
 - `E2E_BASE_URL` (optional target URL)
+
+Selenium runs in local/direct browser mode only. In CI, set `e2e_base_url` in your pipeline caller to avoid falling back to `http://localhost:3000`.
 
 ## 4) Ownership model
 

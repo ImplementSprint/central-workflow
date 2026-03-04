@@ -436,7 +436,7 @@ Each environment requires its own set of secrets configured in GitHub:
 Per-environment secrets:
 ├── VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID
 ├── SONAR_TOKEN / SONAR_PROJECT_KEY / SONAR_ORG
-├── SELENIUM_GRID_URL (when Selenium Grid is enabled)
+├── E2E_BASE_URL (optional, when Selenium targets non-local URL)
 ├── K6_CLOUD_TOKEN / K6_CLOUD_PROJECT_ID (when Grafana k6 is enabled)
 ├── DESCOPE_PROJECT_ID / DESCOPE_BASE_URL / DESCOPE_ISSUER
 ├── DESCOPE_M2M_CLIENT_ID / DESCOPE_M2M_CLIENT_SECRET
@@ -458,7 +458,7 @@ Per-environment secrets:
 | Audit log generation | No | No | Yes (365-day retention) |
 | Auto-revert on failure | No | Yes | Yes |
 | Detox E2E (mobile) | No | Yes | No |
-| Selenium Grid E2E (web, optional) | No | Yes | Optional |
+| Selenium E2E (web, optional) | No | Yes | Optional |
 | Grafana k6 (cloud, optional) | No | Yes | Optional |
 | Notification escalation (`@here`) | No | Yes | Yes |
 
@@ -492,7 +492,7 @@ Every push or PR to `test`, `uat`, or `main` triggers the full pipeline:
 │     └→ Code quality + security analysis                     │
 │                                                             │
 │  5. Optional QA Extensions                                  │
-│     ├→ Selenium Grid E2E (multi-browser)                   │
+│     ├→ Selenium E2E (multi-browser, local browser mode)    │
 │     └→ Grafana k6 load tests (cloud)                        │
 │                                                             │
 │  6. Branch-Specific Actions                                 │
@@ -579,7 +579,7 @@ Every PR must pass these gates before merge:
 | **Security Audit** | `npm audit` | No HIGH/CRITICAL | Yes |
 | **License Check** | Custom script | Allowlist only | Yes |
 | **SonarCloud** | SonarQube Scanner | Quality gate pass | Yes (when enabled) |
-| **Selenium Grid E2E** | Selenium WebDriver/Grid | Browser suite must pass | Yes (when enabled) |
+| **Selenium E2E** | Selenium WebDriver | Browser suite must pass | Yes (when enabled) |
 | **Grafana k6 Load** | k6 + Grafana Cloud | Load profile must pass | Yes (when enabled) |
 | **Frontend Standards** | Custom check | Next.js + strict TS conventions | Yes (FE repos) |
 | **Governance** | Reusable workflow | Coverage thresholds met | Yes |

@@ -8,8 +8,6 @@ import firefox from 'selenium-webdriver/firefox.js';
 
 const baseUrl: string = process.env.E2E_BASE_URL || 'http://localhost:3000';
 const requestedBrowser: string = (process.env.SELENIUM_BROWSER || 'chrome').toLowerCase();
-const seleniumMode: string = (process.env.SELENIUM_MODE || 'local').toLowerCase();
-const gridUrl: string = process.env.SELENIUM_GRID_URL || '';
 
 function resolveBrowser(browserName: string): Browser {
   if (browserName === 'firefox') return Browser.FIREFOX;
@@ -18,14 +16,6 @@ function resolveBrowser(browserName: string): Browser {
 
 async function buildDriver() {
   const browser = resolveBrowser(requestedBrowser);
-
-  if (seleniumMode === 'grid') {
-    if (!gridUrl) {
-      throw new Error('SELENIUM_GRID_URL is required when SELENIUM_MODE=grid');
-    }
-
-    return new Builder().usingServer(gridUrl).forBrowser(browser).build();
-  }
 
   if (browser === Browser.FIREFOX) {
     const options = new firefox.Options();
@@ -53,7 +43,7 @@ async function runSmoke(): Promise<void> {
       throw new Error('Smoke check failed: page body text is empty');
     }
 
-    console.log(`✅ Selenium smoke passed on ${requestedBrowser} (${seleniumMode}) against ${baseUrl}`);
+    console.log(`✅ Selenium smoke passed on ${requestedBrowser} against ${baseUrl}`);
   } finally {
     await driver.quit();
   }

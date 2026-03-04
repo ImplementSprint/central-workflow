@@ -16,16 +16,12 @@ on:
         description: "Run Selenium E2E checks"
         type: boolean
         default: true
-      selenium_mode:
-        description: "Selenium execution mode (local|grid)"
-        type: string
-        default: "local"
       selenium_browsers:
         description: "Selenium browser list (JSON array or CSV)"
         type: string
         default: '["chrome"]'
-      selenium_grid_url:
-        description: "Selenium Grid URL (required when selenium_mode=grid)"
+      e2e_base_url:
+        description: "Optional base URL for Selenium E2E"
         type: string
         default: ""
       selenium_run_only_on_branch:
@@ -70,16 +66,12 @@ on:
         description: "Run Selenium E2E checks"
         type: boolean
         default: true
-      selenium_mode:
-        description: "Selenium execution mode (local|grid)"
-        type: string
-        default: "local"
       selenium_browsers:
         description: "Selenium browser list (JSON array or CSV)"
         type: string
         default: '["chrome"]'
-      selenium_grid_url:
-        description: "Selenium Grid URL (required when selenium_mode=grid)"
+      e2e_base_url:
+        description: "Optional base URL for Selenium E2E"
         type: string
         default: ""
       selenium_run_only_on_branch:
@@ -215,9 +207,8 @@ jobs:
     timeout-minutes: 30
     outputs:
       enable_selenium: ${{ steps.resolve.outputs.enable_selenium }}
-      selenium_mode: ${{ steps.resolve.outputs.selenium_mode }}
       selenium_browsers: ${{ steps.resolve.outputs.selenium_browsers }}
-      selenium_grid_url: ${{ steps.resolve.outputs.selenium_grid_url }}
+      e2e_base_url: ${{ steps.resolve.outputs.e2e_base_url }}
       selenium_run_only_on_branch: ${{ steps.resolve.outputs.selenium_run_only_on_branch }}
       enable_grafana_k6: ${{ steps.resolve.outputs.enable_grafana_k6 }}
       k6_script_path: ${{ steps.resolve.outputs.k6_script_path }}
@@ -229,9 +220,8 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           IN_ENABLE_SELENIUM: ${{ inputs.enable_selenium }}
-          IN_SELENIUM_MODE: ${{ inputs.selenium_mode }}
           IN_SELENIUM_BROWSERS: ${{ inputs.selenium_browsers }}
-          IN_SELENIUM_GRID_URL: ${{ inputs.selenium_grid_url }}
+          IN_E2E_BASE_URL: ${{ inputs.e2e_base_url }}
           IN_SELENIUM_RUN_ONLY_ON_BRANCH: ${{ inputs.selenium_run_only_on_branch }}
           IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
           IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
@@ -240,7 +230,6 @@ jobs:
         run: |
           ENABLE_SELENIUM="${IN_ENABLE_SELENIUM}"
           ENABLE_GRAFANA_K6="${IN_ENABLE_GRAFANA_K6}"
-          SELENIUM_MODE="local"
 
           if [ -z "${ENABLE_SELENIUM}" ]; then
             ENABLE_SELENIUM="true"
@@ -256,20 +245,6 @@ jobs:
 
           if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
             ENABLE_GRAFANA_K6="true"
-          fi
-
-          if [ -n "${IN_SELENIUM_MODE}" ]; then
-            SELENIUM_MODE="${IN_SELENIUM_MODE}"
-          fi
-
-          if [ "${SELENIUM_MODE}" != "local" ] && [ "${SELENIUM_MODE}" != "grid" ]; then
-            echo "❌ Invalid selenium_mode='${SELENIUM_MODE}'. Allowed: local, grid."
-            exit 1
-          fi
-
-          if [ "${ENABLE_SELENIUM}" = "true" ] && [ "${SELENIUM_MODE}" = "grid" ] && [ -z "${IN_SELENIUM_GRID_URL}" ]; then
-            echo "❌ Selenium Grid URL is required when enable_selenium=true and selenium_mode=grid."
-            exit 1
           fi
 
           SELENIUM_BROWSERS='["chrome"]'
@@ -293,9 +268,8 @@ jobs:
           fi
 
           echo "enable_selenium=${ENABLE_SELENIUM}" >> "$GITHUB_OUTPUT"
-          echo "selenium_mode=${SELENIUM_MODE}" >> "$GITHUB_OUTPUT"
           echo "selenium_browsers=${SELENIUM_BROWSERS}" >> "$GITHUB_OUTPUT"
-          echo "selenium_grid_url=${IN_SELENIUM_GRID_URL}" >> "$GITHUB_OUTPUT"
+          echo "e2e_base_url=${IN_E2E_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "selenium_run_only_on_branch=${SELENIUM_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "enable_grafana_k6=${ENABLE_GRAFANA_K6}" >> "$GITHUB_OUTPUT"
           echo "k6_script_path=${K6_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
@@ -437,7 +411,7 @@ jobs:
     secrets: inherit
 
   selenium-e2e:
-    name: "Selenium Grid E2E — ${{ matrix.system.name }}"
+    name: "Selenium E2E — ${{ matrix.system.name }}"
     needs: [active-systems, frontend, qa-controls]
     if: >-
       always() &&
@@ -452,9 +426,8 @@ jobs:
     with:
       working-directory: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      selenium-mode: ${{ needs.qa-controls.outputs.selenium_mode }}
       browser-list: ${{ needs.qa-controls.outputs.selenium_browsers }}
-      selenium-grid-url: ${{ needs.qa-controls.outputs.selenium_grid_url }}
+      e2e-base-url: ${{ needs.qa-controls.outputs.e2e_base_url }}
       run-only-on-branch: ${{ needs.qa-controls.outputs.selenium_run_only_on_branch }}
       parallel-mode: matrix
       max-parallel: 3
