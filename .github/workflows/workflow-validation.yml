@@ -46,24 +46,20 @@ jobs:
             fi
           }
 
-          SINGLE="templates/mobile-single-pipeline-caller.yml"
-          MULTI="templates/mobile-multi-pipeline-caller.yml"
+          CALLER="templates/mobile-pipeline-caller.yml"
 
-          assert_contains "$SINGLE" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main"
-          assert_contains "$SINGLE" "pipeline_mode: single"
-          assert_contains "$SINGLE" "enable_grafana_k6"
-          assert_contains "$SINGLE" "k6_script_path"
-          assert_contains "$SINGLE" "k6_base_url"
-          assert_contains "$SINGLE" "k6_run_only_on_branch"
+          assert_contains "$CALLER" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main"
+          assert_contains "$CALLER" "pipeline_mode"
+          assert_contains "$CALLER" "enable_lint"
+          assert_contains "$CALLER" "enable_security_scan"
+          assert_contains "$CALLER" "enable_sonar"
+          assert_contains "$CALLER" "enable_governance"
+          assert_contains "$CALLER" "enable_grafana_k6"
+          assert_contains "$CALLER" "k6_script_path"
+          assert_contains "$CALLER" "k6_base_url"
+          assert_contains "$CALLER" "k6_run_only_on_branch"
 
-          assert_contains "$MULTI" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main"
-          assert_contains "$MULTI" "pipeline_mode: multi"
-          assert_contains "$MULTI" "enable_grafana_k6"
-          assert_contains "$MULTI" "k6_script_path"
-          assert_contains "$MULTI" "k6_base_url"
-          assert_contains "$MULTI" "k6_run_only_on_branch"
-
-          echo "✅ Mobile caller templates validated."
+          echo "✅ Mobile caller template validated."
 
   simulate-mobile-config-matrix:
     name: "Simulate Mobile Config Matrix"

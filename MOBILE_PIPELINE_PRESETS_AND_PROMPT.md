@@ -23,6 +23,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "mobile_stack": "expo",
   "enable_grafana_k6": true,
   "k6_script_path": "tests/performance/k6-smoke.js",
+  "k6_base_url": "",
   "k6_run_only_on_branch": "test,uat,main",
   "node_version": 20,
   "java_version": "17",
@@ -51,6 +52,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "mobile_stack": "kotlin",
   "enable_grafana_k6": true,
   "k6_script_path": "tests/performance/k6-smoke.js",
+  "k6_base_url": "",
   "k6_run_only_on_branch": "test,uat,main",
   "java_version": "17",
   "enable_governance": true,
@@ -73,6 +75,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "mobile_stack": "expo",
     "enable_grafana_k6": true,
     "k6_script_path": "tests/performance/k6-smoke.js",
+    "k6_base_url": "",
     "k6_run_only_on_branch": "test,uat,main",
     "node_version": 20,
     "java_version": "17",
@@ -94,6 +97,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "mobile_stack": "kotlin",
     "enable_grafana_k6": true,
     "k6_script_path": "tests/performance/k6-smoke.js",
+    "k6_base_url": "",
     "k6_run_only_on_branch": "test,uat,main",
     "java_version": "17",
     "enable_governance": true,
@@ -136,8 +140,8 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 > For `mixed-multi`, ensure both structures exist in separate folders and are independently buildable.
 >
 > Also create/update `.github/workflows` to include exactly one caller file:
-> - single mode: `master-pipeline-mobile-single.yml`
-> - multi mode: `master-pipeline-mobile-multi.yml`
+> - Copy `templates/mobile-pipeline-caller.yml` as `.github/workflows/master-pipeline-mobile.yml`
+> - The `pipeline_mode` input controls single vs multi behaviour (default: `auto`)
 >
 > Finally, provide the exact repository variable value to set:
 > - `MOBILE_SINGLE_SYSTEMS_JSON` or `MOBILE_MULTI_SYSTEMS_JSON`
