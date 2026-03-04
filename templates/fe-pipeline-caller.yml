@@ -53,6 +53,14 @@ on:
         description: "Branch allowed for k6 execution"
         type: string
         default: "test,uat"
+      enforce_e2e_k6:
+        description: "Enforce Selenium + k6 checks before promotion"
+        type: boolean
+        default: true
+      enforce_e2e_k6_on_branches:
+        description: "Branches where Selenium + k6 are mandatory"
+        type: string
+        default: "test,uat"
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -83,6 +91,8 @@ jobs:
       k6_script_path: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.k6_script_path || 'tests/performance/k6-smoke.js' }}
       k6_base_url: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.k6_base_url || '' }}
       k6_run_only_on_branch: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.k6_run_only_on_branch || 'test,uat' }}
+      enforce_e2e_k6: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enforce_e2e_k6 || 'true') || true }}
+      enforce_e2e_k6_on_branches: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enforce_e2e_k6_on_branches || 'test,uat' }}
       run_deploy: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.run_deploy || 'true') || true }}
       run_promotion: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.run_promotion || 'true') || true }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.dry_run || 'false') || false }}

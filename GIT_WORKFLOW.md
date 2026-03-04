@@ -45,6 +45,11 @@ This document defines the end-to-end Git workflow for all repositories under the
 | `uat` | UAT | User acceptance testing — promoted from `test` | Protected: require PR, require status checks |
 | `main` | Production | Production releases — promoted from `uat` | Protected: require PR, require status checks, require approval |
 
+Required status checks for `test` and `uat` must include:
+
+- `E2E + k6 Enforcement Gate`
+- `Pipeline Summary`
+
 ### Short-Lived Branches
 
 | Branch Type | Prefix | Merges Into | Lifetime |
@@ -458,8 +463,8 @@ Per-environment secrets:
 | Audit log generation | No | No | Yes (365-day retention) |
 | Auto-revert on failure | No | Yes | Yes |
 | Detox E2E (mobile) | No | Yes | No |
-| Selenium E2E (web, optional) | No | Yes | Optional |
-| Grafana k6 (cloud, optional) | No | Yes | Optional |
+| Selenium E2E (web) | Yes (enforced) | Yes (enforced) | Optional |
+| Grafana k6 (cloud) | Yes (enforced) | Yes (enforced) | Optional |
 | Notification escalation (`@here`) | No | Yes | Yes |
 
 ---
@@ -579,8 +584,8 @@ Every PR must pass these gates before merge:
 | **Security Audit** | `npm audit` | No HIGH/CRITICAL | Yes |
 | **License Check** | Custom script | Allowlist only | Yes |
 | **SonarCloud** | SonarQube Scanner | Quality gate pass | Yes (when enabled) |
-| **Selenium E2E** | Selenium WebDriver | Browser suite must pass | Yes (when enabled) |
-| **Grafana k6 Load** | k6 + Grafana Cloud | Load profile must pass | Yes (when enabled) |
+| **Selenium E2E** | Selenium WebDriver | Browser suite must pass | Yes (mandatory on `test`,`uat`) |
+| **Grafana k6 Load** | k6 + Grafana Cloud | Load profile must pass | Yes (mandatory on `test`,`uat`) |
 | **Frontend Standards** | Custom check | Next.js + strict TS conventions | Yes (FE repos) |
 | **Governance** | Reusable workflow | Coverage thresholds met | Yes |
 | **Production Gate** | Reusable workflow | Checklist + optional approval | Yes (main only) |
