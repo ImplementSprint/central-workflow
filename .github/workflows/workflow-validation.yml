@@ -1,0 +1,163 @@
+name: "Workflow Validation"
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "templates/**"
+      - "MOBILE_PIPELINE_PRESETS_AND_PROMPT.md"
+      - "USER_STORIES_STATUS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: "Actionlint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: rhysd/actionlint@v1
+
+  validate-mobile-callers:
+    name: "Validate Mobile Caller Templates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Assert mobile caller template contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          assert_contains() {
+            local file="$1"
+            local expected="$2"
+            if ! grep -Fq "$expected" "$file"; then
+              echo "❌ Expected '$expected' in $file"
+              exit 1
+            fi
+          }
+
+          SINGLE="templates/mobile-single-pipeline-caller.yml"
+          MULTI="templates/mobile-multi-pipeline-caller.yml"
+
+          assert_contains "$SINGLE" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main"
+          assert_contains "$SINGLE" "pipeline_mode: single"
+          assert_contains "$SINGLE" "enable_grafana_k6"
+          assert_contains "$SINGLE" "k6_script_path"
+          assert_contains "$SINGLE" "k6_base_url"
+          assert_contains "$SINGLE" "k6_run_only_on_branch"
+
+          assert_contains "$MULTI" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main"
+          assert_contains "$MULTI" "pipeline_mode: multi"
+          assert_contains "$MULTI" "enable_grafana_k6"
+          assert_contains "$MULTI" "k6_script_path"
+          assert_contains "$MULTI" "k6_base_url"
+          assert_contains "$MULTI" "k6_run_only_on_branch"
+
+          echo "✅ Mobile caller templates validated."
+
+  simulate-mobile-config-matrix:
+    name: "Simulate Mobile Config Matrix"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate normalization + stack classification
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          normalize_and_validate() {
+            local input_json="$1"
+            local normalized=""
+            local type=""
+
+            type=$(echo "$input_json" | jq -r 'type')
+            if [ "$type" = "object" ]; then
+              normalized=$(echo "$input_json" | jq -c '[.]')
+            elif [ "$type" = "array" ]; then
+              normalized=$(echo "$input_json" | jq -c .)
+            else
+              echo "❌ Config JSON must be object or array"
+              exit 1
+            fi
+
+            echo "$normalized" | jq -e 'length > 0' >/dev/null
+            echo "$normalized" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0))' >/dev/null
+            echo "$normalized"
+          }
+
+          classify_target() {
+            local system_json="$1"
+            local stack_declared=""
+            local has_package_json=""
+            local has_gradle=""
+
+            stack_declared=$(echo "$system_json" | jq -r '(.mobile_stack // .stack // .framework // "") | ascii_downcase | gsub("[ _]"; "-")')
+            has_package_json=$(echo "$system_json" | jq -r '.has_package_json // false')
+            has_gradle=$(echo "$system_json" | jq -r '.has_gradle // false')
+
+            case "$stack_declared" in
+              kotlin|android-kotlin|native-kotlin)
+                echo "kotlin"
+                ;;
+              react-native|reactnative|rn|expo)
+                echo "react-native"
+                ;;
+              *)
+                if [ "$has_package_json" = "true" ]; then
+                  echo "react-native"
+                elif [ "$has_gradle" = "true" ]; then
+                  echo "kotlin"
+                else
+                  echo "react-native"
+                fi
+                ;;
+            esac
+          }
+
+          EXPO_SINGLE='{"name":"mobile-expo","dir":".","mobile_stack":"expo","has_package_json":true}'
+          KOTLIN_SINGLE='{"name":"mobile-kotlin","dir":".","mobile_stack":"kotlin","has_gradle":true}'
+          MIXED_MULTI='[{"name":"mobile-expo","dir":"apps/mobile-expo","mobile_stack":"expo","has_package_json":true},{"name":"mobile-kotlin","dir":"apps/mobile-kotlin","mobile_stack":"kotlin","has_gradle":true}]'
+
+          EXPO_NORM=$(normalize_and_validate "$EXPO_SINGLE")
+          KOTLIN_NORM=$(normalize_and_validate "$KOTLIN_SINGLE")
+          MIXED_NORM=$(normalize_and_validate "$MIXED_MULTI")
+
+          if [ "$(echo "$EXPO_NORM" | jq 'length')" -ne 1 ]; then
+            echo "❌ Expo single normalization failed"
+            exit 1
+          fi
+
+          if [ "$(echo "$KOTLIN_NORM" | jq 'length')" -ne 1 ]; then
+            echo "❌ Kotlin single normalization failed"
+            exit 1
+          fi
+
+          if [ "$(echo "$MIXED_NORM" | jq 'length')" -lt 2 ]; then
+            echo "❌ Mixed multi normalization failed"
+            exit 1
+          fi
+
+          EXPO_CLASS=$(classify_target "$(echo "$EXPO_NORM" | jq -c '.[0]')")
+          KOTLIN_CLASS=$(classify_target "$(echo "$KOTLIN_NORM" | jq -c '.[0]')")
+
+          if [ "$EXPO_CLASS" != "react-native" ]; then
+            echo "❌ Expo sample classification expected react-native, got $EXPO_CLASS"
+            exit 1
+          fi
+
+          if [ "$KOTLIN_CLASS" != "kotlin" ]; then
+            echo "❌ Kotlin sample classification expected kotlin, got $KOTLIN_CLASS"
+            exit 1
+          fi
+
+          echo "✅ Mobile config matrix simulation passed."

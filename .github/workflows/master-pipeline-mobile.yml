@@ -12,6 +12,22 @@ on:
         type: choice
         options: [auto, single, multi]
         default: auto
+      enable_grafana_k6:
+        description: "Run Grafana k6 cloud checks"
+        type: boolean
+        default: true
+      k6_script_path:
+        description: "Path to k6 script"
+        type: string
+        default: "tests/performance/k6-smoke.js"
+      k6_base_url:
+        description: "Optional base URL for k6"
+        type: string
+        default: ""
+      k6_run_only_on_branch:
+        description: "Branch allowed for k6 execution"
+        type: string
+        default: "test,uat,main"
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -30,6 +46,22 @@ on:
         description: "Pipeline mode (auto|single|multi)"
         type: string
         default: auto
+      enable_grafana_k6:
+        description: "Run Grafana k6 cloud checks"
+        type: boolean
+        default: true
+      k6_script_path:
+        description: "Path to k6 script"
+        type: string
+        default: "tests/performance/k6-smoke.js"
+      k6_base_url:
+        description: "Optional base URL for k6"
+        type: string
+        default: ""
+      k6_run_only_on_branch:
+        description: "Branch allowed for k6 execution"
+        type: string
+        default: "test,uat,main"
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -148,6 +180,49 @@ jobs:
           echo "systems_json=${SYSTEMS_JSON}" >> "$GITHUB_OUTPUT"
           echo "systems_label=${SYSTEMS_LABEL}" >> "$GITHUB_OUTPUT"
           echo "pipeline_mode=${PIPELINE_MODE}" >> "$GITHUB_OUTPUT"
+
+  qa-controls:
+    name: "Resolve QA Controls"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      enable_grafana_k6: ${{ steps.resolve.outputs.enable_grafana_k6 }}
+      k6_script_path: ${{ steps.resolve.outputs.k6_script_path }}
+      k6_base_url: ${{ steps.resolve.outputs.k6_base_url }}
+      k6_run_only_on_branch: ${{ steps.resolve.outputs.k6_run_only_on_branch }}
+    steps:
+      - name: Resolve QA inputs
+        id: resolve
+        env:
+          IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
+          IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
+          IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
+          IN_K6_RUN_ONLY_ON_BRANCH: ${{ inputs.k6_run_only_on_branch }}
+        run: |
+          ENABLE_GRAFANA_K6="${IN_ENABLE_GRAFANA_K6}"
+
+          if [ -z "${ENABLE_GRAFANA_K6}" ]; then
+            ENABLE_GRAFANA_K6="true"
+          fi
+
+          if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
+            ENABLE_GRAFANA_K6="true"
+          fi
+
+          K6_SCRIPT_PATH="tests/performance/k6-smoke.js"
+          if [ -n "${IN_K6_SCRIPT_PATH}" ]; then
+            K6_SCRIPT_PATH="${IN_K6_SCRIPT_PATH}"
+          fi
+
+          K6_RUN_ONLY_ON_BRANCH="test,uat,main"
+          if [ -n "${IN_K6_RUN_ONLY_ON_BRANCH}" ]; then
+            K6_RUN_ONLY_ON_BRANCH="${IN_K6_RUN_ONLY_ON_BRANCH}"
+          fi
+
+          echo "enable_grafana_k6=${ENABLE_GRAFANA_K6}" >> "$GITHUB_OUTPUT"
+          echo "k6_script_path=${K6_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "k6_base_url=${IN_K6_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "k6_run_only_on_branch=${K6_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
 
   active-systems:
     name: "Detect Active Mobile Systems"
@@ -370,6 +445,67 @@ jobs:
       dockerfile-path: ${{ matrix.system.dockerfile_path || 'Dockerfile' }}
       upload-artifact: true
 
+  k6-systems:
+    name: "Detect k6-Enabled Mobile Systems"
+    needs: [qa-controls, active-systems]
+    if: >-
+      always() &&
+      fromJson(needs.active-systems.outputs.active_count) > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      k6_systems_json: ${{ steps.select.outputs.k6_systems_json }}
+      k6_count: ${{ steps.select.outputs.k6_count }}
+      k6_label: ${{ steps.select.outputs.k6_label }}
+    steps:
+      - name: Select k6-enabled systems
+        id: select
+        env:
+          ENABLE_GRAFANA_K6: ${{ needs.qa-controls.outputs.enable_grafana_k6 }}
+          ACTIVE_SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+        run: |
+          if [ "${ENABLE_GRAFANA_K6}" != "true" ]; then
+            K6_SYSTEMS='[]'
+          else
+            K6_SYSTEMS=$(echo "${ACTIVE_SYSTEMS_JSON}" | jq -c 'map(select((.enable_grafana_k6 // true) != false and (.enable_k6 // true) != false))')
+          fi
+
+          K6_COUNT=$(echo "${K6_SYSTEMS}" | jq 'length')
+          if [ "${K6_COUNT}" -gt 0 ]; then
+            K6_LABEL=$(echo "${K6_SYSTEMS}" | jq -r 'map(.name) | join(", ")')
+          else
+            K6_LABEL="None"
+          fi
+
+          echo "k6_systems_json=${K6_SYSTEMS}" >> "$GITHUB_OUTPUT"
+          echo "k6_count=${K6_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "k6_label=${K6_LABEL}" >> "$GITHUB_OUTPUT"
+
+  mobile-grafana-k6:
+    name: "Mobile Grafana k6 — ${{ matrix.system.name }}"
+    needs: [qa-controls, k6-systems, classify-systems, mobile-react-native, mobile-kotlin]
+    if: >-
+      always() &&
+      needs.qa-controls.outputs.enable_grafana_k6 == 'true' &&
+      fromJson(needs.k6-systems.outputs.k6_count) > 0 &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.k6-systems.outputs.k6_systems_json) }}
+    uses: ./.github/workflows/grafana-k6.yml
+    with:
+      system-name: ${{ matrix.system.name }}
+      working-directory: ${{ matrix.system.dir || '.' }}
+      script-path: ${{ matrix.system.k6_script_path || needs.qa-controls.outputs.k6_script_path }}
+      target-base-url: ${{ matrix.system.k6_base_url || needs.qa-controls.outputs.k6_base_url }}
+      run-only-on-branch: ${{ matrix.system.k6_run_only_on_branch || needs.qa-controls.outputs.k6_run_only_on_branch }}
+      upload-artifacts: true
+    secrets:
+      K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+      K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
+
   version-test:
     name: "Version Tag — TEST (${{ matrix.system.name }})"
     needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems]
@@ -410,9 +546,95 @@ jobs:
       mode: release
       stream: ${{ matrix.system.version_stream }}
 
+  publish-mobile-release:
+    name: "Publish Mobile Release — ${{ matrix.system.name }}"
+    needs: [active-systems, qa-controls, k6-systems, mobile-react-native, mobile-kotlin, mobile-grafana-k6, version-main-release]
+    if: >-
+      always() &&
+      github.repository != 'ImplementSprint/central-workflow' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.version-main-release.result == 'success' || needs.version-main-release.result == 'skipped') &&
+      (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || (needs.mobile-grafana-k6.result == 'success' || needs.mobile-grafana-k6.result == 'skipped'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve MAIN stream tag
+        id: tag
+        env:
+          VERSION_STREAM: ${{ matrix.system.version_stream || 'global' }}
+        run: |
+          if [ -z "${VERSION_STREAM}" ] || [ "${VERSION_STREAM}" = "global" ]; then
+            PREFIX="main-v"
+          else
+            PREFIX="main-${VERSION_STREAM}-v"
+          fi
+
+          TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+          if [ -z "${TAG}" ]; then
+            echo "❌ No release tag found for prefix ${PREFIX}"
+            exit 1
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.system.name }}-android-*
+          path: release-assets/${{ matrix.system.name }}
+          merge-multiple: true
+          if-no-files-found: ignore
+
+      - name: Validate release artifacts
+        env:
+          SYSTEM_NAME: ${{ matrix.system.name }}
+        run: |
+          FILE_COUNT=$(find "release-assets/${SYSTEM_NAME}" -type f | wc -l)
+          if [ "${FILE_COUNT}" -eq 0 ]; then
+            echo "❌ No Android artifacts found for ${SYSTEM_NAME} in this run."
+            exit 1
+          fi
+
+      - name: Zip release assets
+        id: zip
+        env:
+          SYSTEM_NAME: ${{ matrix.system.name }}
+        run: |
+          mkdir -p release-zips
+          ZIP_PATH="release-zips/${SYSTEM_NAME}-android-release.zip"
+          cd "release-assets/${SYSTEM_NAME}"
+          zip -r "../../${ZIP_PATH}" .
+          cd - >/dev/null
+          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: ${{ steps.zip.outputs.zip_path }}
+          fail_on_unmatched_files: true
+          append_body: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   aggregate-mobile-status:
     name: "Aggregate Mobile Status"
-    needs: [active-systems, classify-systems, mobile-react-native, mobile-kotlin]
+    needs: [qa-controls, active-systems, classify-systems, mobile-react-native, mobile-kotlin, k6-systems, mobile-grafana-k6]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -423,19 +645,24 @@ jobs:
       - name: Compute overall status
         id: aggregate
         env:
+          ENABLE_GRAFANA_K6: ${{ needs.qa-controls.outputs.enable_grafana_k6 }}
           ACTIVE_COUNT_RAW: ${{ needs.active-systems.outputs.active_count }}
           RN_COUNT_RAW: ${{ needs.classify-systems.outputs.react_native_count }}
           KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          K6_COUNT_RAW: ${{ needs.k6-systems.outputs.k6_count }}
           RN_RESULT: ${{ needs.mobile-react-native.result }}
           KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+          K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
         run: |
           ACTIVE_COUNT="${ACTIVE_COUNT_RAW:-0}"
           RN_COUNT="${RN_COUNT_RAW:-0}"
           KOTLIN_COUNT="${KOTLIN_COUNT_RAW:-0}"
+          K6_COUNT="${K6_COUNT_RAW:-0}"
 
           if ! [[ "${ACTIVE_COUNT}" =~ ^[0-9]+$ ]]; then ACTIVE_COUNT=0; fi
           if ! [[ "${RN_COUNT}" =~ ^[0-9]+$ ]]; then RN_COUNT=0; fi
           if ! [[ "${KOTLIN_COUNT}" =~ ^[0-9]+$ ]]; then KOTLIN_COUNT=0; fi
+          if ! [[ "${K6_COUNT}" =~ ^[0-9]+$ ]]; then K6_COUNT=0; fi
 
           OVERALL="success"
           DETAILS=""
@@ -457,6 +684,14 @@ jobs:
 
             if [ "${KOTLIN_COUNT}" -gt 0 ]; then
               case "${KOTLIN_RESULT}" in
+                success|skipped) ;;
+                cancelled) CANCELLED=true ;;
+                *) FAILED=true ;;
+              esac
+            fi
+
+            if [ "${ENABLE_GRAFANA_K6}" = "true" ] && [ "${K6_COUNT}" -gt 0 ]; then
+              case "${K6_RESULT}" in
                 success|skipped) ;;
                 cancelled) CANCELLED=true ;;
                 *) FAILED=true ;;
@@ -559,14 +794,18 @@ jobs:
     needs:
       [
         systems-config,
+        qa-controls,
         active-systems,
         classify-systems,
         mobile-react-native,
         kotlin-governance,
         mobile-kotlin,
+        k6-systems,
+        mobile-grafana-k6,
         aggregate-mobile-status,
         version-test,
         version-main-release,
+        publish-mobile-release,
         prepare-notify-test-payload,
         prepare-notify-uat-payload,
         prepare-notify-main-payload,
