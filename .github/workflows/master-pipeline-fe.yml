@@ -12,6 +12,42 @@ on:
         type: choice
         options: [auto, single, multi]
         default: auto
+      enable_selenium:
+        description: "Run Selenium E2E checks"
+        type: boolean
+        default: false
+      selenium_mode:
+        description: "Selenium execution mode (local|grid)"
+        type: string
+        default: "local"
+      selenium_browsers:
+        description: "Selenium browser list (JSON array or CSV)"
+        type: string
+        default: '["chrome"]'
+      selenium_grid_url:
+        description: "Selenium Grid URL (required when selenium_mode=grid)"
+        type: string
+        default: ""
+      selenium_run_only_on_branch:
+        description: "Branch allowed for Selenium execution"
+        type: string
+        default: "test"
+      enable_grafana_k6:
+        description: "Run Grafana k6 cloud checks"
+        type: boolean
+        default: false
+      k6_script_path:
+        description: "Path to k6 script"
+        type: string
+        default: "tests/performance/k6-smoke.js"
+      k6_base_url:
+        description: "Optional base URL for k6"
+        type: string
+        default: ""
+      k6_run_only_on_branch:
+        description: "Branch allowed for k6 execution"
+        type: string
+        default: "uat"
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -30,6 +66,42 @@ on:
         description: "Pipeline mode (auto|single|multi)"
         type: string
         default: auto
+      enable_selenium:
+        description: "Run Selenium E2E checks"
+        type: boolean
+        default: false
+      selenium_mode:
+        description: "Selenium execution mode (local|grid)"
+        type: string
+        default: "local"
+      selenium_browsers:
+        description: "Selenium browser list (JSON array or CSV)"
+        type: string
+        default: '["chrome"]'
+      selenium_grid_url:
+        description: "Selenium Grid URL (required when selenium_mode=grid)"
+        type: string
+        default: ""
+      selenium_run_only_on_branch:
+        description: "Branch allowed for Selenium execution"
+        type: string
+        default: "test"
+      enable_grafana_k6:
+        description: "Run Grafana k6 cloud checks"
+        type: boolean
+        default: false
+      k6_script_path:
+        description: "Path to k6 script"
+        type: string
+        default: "tests/performance/k6-smoke.js"
+      k6_base_url:
+        description: "Optional base URL for k6"
+        type: string
+        default: ""
+      k6_run_only_on_branch:
+        description: "Branch allowed for k6 execution"
+        type: string
+        default: "uat"
       run_deploy:
         description: "Run deploy jobs"
         type: boolean
@@ -136,6 +208,90 @@ jobs:
           echo "systems_json=${SYSTEMS_JSON}" >> "$GITHUB_OUTPUT"
           echo "systems_label=${SYSTEMS_LABEL}" >> "$GITHUB_OUTPUT"
           echo "pipeline_mode=${PIPELINE_MODE}" >> "$GITHUB_OUTPUT"
+
+  qa-controls:
+    name: "Resolve QA Controls"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      enable_selenium: ${{ steps.resolve.outputs.enable_selenium }}
+      selenium_mode: ${{ steps.resolve.outputs.selenium_mode }}
+      selenium_browsers: ${{ steps.resolve.outputs.selenium_browsers }}
+      selenium_grid_url: ${{ steps.resolve.outputs.selenium_grid_url }}
+      selenium_run_only_on_branch: ${{ steps.resolve.outputs.selenium_run_only_on_branch }}
+      enable_grafana_k6: ${{ steps.resolve.outputs.enable_grafana_k6 }}
+      k6_script_path: ${{ steps.resolve.outputs.k6_script_path }}
+      k6_base_url: ${{ steps.resolve.outputs.k6_base_url }}
+      k6_run_only_on_branch: ${{ steps.resolve.outputs.k6_run_only_on_branch }}
+    steps:
+      - name: Resolve QA inputs
+        id: resolve
+        env:
+          IN_ENABLE_SELENIUM: ${{ inputs.enable_selenium }}
+          IN_SELENIUM_MODE: ${{ inputs.selenium_mode }}
+          IN_SELENIUM_BROWSERS: ${{ inputs.selenium_browsers }}
+          IN_SELENIUM_GRID_URL: ${{ inputs.selenium_grid_url }}
+          IN_SELENIUM_RUN_ONLY_ON_BRANCH: ${{ inputs.selenium_run_only_on_branch }}
+          IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
+          IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
+          IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
+          IN_K6_RUN_ONLY_ON_BRANCH: ${{ inputs.k6_run_only_on_branch }}
+        run: |
+          ENABLE_SELENIUM="false"
+          ENABLE_GRAFANA_K6="false"
+          SELENIUM_MODE="local"
+
+          if [ "${IN_ENABLE_SELENIUM}" = "true" ]; then
+            ENABLE_SELENIUM="true"
+          fi
+
+          if [ "${IN_ENABLE_GRAFANA_K6}" = "true" ]; then
+            ENABLE_GRAFANA_K6="true"
+          fi
+
+          if [ -n "${IN_SELENIUM_MODE}" ]; then
+            SELENIUM_MODE="${IN_SELENIUM_MODE}"
+          fi
+
+          if [ "${SELENIUM_MODE}" != "local" ] && [ "${SELENIUM_MODE}" != "grid" ]; then
+            echo "❌ Invalid selenium_mode='${SELENIUM_MODE}'. Allowed: local, grid."
+            exit 1
+          fi
+
+          if [ "${ENABLE_SELENIUM}" = "true" ] && [ "${SELENIUM_MODE}" = "grid" ] && [ -z "${IN_SELENIUM_GRID_URL}" ]; then
+            echo "❌ Selenium Grid URL is required when enable_selenium=true and selenium_mode=grid."
+            exit 1
+          fi
+
+          SELENIUM_BROWSERS='["chrome"]'
+          if [ -n "${IN_SELENIUM_BROWSERS}" ]; then
+            SELENIUM_BROWSERS="${IN_SELENIUM_BROWSERS}"
+          fi
+
+          SELENIUM_RUN_ONLY_ON_BRANCH="test"
+          if [ -n "${IN_SELENIUM_RUN_ONLY_ON_BRANCH}" ]; then
+            SELENIUM_RUN_ONLY_ON_BRANCH="${IN_SELENIUM_RUN_ONLY_ON_BRANCH}"
+          fi
+
+          K6_SCRIPT_PATH="tests/performance/k6-smoke.js"
+          if [ -n "${IN_K6_SCRIPT_PATH}" ]; then
+            K6_SCRIPT_PATH="${IN_K6_SCRIPT_PATH}"
+          fi
+
+          K6_RUN_ONLY_ON_BRANCH="uat"
+          if [ -n "${IN_K6_RUN_ONLY_ON_BRANCH}" ]; then
+            K6_RUN_ONLY_ON_BRANCH="${IN_K6_RUN_ONLY_ON_BRANCH}"
+          fi
+
+          echo "enable_selenium=${ENABLE_SELENIUM}" >> "$GITHUB_OUTPUT"
+          echo "selenium_mode=${SELENIUM_MODE}" >> "$GITHUB_OUTPUT"
+          echo "selenium_browsers=${SELENIUM_BROWSERS}" >> "$GITHUB_OUTPUT"
+          echo "selenium_grid_url=${IN_SELENIUM_GRID_URL}" >> "$GITHUB_OUTPUT"
+          echo "selenium_run_only_on_branch=${SELENIUM_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "enable_grafana_k6=${ENABLE_GRAFANA_K6}" >> "$GITHUB_OUTPUT"
+          echo "k6_script_path=${K6_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "k6_base_url=${IN_K6_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "k6_run_only_on_branch=${K6_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
 
   active-systems:
     name: "Detect Active Systems"
@@ -271,6 +427,50 @@ jobs:
       enable-security-scan: true
     secrets: inherit
 
+  selenium-e2e:
+    name: "Selenium Grid E2E — ${{ matrix.system.name }}"
+    needs: [active-systems, frontend, qa-controls]
+    if: >-
+      always() &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
+      needs.qa-controls.outputs.enable_selenium == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/selenium-e2e.yml
+    with:
+      working-directory: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      selenium-mode: ${{ needs.qa-controls.outputs.selenium_mode }}
+      browser-list: ${{ needs.qa-controls.outputs.selenium_browsers }}
+      selenium-grid-url: ${{ needs.qa-controls.outputs.selenium_grid_url }}
+      run-only-on-branch: ${{ needs.qa-controls.outputs.selenium_run_only_on_branch }}
+      parallel-mode: matrix
+      max-parallel: 3
+      fail-fast: false
+      upload-artifacts: true
+    secrets: inherit
+
+  grafana-k6:
+    name: "Grafana k6 — Monorepo"
+    needs: [active-systems, frontend, qa-controls]
+    if: >-
+      always() &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
+      needs.qa-controls.outputs.enable_grafana_k6 == 'true'
+    uses: ./.github/workflows/grafana-k6.yml
+    with:
+      system-name: ${{ needs.active-systems.outputs.active_label }}
+      working-directory: .
+      script-path: ${{ needs.qa-controls.outputs.k6_script_path }}
+      target-base-url: ${{ needs.qa-controls.outputs.k6_base_url }}
+      run-only-on-branch: ${{ needs.qa-controls.outputs.k6_run_only_on_branch }}
+      upload-artifacts: true
+    secrets: inherit
+
   sonarcloud:
     name: "SonarCloud — Monorepo Analysis"
     needs: [frontend, active-systems]
@@ -322,7 +522,7 @@ jobs:
 
   version-test:
     name: "Version Tag — TEST (${{ matrix.system.name }})"
-    needs: [frontend, active-systems, sonarcloud]
+    needs: [frontend, active-systems, sonarcloud, selenium-e2e, grafana-k6]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -330,6 +530,8 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     strategy:
       fail-fast: false
@@ -342,7 +544,7 @@ jobs:
 
   deploy-test:
     name: "TEST — ${{ matrix.system.name }}"
-    needs: [frontend, active-systems, sonarcloud]
+    needs: [frontend, active-systems, sonarcloud, selenium-e2e, grafana-k6]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -350,6 +552,8 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || (inputs.run_deploy == true && inputs.dry_run != true)) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     strategy:
       fail-fast: false
@@ -367,7 +571,7 @@ jobs:
 
   deploy-uat:
     name: "UAT — ${{ matrix.system.name }}"
-    needs: [frontend, active-systems, sonarcloud]
+    needs: [frontend, active-systems, sonarcloud, selenium-e2e, grafana-k6]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -375,6 +579,8 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || (inputs.run_deploy == true && inputs.dry_run != true)) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     strategy:
       fail-fast: false
@@ -392,7 +598,7 @@ jobs:
 
   production-gate:
     name: "Production Readiness Gate"
-    needs: [frontend, active-systems, sonarcloud]
+    needs: [frontend, active-systems, sonarcloud, selenium-e2e, grafana-k6]
     if: >-
       always() &&
       github.ref == 'refs/heads/main' &&
@@ -400,6 +606,8 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || (inputs.run_deploy == true && inputs.dry_run != true)) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     uses: ./.github/workflows/production-gate.yml
     with:
@@ -771,7 +979,7 @@ jobs:
 
   create-pr-to-uat:
     name: "Create PR → UAT"
-    needs: [systems-config, frontend, sonarcloud, version-test, deploy-test, active-systems, prepare-promotion-test-payload]
+    needs: [systems-config, frontend, sonarcloud, selenium-e2e, grafana-k6, version-test, deploy-test, active-systems, prepare-promotion-test-payload]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -779,8 +987,12 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_promotion == true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       needs.version-test.result == 'success' &&
-      (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
+      (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped') &&
+      needs.prepare-promotion-test-payload.result == 'success'
     uses: ./.github/workflows/promotion.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
@@ -794,14 +1006,16 @@ jobs:
       lint-status: ${{ needs.frontend.result }}
       security-status: ${{ needs.frontend.result }}
       sonar-status: ${{ needs.sonarcloud.result }}
-      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled') && 'cancelled' || 'failure' }}
+      selenium-status: ${{ needs.selenium-e2e.result }}
+      grafana-status: ${{ needs.grafana-k6.result }}
+      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
 
   create-pr-to-main:
     name: "Create PR → Main"
-    needs: [systems-config, frontend, sonarcloud, deploy-uat, active-systems, prepare-promotion-uat-payload]
+    needs: [systems-config, frontend, sonarcloud, selenium-e2e, grafana-k6, deploy-uat, active-systems, prepare-promotion-uat-payload]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -809,7 +1023,11 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_promotion == true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
-      (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
+      (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped') &&
+      needs.prepare-promotion-uat-payload.result == 'success'
     uses: ./.github/workflows/promotion.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
@@ -823,7 +1041,9 @@ jobs:
       lint-status: ${{ needs.frontend.result }}
       security-status: ${{ needs.frontend.result }}
       sonar-status: ${{ needs.sonarcloud.result }}
-      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled') && 'cancelled' || 'failure' }}
+      selenium-status: ${{ needs.selenium-e2e.result }}
+      grafana-status: ${{ needs.grafana-k6.result }}
+      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
@@ -881,23 +1101,27 @@ jobs:
 
   pipeline-summary:
     name: "Pipeline Summary"
-    needs: [systems-config, frontend, active-systems]
+    needs: [systems-config, frontend, sonarcloud, selenium-e2e, grafana-k6, active-systems]
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
-      overall-result: ${{ needs.frontend.result }}
+      overall-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
 
   auto-revert-on-failure:
     name: "Auto Revert on Failure"
+    permissions:
+      contents: write
     needs:
       [
         systems-config,
         active-systems,
         frontend,
         sonarcloud,
+        selenium-e2e,
+        grafana-k6,
         version-test,
         deploy-test,
         deploy-uat,
@@ -916,7 +1140,11 @@ jobs:
       always() &&
       github.event_name == 'push' &&
       github.repository != 'ImplementSprint/CICD-Fe-Multi' && github.repository != 'ImplementSprint/central-workflow' &&
-      contains(needs.*.result, 'failure') &&
+      (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
+      (
+        (github.ref == 'refs/heads/uat' && (needs.deploy-uat.result == 'failure' || needs.production-gate.result == 'failure')) ||
+        (github.ref == 'refs/heads/main' && (needs.deploy-prod.result == 'failure' || needs.update-about-link.result == 'failure' || needs.version-main-release.result == 'failure' || needs.docker-main.result == 'failure'))
+      ) &&
       !contains(github.event.head_commit.message, '[skip-revert]') &&
       !contains(github.event.head_commit.message, '[skip ci]') &&
       !contains(github.event.head_commit.message, '[ci skip]') &&
@@ -930,9 +1158,18 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
+      - name: Cooldown before auto-revert
+        run: sleep 45
+
       - name: Create rollback commit
         env:
           BRANCH_NAME: ${{ github.ref_name }}
+          DEPLOY_UAT_RESULT: ${{ needs.deploy-uat.result }}
+          PRODUCTION_GATE_RESULT: ${{ needs.production-gate.result }}
+          DEPLOY_PROD_RESULT: ${{ needs.deploy-prod.result }}
+          UPDATE_ABOUT_LINK_RESULT: ${{ needs.update-about-link.result }}
+          VERSION_MAIN_RELEASE_RESULT: ${{ needs.version-main-release.result }}
+          DOCKER_MAIN_RESULT: ${{ needs.docker-main.result }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -951,7 +1188,19 @@ jobs:
           else
             git revert --abort || true
             SHORT_SHA="${GITHUB_SHA:0:7}"
-            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]"
+            FAILED_JOBS=""
+            [ "${DEPLOY_UAT_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},deploy-uat"
+            [ "${PRODUCTION_GATE_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},production-gate"
+            [ "${DEPLOY_PROD_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},deploy-prod"
+            [ "${UPDATE_ABOUT_LINK_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},update-about-link"
+            [ "${VERSION_MAIN_RELEASE_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},version-main-release"
+            [ "${DOCKER_MAIN_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},docker-main"
+            FAILED_JOBS="${FAILED_JOBS#,}"
+            if [ -z "${FAILED_JOBS}" ]; then
+              FAILED_JOBS="unknown"
+            fi
+            RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]" -m "failed_jobs=${FAILED_JOBS}" -m "run_url=${RUN_URL}"
             echo "⚠️ Automatic revert conflicted; created marker commit for manual rollback."
           fi
 
@@ -959,14 +1208,14 @@ jobs:
 
   notify-pipeline:
     name: "Notify Pipeline Status"
-    needs: [systems-config, pipeline-summary, frontend, active-systems, auto-revert-on-failure, prepare-promotion-test-payload, prepare-promotion-uat-payload, prepare-notify-prod-payload]
+    needs: [systems-config, pipeline-summary, frontend, sonarcloud, selenium-e2e, grafana-k6, active-systems, auto-revert-on-failure, prepare-promotion-test-payload, prepare-promotion-uat-payload, prepare-notify-prod-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
-      status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' && 'cancelled' || 'failure') }}
+      status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || ((needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure') }}
       system-dir: ${{ needs.active-systems.outputs.active_label }}
       pipeline-type: ${{ needs.systems-config.outputs.pipeline_mode == 'single' && 'FE Single Master' || 'FE Multi Master' }}
-      error-details: ${{ needs.frontend.result != 'success' && needs.frontend.result != 'skipped' && (needs.systems-config.outputs.pipeline_mode == 'single' && 'Master FE single pipeline reported failures.' || 'Master FE multi pipeline reported failures.') || '' }}
+      error-details: ${{ ((needs.frontend.result != 'success' && needs.frontend.result != 'skipped') || (needs.sonarcloud.result != 'success' && needs.sonarcloud.result != 'skipped') || (needs.selenium-e2e.result != 'success' && needs.selenium-e2e.result != 'skipped') || (needs.grafana-k6.result != 'success' && needs.grafana-k6.result != 'skipped')) && (needs.systems-config.outputs.pipeline_mode == 'single' && 'Master FE single pipeline reported failures.' || 'Master FE multi pipeline reported failures.') || '' }}
       deployment-url: ''
       deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-prod-payload.outputs.deployment_urls_json || (github.ref_name == 'uat' && needs.prepare-promotion-uat-payload.outputs.deployment_urls_json || (github.ref_name == 'test' && needs.prepare-promotion-test-payload.outputs.deployment_urls_json || '{}')) }}
       success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL }}

@@ -87,6 +87,14 @@ on:
         required: false
         type: string
         default: ""
+      selenium-status:
+        required: false
+        type: string
+        default: ""
+      grafana-status:
+        required: false
+        type: string
+        default: ""
       pipeline-result:
         required: false
         type: string
@@ -143,6 +151,8 @@ jobs:
           LINT_STATUS_INPUT: ${{ inputs.lint-status }}
           SECURITY_STATUS_INPUT: ${{ inputs.security-status }}
           SONAR_STATUS_INPUT: ${{ inputs.sonar-status }}
+          SELENIUM_STATUS_INPUT: ${{ inputs.selenium-status }}
+          GRAFANA_STATUS_INPUT: ${{ inputs.grafana-status }}
           PIPELINE_RESULT_INPUT: ${{ inputs.pipeline-result }}
         run: |
           retry() {
@@ -282,12 +292,16 @@ jobs:
             LINT_STATUS="${LINT_STATUS_INPUT}"
             SECURITY_STATUS="${SECURITY_STATUS_INPUT}"
             SONAR_STATUS="${SONAR_STATUS_INPUT}"
+            SELENIUM_STATUS="${SELENIUM_STATUS_INPUT}"
+            GRAFANA_STATUS="${GRAFANA_STATUS_INPUT}"
             PIPELINE_RESULT="${PIPELINE_RESULT_INPUT}"
 
             if [ -z "${TESTS_STATUS}" ]; then TESTS_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${LINT_STATUS}" ]; then LINT_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${SECURITY_STATUS}" ]; then SECURITY_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${SONAR_STATUS}" ]; then SONAR_STATUS="${DEFAULT_RESULT}"; fi
+            if [ -z "${SELENIUM_STATUS}" ]; then SELENIUM_STATUS="${DEFAULT_RESULT}"; fi
+            if [ -z "${GRAFANA_STATUS}" ]; then GRAFANA_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${PIPELINE_RESULT}" ]; then PIPELINE_RESULT="${DEFAULT_RESULT}"; fi
 
             DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
@@ -338,7 +352,7 @@ jobs:
           fi
 
           RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Version Tag | %s |\n| Short SHA | %s |\n| Compare | [View changes](%s) |\n| Pipeline Result | %s |" "${RELEASE_VERSION_VALUE}" "${SHORT_SHA}" "${COMPARE_URL}" "${PIPELINE_RESULT}")
-          QUALITY_GATES=$(printf -- "| Gate | Status |\n|------|--------|\n| Tests | %s |\n| Lint | %s |\n| Security | %s |\n| Sonar | %s |" "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}")
+          QUALITY_GATES=$(printf -- "| Gate | Status |\n|------|--------|\n| Tests | %s |\n| Lint | %s |\n| Security | %s |\n| Sonar | %s |\n| Selenium | %s |\n| Grafana k6 | %s |" "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${SELENIUM_STATUS}" "${GRAFANA_STATUS}")
 
           DETAILS=$(printf -- "- **Source branch:** %s\n- **Target branch:** %s" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
           if [ "${PIPELINE_KIND}" = "multi" ]; then

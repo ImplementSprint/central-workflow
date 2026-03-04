@@ -718,8 +718,10 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_promotion == true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
       needs.version-test.result == 'success' &&
-      (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
+      (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped') &&
+      needs.prepare-promotion-test-payload.result == 'success'
     uses: ./.github/workflows/promotion.yml
     with:
       pipeline-kind: ${{ inputs.pipeline_kind }}
@@ -748,7 +750,9 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_promotion == true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
-      (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped')
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.deploy-uat.result == 'success' || needs.deploy-uat.result == 'skipped') &&
+      needs.prepare-promotion-uat-payload.result == 'success'
     uses: ./.github/workflows/promotion.yml
     with:
       pipeline-kind: ${{ inputs.pipeline_kind }}
@@ -831,6 +835,8 @@ jobs:
 
   auto-revert-on-failure:
     name: "Auto Revert on Failure"
+    permissions:
+      contents: write
     needs:
       [
         systems-config,
@@ -855,7 +861,11 @@ jobs:
       always() &&
       github.event_name == 'push' &&
       github.repository != 'ImplementSprint/CICD-Fe-Multi' && github.repository != 'ImplementSprint/central-workflow' &&
-      contains(needs.*.result, 'failure') &&
+      (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
+      (
+        (github.ref == 'refs/heads/uat' && (needs.deploy-uat.result == 'failure' || needs.production-gate.result == 'failure')) ||
+        (github.ref == 'refs/heads/main' && (needs.deploy-prod.result == 'failure' || needs.update-about-link.result == 'failure' || needs.version-main-release.result == 'failure' || needs.docker-main.result == 'failure'))
+      ) &&
       !contains(github.event.head_commit.message, '[skip-revert]') &&
       !contains(github.event.head_commit.message, '[skip ci]') &&
       !contains(github.event.head_commit.message, '[ci skip]') &&
@@ -869,9 +879,18 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
+      - name: Cooldown before auto-revert
+        run: sleep 45
+
       - name: Create rollback commit
         env:
           BRANCH_NAME: ${{ github.ref_name }}
+          DEPLOY_UAT_RESULT: ${{ needs.deploy-uat.result }}
+          PRODUCTION_GATE_RESULT: ${{ needs.production-gate.result }}
+          DEPLOY_PROD_RESULT: ${{ needs.deploy-prod.result }}
+          UPDATE_ABOUT_LINK_RESULT: ${{ needs.update-about-link.result }}
+          VERSION_MAIN_RELEASE_RESULT: ${{ needs.version-main-release.result }}
+          DOCKER_MAIN_RESULT: ${{ needs.docker-main.result }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -890,7 +909,19 @@ jobs:
           else
             git revert --abort || true
             SHORT_SHA="${GITHUB_SHA:0:7}"
-            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]"
+            FAILED_JOBS=""
+            [ "${DEPLOY_UAT_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},deploy-uat"
+            [ "${PRODUCTION_GATE_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},production-gate"
+            [ "${DEPLOY_PROD_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},deploy-prod"
+            [ "${UPDATE_ABOUT_LINK_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},update-about-link"
+            [ "${VERSION_MAIN_RELEASE_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},version-main-release"
+            [ "${DOCKER_MAIN_RESULT}" = "failure" ] && FAILED_JOBS="${FAILED_JOBS},docker-main"
+            FAILED_JOBS="${FAILED_JOBS#,}"
+            if [ -z "${FAILED_JOBS}" ]; then
+              FAILED_JOBS="unknown"
+            fi
+            RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]" -m "failed_jobs=${FAILED_JOBS}" -m "run_url=${RUN_URL}"
             echo "⚠️ Automatic revert conflicted; created marker commit for manual rollback."
           fi
 

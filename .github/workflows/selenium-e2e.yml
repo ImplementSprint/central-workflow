@@ -44,22 +44,121 @@ on:
       run-only-on-branch:
         required: false
         type: string
-        default: "uat"
-        description: "Branch name allowed to run Selenium (default: uat)"
+        default: "test"
+        description: "Branch name allowed to run Selenium (default: test)"
+      selenium-mode:
+        required: false
+        type: string
+        default: "local"
+        description: "Selenium execution mode (local|grid)"
+      browser-list:
+        required: false
+        type: string
+        default: '["chrome"]'
+        description: "Browser list as JSON array or CSV (e.g. [\"chrome\",\"firefox\"] or chrome,firefox)"
+      selenium-grid-url:
+        required: false
+        type: string
+        default: ""
+        description: "Selenium Grid URL (required when selenium-mode=grid)"
+      parallel-mode:
+        required: false
+        type: string
+        default: "matrix"
+        description: "Execution mode: matrix or serial"
+      max-parallel:
+        required: false
+        type: number
+        default: 3
+        description: "Max parallel browser jobs when parallel-mode=matrix"
+      fail-fast:
+        required: false
+        type: boolean
+        default: false
+        description: "Stop remaining browser jobs when one browser fails"
     outputs:
       e2e-result:
         description: "E2E test pass/fail result"
-        value: ${{ jobs.selenium-e2e.outputs.result }}
+        value: ${{ jobs.finalize.outputs.result }}
 
 permissions:
   contents: read
 
 jobs:
+  prepare:
+    name: "Prepare Selenium Browser Matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+      selenium_mode: ${{ steps.resolve.outputs.selenium_mode }}
+      browsers_json: ${{ steps.resolve.outputs.browsers_json }}
+    steps:
+      - name: Resolve execution settings
+        id: resolve
+        env:
+          BRANCH_RULE: ${{ inputs.run-only-on-branch }}
+          SELENIUM_MODE_INPUT: ${{ inputs.selenium-mode }}
+          BROWSER_LIST_INPUT: ${{ inputs.browser-list }}
+          SELENIUM_GRID_URL_INPUT: ${{ inputs.selenium-grid-url }}
+        run: |
+          SHOULD_RUN="false"
+          SELENIUM_MODE="local"
+
+          if [ -n "${SELENIUM_MODE_INPUT}" ]; then
+            SELENIUM_MODE="${SELENIUM_MODE_INPUT}"
+          fi
+
+          if [ "${SELENIUM_MODE}" != "local" ] && [ "${SELENIUM_MODE}" != "grid" ]; then
+            echo "❌ Invalid selenium-mode='${SELENIUM_MODE}'. Allowed: local, grid."
+            exit 1
+          fi
+
+          if [ "${SELENIUM_MODE}" = "grid" ] && [ -z "${SELENIUM_GRID_URL_INPUT}" ]; then
+            echo "❌ selenium-grid-url is required when selenium-mode=grid."
+            exit 1
+          fi
+
+          if [ -z "${BRANCH_RULE}" ] || [ "${BRANCH_RULE}" = "*" ] || [ "${GITHUB_REF_NAME}" = "${BRANCH_RULE}" ]; then
+            SHOULD_RUN="true"
+          fi
+
+          RAW="${BROWSER_LIST_INPUT}"
+          if [ -z "${RAW}" ]; then
+            RAW='["chrome"]'
+          fi
+
+          if echo "${RAW}" | jq -e . >/dev/null 2>&1; then
+            BROWSERS_JSON=$(echo "${RAW}" | jq -c 'if type=="array" then map(tostring|ascii_downcase|gsub("^\\s+|\\s+$";"")) | map(select(length>0)) else [tostring|ascii_downcase] end')
+          else
+            BROWSERS_JSON=$(printf "%s" "${RAW}" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sed '/^$/d' | jq -R -s -c 'split("\n") | map(ascii_downcase) | map(select(length>0))')
+          fi
+
+          if [ "$(echo "${BROWSERS_JSON}" | jq 'length')" -eq 0 ]; then
+            BROWSERS_JSON='["chrome"]'
+          fi
+
+          if [ "${SELENIUM_MODE}" = "local" ]; then
+            BROWSERS_JSON=$(echo "${BROWSERS_JSON}" | jq -c 'map(select(. == "chrome" or . == "chromium" or . == "firefox"))')
+            if [ "$(echo "${BROWSERS_JSON}" | jq 'length')" -eq 0 ]; then
+              BROWSERS_JSON='["chrome"]'
+            fi
+          fi
+
+          echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
+          echo "selenium_mode=${SELENIUM_MODE}" >> "$GITHUB_OUTPUT"
+          echo "browsers_json=${BROWSERS_JSON}" >> "$GITHUB_OUTPUT"
+
   selenium-e2e:
     name: "Selenium E2E — ${{ inputs.system-name }}"
-    if: ${{ github.ref_name == inputs.run-only-on-branch }}
+    needs: [prepare]
+    if: ${{ needs.prepare.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: ${{ inputs.fail-fast }}
+      max-parallel: ${{ inputs.max-parallel }}
+      matrix:
+        browser: ${{ fromJson(needs.prepare.outputs.browsers_json) }}
     defaults:
       run:
         working-directory: ./${{ inputs.working-directory }}
@@ -89,17 +188,56 @@ jobs:
       - name: Run Selenium E2E
         id: run-e2e
         env:
+          SELENIUM_BROWSER: ${{ matrix.browser }}
+          SELENIUM_MODE: ${{ needs.prepare.outputs.selenium_mode }}
+          SELENIUM_GRID_URL: ${{ inputs.selenium-grid-url }}
+          SELENIUM_PARALLEL_MODE: ${{ inputs.parallel-mode }}
           E2E_BASE_URL: ${{ inputs.e2e-base-url }}
-        run: ${{ inputs.test-command }}
+        run: |
+          CMD='${{ inputs.test-command }}'
+          CMD="${CMD//\{browser\}/${{ matrix.browser }}}"
+          echo "Selenium mode: ${SELENIUM_MODE}"
+          echo "Running browser: ${{ matrix.browser }}"
+          if [ "${SELENIUM_MODE}" = "grid" ] && [ -n "${SELENIUM_GRID_URL}" ]; then
+            echo "Using Selenium Grid endpoint: ${SELENIUM_GRID_URL}"
+          else
+            echo "Using local browser execution"
+          fi
+          eval "${CMD}"
 
       - name: Upload E2E Artifacts
         if: ${{ inputs.upload-artifacts && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.system-name }}-selenium-e2e-artifacts
+          name: ${{ inputs.system-name }}-selenium-e2e-${{ matrix.browser }}-artifacts
           path: |
             ${{ inputs.working-directory }}/tests/e2e/**
             ${{ inputs.working-directory }}/test-results/**
             ${{ inputs.working-directory }}/playwright-report/**
           if-no-files-found: ignore
           retention-days: 7
+
+  finalize:
+    name: "Finalize Selenium Result"
+    needs: [prepare, selenium-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.finalize.outputs.result }}
+    steps:
+      - name: Resolve final e2e result
+        id: finalize
+        env:
+          SHOULD_RUN: ${{ needs.prepare.outputs.should_run }}
+          MATRIX_RESULT: ${{ needs.selenium-e2e.result }}
+        run: |
+          if [ "${SHOULD_RUN}" != "true" ]; then
+            RESULT="skipped"
+          elif [ "${MATRIX_RESULT}" = "success" ]; then
+            RESULT="success"
+          elif [ "${MATRIX_RESULT}" = "cancelled" ]; then
+            RESULT="cancelled"
+          else
+            RESULT="failure"
+          fi
+          echo "result=${RESULT}" >> "$GITHUB_OUTPUT"
