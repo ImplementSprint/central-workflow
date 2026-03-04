@@ -15,7 +15,7 @@ on:
       enable_selenium:
         description: "Run Selenium E2E checks"
         type: boolean
-        default: false
+        default: true
       selenium_mode:
         description: "Selenium execution mode (local|grid)"
         type: string
@@ -69,7 +69,7 @@ on:
       enable_selenium:
         description: "Run Selenium E2E checks"
         type: boolean
-        default: false
+        default: true
       selenium_mode:
         description: "Selenium execution mode (local|grid)"
         type: string
