@@ -31,6 +31,11 @@ on:
         type: string
         default: "npm run test:e2e"
         description: "Selenium E2E command"
+      e2e-tests-directory:
+        required: false
+        type: string
+        default: "tests/e2e"
+        description: "Folder that contains E2E tests"
       e2e-base-url:
         required: false
         type: string
@@ -165,6 +170,17 @@ jobs:
       - name: Install Dependencies
         run: ${{ inputs.install-command }}
 
+      - name: Validate E2E tests folder exists
+        env:
+          E2E_TESTS_DIRECTORY: ${{ inputs.e2e-tests-directory }}
+        run: |
+          if [ ! -d "${E2E_TESTS_DIRECTORY}" ]; then
+            echo "❌ E2E tests folder not found: ${E2E_TESTS_DIRECTORY}"
+            echo "Expected E2E tests under ${E2E_TESTS_DIRECTORY}."
+            exit 1
+          fi
+          echo "✅ E2E tests folder found: ${E2E_TESTS_DIRECTORY}"
+
       - name: Verify browser tools
         run: |
           echo "Google Chrome path: $(command -v google-chrome || true)"
@@ -190,7 +206,7 @@ jobs:
         with:
           name: ${{ inputs.system-name }}-selenium-e2e-${{ matrix.browser }}-artifacts
           path: |
-            ${{ inputs.working-directory }}/tests/e2e/**
+            ${{ inputs.working-directory }}/${{ inputs.e2e-tests-directory }}/**
             ${{ inputs.working-directory }}/test-results/**
             ${{ inputs.working-directory }}/playwright-report/**
           if-no-files-found: ignore

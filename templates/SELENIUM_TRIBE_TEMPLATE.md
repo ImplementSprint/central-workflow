@@ -5,6 +5,7 @@ Use this template when onboarding a tribe repository to the central workflow Sel
 ## Where the pipeline expects E2E tests
 
 The central Selenium workflow does **not** hardcode a file path. It runs whatever command is configured in `test-command`.
+It now validates that the E2E folder exists before running.
 
 Current default in the reusable workflow:
 
@@ -23,6 +24,10 @@ So each tribe repo must define in its own `package.json`:
 Recommended test location in tribe repos:
 
 - `tests/e2e/selenium-smoke.ts`
+
+Required folder (validated by pipeline):
+
+- `tests/e2e`
 
 ## 1) Copy baseline test
 

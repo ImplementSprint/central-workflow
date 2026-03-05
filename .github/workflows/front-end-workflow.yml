@@ -64,7 +64,7 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      test-command: npm run test -- --coverage --coverageReporters=json-summary
+      test-command: npm run test -- --coverage --coverageReporters=json-summary tests/unit
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   # ── Stage 1B: Lint (parallel with tests) ────────────────────────
@@ -96,7 +96,7 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      test-command: npm run test -- --coverage --coverageReporters=json-summary
+      test-command: npm run test -- --coverage --coverageReporters=json-summary tests/unit
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   # ── Stage 2: Build Web Application ─────────────────────────────

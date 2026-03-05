@@ -19,8 +19,13 @@ on:
       script-path:
         required: false
         type: string
-        default: "tests/performance/k6-smoke.js"
-        description: "Path to k6 script"
+        default: "tests/performances"
+        description: "Path to k6 script or performance tests directory"
+      performance-tests-directory:
+        required: false
+        type: string
+        default: "tests/performances"
+        description: "Folder that contains performance tests"
       target-base-url:
         required: false
         type: string
@@ -105,20 +110,42 @@ jobs:
         uses: grafana/setup-k6-action@v1
 
       - name: Validate Grafana Cloud configuration
+        id: validate
         env:
           K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
           K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
           SCRIPT_PATH: ${{ inputs.script-path }}
+          PERFORMANCE_TESTS_DIRECTORY: ${{ inputs.performance-tests-directory }}
         run: |
           if [ -z "${K6_CLOUD_TOKEN}" ] || [ -z "${K6_CLOUD_PROJECT_ID}" ]; then
             echo "❌ Grafana Cloud is required: set K6_CLOUD_TOKEN and K6_CLOUD_PROJECT_ID secrets."
             exit 1
           fi
 
-          if [ ! -f "${SCRIPT_PATH}" ]; then
-            echo "❌ k6 script not found: ${SCRIPT_PATH}"
+          if [ ! -d "${PERFORMANCE_TESTS_DIRECTORY}" ]; then
+            echo "❌ Performance tests folder not found: ${PERFORMANCE_TESTS_DIRECTORY}"
+            echo "Expected performance tests under ${PERFORMANCE_TESTS_DIRECTORY}."
             exit 1
           fi
+
+          RESOLVED_SCRIPT_PATH=""
+
+          if [ -n "${SCRIPT_PATH}" ] && [ -f "${SCRIPT_PATH}" ]; then
+            RESOLVED_SCRIPT_PATH="${SCRIPT_PATH}"
+          elif [ -n "${SCRIPT_PATH}" ] && [ -d "${SCRIPT_PATH}" ]; then
+            RESOLVED_SCRIPT_PATH=$(find "${SCRIPT_PATH}" -type f \( -name '*.js' -o -name '*.ts' \) | sort | head -n 1)
+          fi
+
+          if [ -z "${RESOLVED_SCRIPT_PATH}" ]; then
+            RESOLVED_SCRIPT_PATH=$(find "${PERFORMANCE_TESTS_DIRECTORY}" -type f \( -name '*.js' -o -name '*.ts' \) | sort | head -n 1)
+          fi
+
+          if [ -z "${RESOLVED_SCRIPT_PATH}" ]; then
+            echo "❌ No k6 script (*.js or *.ts) found in ${PERFORMANCE_TESTS_DIRECTORY}."
+            exit 1
+          fi
+
+          echo "resolved_script_path=${RESOLVED_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
 
           echo "✅ Grafana Cloud prerequisites validated."
 
@@ -128,7 +155,7 @@ jobs:
           K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
           K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
           BASE_URL: ${{ inputs.target-base-url }}
-          SCRIPT_PATH: ${{ inputs.script-path }}
+          SCRIPT_PATH: ${{ steps.validate.outputs.resolved_script_path }}
         run: |
           if [ -n "${BASE_URL}" ]; then
             k6 run --out cloud -e BASE_URL="${BASE_URL}" "${SCRIPT_PATH}" | tee k6-output.log
@@ -143,7 +170,7 @@ jobs:
           name: ${{ inputs.system-name }}-grafana-k6-artifacts
           path: |
             ${{ inputs.working-directory }}/k6-output.log
-            ${{ inputs.working-directory }}/tests/performance/**
+            ${{ inputs.working-directory }}/${{ inputs.performance-tests-directory }}/**
           if-no-files-found: ignore
           retention-days: 7
 
