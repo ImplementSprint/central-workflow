@@ -46,6 +46,8 @@ on:
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   vercel-deploy:
@@ -210,6 +212,7 @@ jobs:
 
       - name: Comment Deployment URL on PR
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
