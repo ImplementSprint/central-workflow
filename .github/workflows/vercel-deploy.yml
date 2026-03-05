@@ -37,7 +37,7 @@ on:
       VERCEL_PROJECT_ID:
         required: true
       GH_PR_TOKEN:
-        required: false
+        required: true
     outputs:
       deployment_url:
         description: "Vercel deployment URL"
@@ -211,13 +211,18 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Comment Deployment URL on PR
-        if: ${{ github.event_name == 'pull_request' && secrets.GH_PR_TOKEN != '' }}
+        if: ${{ github.event_name == 'pull_request' }}
         continue-on-error: true
         uses: actions/github-script@v7
         env:
           GH_TOKEN: ${{ secrets.GH_PR_TOKEN }}
         with:
           script: |
+            if (!process.env.GH_TOKEN) {
+              core.info('GH_PR_TOKEN is not set; skipping PR deployment comment.');
+              return;
+            }
+
             const url = '${{ steps.deploy.outputs.url }}';
             const body = `## 🚀 Vercel Preview Deployment\n\n` +
               `**Project:** \`${{ inputs.working-directory }}\`\n` +
