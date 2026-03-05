@@ -71,6 +71,10 @@ concurrency:
   group: master-pipeline-mobile-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   call-orchestrator:
     uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main
