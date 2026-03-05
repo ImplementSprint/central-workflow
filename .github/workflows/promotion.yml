@@ -181,7 +181,7 @@ jobs:
             HEADER="## 🚀 Promote TEST → UAT"
             CONTEXT_LABEL="TEST"
             FOOTER="*Merge this PR to trigger UAT deployment.*"
-            INTRO="This PR was **automatically created** after all CI checks and TEST deployments passed on the \`test\` branch."
+            INTRO="This PR was **automatically created** after all CI checks and TEST deployments passed on the ${BT}test${BT} branch."
 
             if [ "${PIPELINE_KIND}" = "single" ] && { [ -z "${VERSION_TAG}" ] || [ "${VERSION_TAG}" = "test-v" ]; }; then
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
@@ -197,7 +197,7 @@ jobs:
             HEADER="## 🚀 Promote UAT → Production"
             CONTEXT_LABEL="UAT"
             FOOTER="*Merge this PR to deploy to production. A production readiness gate will run automatically.*"
-            INTRO="This PR was **automatically created** after all CI checks and UAT deployments passed on the \`uat\` branch."
+            INTRO="This PR was **automatically created** after all CI checks and UAT deployments passed on the ${BT}uat${BT} branch."
 
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
@@ -304,6 +304,9 @@ jobs:
             if [ -z "${GRAFANA_STATUS}" ]; then GRAFANA_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${PIPELINE_RESULT}" ]; then PIPELINE_RESULT="${DEFAULT_RESULT}"; fi
 
+          # ── Backtick variable (avoids YAML/bash/jq escape issues) ──
+          BT='`'
+
           # ── Status icon helper ──
           status_icon() {
             case "$1" in
@@ -369,7 +372,7 @@ jobs:
           QG_SONAR_ICON=$(status_icon "${SONAR_STATUS}")
           QG_SELENIUM_ICON=$(status_icon "${SELENIUM_STATUS}")
           QG_GRAFANA_ICON=$(status_icon "${GRAFANA_STATUS}")
-          QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | \`%s\` |\n| Lint | %s | \`%s\` |\n| Security | %s | \`%s\` |\n| SonarCloud | %s | \`%s\` |\n| Selenium E2E | %s | \`%s\` |\n| Grafana k6 | %s | \`%s\` |" \
+          QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | ${BT}%s${BT} |\n| Lint | %s | ${BT}%s${BT} |\n| Security | %s | ${BT}%s${BT} |\n| SonarCloud | %s | ${BT}%s${BT} |\n| Selenium E2E | %s | ${BT}%s${BT} |\n| Grafana k6 | %s | ${BT}%s${BT} |" \
             "${QG_TESTS_ICON}" "${TESTS_STATUS}" \
             "${QG_LINT_ICON}" "${LINT_STATUS}" \
             "${QG_SEC_ICON}" "${SECURITY_STATUS}" \
@@ -378,10 +381,10 @@ jobs:
             "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
 
           # ── Version tags table ──
-          VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "| " + .name + " | `" + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + "` |"')
+          VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" --arg bt "${BT}" '.[] | "| " + .name + " | " + $bt + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + $bt + " |"')
 
           # ── CI results table ──
-          EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" '.[] | "| \(.name) | `" + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + "` |"')
+          EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" --arg bt "${BT}" '.[] | "| \(.name) | " + $bt + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + $bt + " |"')
 
           # ── Release summary ──
           RELEASE_VERSION_VALUE="${VERSION_TAG:-N/A}"
@@ -389,19 +392,19 @@ jobs:
             RELEASE_VERSION_VALUE="Per-system (see Version Tags)"
           fi
           PIPELINE_ICON=$(status_icon "${PIPELINE_RESULT}")
-          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s \`%s\` |\n| Version Tag | \`%s\` |\n| Short SHA | [\`%s\`](https://github.com/${{ github.repository }}/commit/%s) |\n| Compare | [View changes ↗](%s) |" \
+          RELEASE_SUMMARY=$(printf -- "| Metric | Value |\n|--------|-------|\n| Pipeline Result | %s ${BT}%s${BT} |\n| Version Tag | ${BT}%s${BT} |\n| Short SHA | [${BT}%s${BT}](https://github.com/${{ github.repository }}/commit/%s) |\n| Compare | [View changes ↗](%s) |" \
             "${PIPELINE_ICON}" "${PIPELINE_RESULT}" \
             "${RELEASE_VERSION_VALUE}" \
             "${SHORT_SHA}" "${GITHUB_SHA}" \
             "${COMPARE_URL}")
 
           # ── Details section ──
-          DETAILS=$(printf -- "- **Source branch:** \`%s\`\n- **Target branch:** \`%s\`" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
+          DETAILS=$(printf -- "- **Source branch:** ${BT}%s${BT}\n- **Target branch:** ${BT}%s${BT}" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
           if [ "${PIPELINE_KIND}" = "multi" ]; then
-            VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "  - **" + .name + "**: `" + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + "`"')
+            VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" --arg bt "${BT}" '.[] | "  - **" + .name + "**: " + $bt + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + $bt')
             DETAILS=$(printf "%s\n- **Version tags per system:**\n%s" "${DETAILS}" "${VERSION_DETAILS}")
           else
-            DETAILS=$(printf "%s\n- **Version tag:** \`%s\`" "${DETAILS}" "${VERSION_TAG:-N/A}")
+            DETAILS=$(printf "%s\n- **Version tag:** ${BT}%s${BT}" "${DETAILS}" "${VERSION_TAG:-N/A}")
           fi
           TRIGGERED_BY="${GITHUB_TRIGGERING_ACTOR:-${GITHUB_ACTOR}}"
           DETAILS=$(printf "%s\n- **Commit:** [\`%s\`](https://github.com/${{ github.repository }}/commit/%s)\n- **Compare:** [View changes ↗](%s)\n- **Triggered by:** @%s\n- **Triggered at:** %s\n- **Pipeline run:** [View workflow run ↗](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" "${DETAILS}" "${SHORT_SHA}" "${GITHUB_SHA}" "${COMPARE_URL}" "${TRIGGERED_BY}" "${TIMESTAMP}")
