@@ -870,13 +870,24 @@ jobs:
               continue
             fi
 
+            FALLBACK_PREFIX=""
             if [ -z "${STREAM}" ] || [ "${STREAM}" = "global" ]; then
               PREFIX="test-v"
             else
               PREFIX="test-${STREAM}-v"
+              FALLBACK_PREFIX="test-v"
             fi
 
             TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+
+            if [ -z "${TAG}" ] && [ -n "${FALLBACK_PREFIX}" ]; then
+              LEGACY_TAG=$(git tag -l "${FALLBACK_PREFIX}*" | grep -E "^${FALLBACK_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+              if [ -n "${LEGACY_TAG}" ]; then
+                echo "ℹ️ No stream-specific test tag found for '${STREAM}'. Falling back to legacy '${FALLBACK_PREFIX}*' for system '${NAME}'."
+                TAG="${LEGACY_TAG}"
+              fi
+            fi
+
             if [ -z "${TAG}" ]; then
               echo "❌ Missing required ${PREFIX}<version> tag for system '${NAME}'."
               MISSING_TEST_TAG=true
@@ -887,7 +898,7 @@ jobs:
           done < <(echo "${SYSTEMS_JSON}" | jq -r '.[] | "\(.name)\t\(.version_stream // "global")"')
 
           if [ "${MISSING_TEST_TAG}" = "true" ]; then
-            echo "❌ UAT→Main promotion blocked: run TEST tagging first for all active systems/streams."
+            echo "❌ TEST→UAT promotion blocked: run TEST tagging first for all active systems/streams."
             exit 1
           fi
 
@@ -934,13 +945,24 @@ jobs:
               continue
             fi
 
+            FALLBACK_PREFIX=""
             if [ -z "${STREAM}" ] || [ "${STREAM}" = "global" ]; then
               PREFIX="test-v"
             else
               PREFIX="test-${STREAM}-v"
+              FALLBACK_PREFIX="test-v"
             fi
 
             TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+
+            if [ -z "${TAG}" ] && [ -n "${FALLBACK_PREFIX}" ]; then
+              LEGACY_TAG=$(git tag -l "${FALLBACK_PREFIX}*" | grep -E "^${FALLBACK_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+              if [ -n "${LEGACY_TAG}" ]; then
+                echo "ℹ️ No stream-specific test tag found for '${STREAM}'. Falling back to legacy '${FALLBACK_PREFIX}*' for system '${NAME}'."
+                TAG="${LEGACY_TAG}"
+              fi
+            fi
+
             if [ -z "${TAG}" ]; then
               echo "❌ Missing required ${PREFIX}<version> tag for system '${NAME}'."
               MISSING_TEST_TAG=true
