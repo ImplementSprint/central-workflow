@@ -492,7 +492,7 @@ jobs:
       parallel-mode: matrix
       max-parallel: 3
       fail-fast: false
-      upload-artifacts: true
+      upload-artifacts: false
     secrets: inherit
 
   sonarcloud:
