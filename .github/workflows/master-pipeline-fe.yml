@@ -35,7 +35,7 @@ on:
       k6_script_path:
         description: "Path to k6 script or performance tests directory"
         type: string
-        default: "tests/performances"
+        default: "tests/performance"
       k6_base_url:
         description: "Optional base URL for k6"
         type: string
@@ -93,7 +93,7 @@ on:
       k6_script_path:
         description: "Path to k6 script or performance tests directory"
         type: string
-        default: "tests/performances"
+        default: "tests/performance"
       k6_base_url:
         description: "Optional base URL for k6"
         type: string
@@ -289,7 +289,7 @@ jobs:
             SELENIUM_RUN_ONLY_ON_BRANCH="${IN_SELENIUM_RUN_ONLY_ON_BRANCH}"
           fi
 
-          K6_SCRIPT_PATH="tests/performances"
+          K6_SCRIPT_PATH="tests/performance"
           if [ -n "${IN_K6_SCRIPT_PATH}" ]; then
             K6_SCRIPT_PATH="${IN_K6_SCRIPT_PATH}"
           fi

@@ -19,12 +19,12 @@ on:
       script-path:
         required: false
         type: string
-        default: "tests/performances"
+        default: "tests/performance"
         description: "Path to k6 script or performance tests directory"
       performance-tests-directory:
         required: false
         type: string
-        default: "tests/performances"
+        default: "tests/performance"
         description: "Folder that contains performance tests"
       target-base-url:
         required: false

@@ -6,7 +6,7 @@ Use this template when onboarding a tribe repository to the central workflow Gra
 
 Recommended path in the tribe repo:
 
-- `tests/performances/k6-smoke.ts`
+- `tests/performance/k6-smoke.ts`
 
 Copy from:
 
@@ -16,12 +16,12 @@ Copy from:
 
 In the tribe caller workflow (or dispatch input), set:
 
-- `k6_script_path: tests/performances`
+- `k6_script_path: tests/performance`
 
 For mobile callers, pass through these inputs to `master-pipeline-mobile.yml`:
 
 - `enable_grafana_k6` (default `true`)
-- `k6_script_path` (default `tests/performances`)
+- `k6_script_path` (default `tests/performance`)
 - `k6_base_url` (default empty; optional override)
 - `k6_run_only_on_branch` (default `test,uat,main`)
 
