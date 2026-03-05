@@ -1176,7 +1176,7 @@ jobs:
       pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6-test-postdeploy.result == 'success' || needs.grafana-k6-test-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6-test-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
-      PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
+      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || (secrets.GHPR_TOKEN != '' && secrets.GHPR_TOKEN || github.token) }}
 
   create-pr-to-main:
     name: "Create PR → Main"
@@ -1212,7 +1212,7 @@ jobs:
       pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6-uat-postdeploy.result == 'success' || needs.grafana-k6-uat-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6-uat-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
-      PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
+      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || (secrets.GHPR_TOKEN != '' && secrets.GHPR_TOKEN || github.token) }}
 
   prepare-notify-prod-payload:
     name: "Prepare Notify Payload (MAIN)"
