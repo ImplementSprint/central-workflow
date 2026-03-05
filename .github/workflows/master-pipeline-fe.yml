@@ -792,14 +792,15 @@ jobs:
 
   prepare-promotion-test-payload:
     name: "Prepare Promotion Payload (TEST→UAT)"
-    needs: [active-systems, frontend, deploy-test]
+    needs: [active-systems, frontend, deploy-test, version-test]
     if: >-
       always() &&
       ((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') &&
       (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
-      (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped')
+      (needs.deploy-test.result == 'success' || needs.deploy-test.result == 'skipped') &&
+      (needs.version-test.result == 'success' || needs.version-test.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -818,6 +819,7 @@ jobs:
           SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           DEPLOY_RESULT: ${{ needs.deploy-test.result }}
+          REQUIRE_TEST_TAGS: ${{ github.event_name != 'pull_request' && 'true' || 'false' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           COMMIT_SHA: ${{ github.sha }}
@@ -894,8 +896,12 @@ jobs:
           done < <(echo "${SYSTEMS_JSON}" | jq -r '.[] | "\(.name)\t\(.version_stream // "global")"')
 
           if [ "${MISSING_TEST_TAG}" = "true" ]; then
-            echo "❌ TEST→UAT promotion blocked: run TEST tagging first for all active systems/streams."
-            exit 1
+            if [ "${REQUIRE_TEST_TAGS}" = "true" ]; then
+              echo "❌ TEST→UAT promotion blocked: run TEST tagging first for all active systems/streams."
+              exit 1
+            fi
+
+            echo "⚠️ Missing TEST tags detected, but tag enforcement is skipped for pull_request runs."
           fi
 
           echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
