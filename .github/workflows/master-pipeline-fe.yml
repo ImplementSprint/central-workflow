@@ -35,7 +35,7 @@ on:
       k6_script_path:
         description: "Path to k6 script"
         type: string
-        default: "tests/performance/k6-smoke.js"
+        default: "tests/performance/k6-smoke.ts"
       k6_base_url:
         description: "Optional base URL for k6"
         type: string
