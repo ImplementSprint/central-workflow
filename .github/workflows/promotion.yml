@@ -378,10 +378,10 @@ jobs:
             "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
 
           # ── Version tags table ──
-          VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "| " + .name + " | \`" + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + "\` |"')
+          VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "| " + .name + " | `" + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + "` |"')
 
           # ── CI results table ──
-          EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" '.[] | "| \(.name) | \`" + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + "\` |"')
+          EVIDENCE_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson results "${RESULTS_JSON}" --arg defaultResult "${DEFAULT_RESULT}" '.[] | "| \(.name) | `" + ((($results[.name] // "") | tostring) | if length > 0 then . else $defaultResult end) + "` |"')
 
           # ── Release summary ──
           RELEASE_VERSION_VALUE="${VERSION_TAG:-N/A}"
@@ -398,7 +398,7 @@ jobs:
           # ── Details section ──
           DETAILS=$(printf -- "- **Source branch:** \`%s\`\n- **Target branch:** \`%s\`" "${SOURCE_BRANCH}" "${TARGET_BRANCH}")
           if [ "${PIPELINE_KIND}" = "multi" ]; then
-            VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "  - **" + .name + "**: \`" + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + "\`"')
+            VERSION_DETAILS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" '.[] | "  - **" + .name + "**: `" + (((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end)) + "`"')
             DETAILS=$(printf "%s\n- **Version tags per system:**\n%s" "${DETAILS}" "${VERSION_DETAILS}")
           else
             DETAILS=$(printf "%s\n- **Version tag:** \`%s\`" "${DETAILS}" "${VERSION_TAG:-N/A}")
