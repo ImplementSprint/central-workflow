@@ -37,7 +37,7 @@ on:
       VERCEL_PROJECT_ID:
         required: true
       GH_PR_TOKEN:
-        required: true
+        required: false
     outputs:
       deployment_url:
         description: "Vercel deployment URL"
