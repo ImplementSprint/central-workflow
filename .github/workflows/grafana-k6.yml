@@ -128,24 +128,29 @@ jobs:
             exit 1
           fi
 
-          RESOLVED_SCRIPT_PATH=""
+          mapfile -t RESOLVED_SCRIPT_PATHS < <(
+            if [ -n "${SCRIPT_PATH}" ] && [ -f "${SCRIPT_PATH}" ]; then
+              printf "%s\n" "${SCRIPT_PATH}"
+            elif [ -n "${SCRIPT_PATH}" ] && [ -d "${SCRIPT_PATH}" ]; then
+              find "${SCRIPT_PATH}" -type f \( -name '*.js' -o -name '*.ts' \) | sort
+            else
+              find "${PERFORMANCE_TESTS_DIRECTORY}" -type f \( -name '*.js' -o -name '*.ts' \) | sort
+            fi
+          )
 
-          if [ -n "${SCRIPT_PATH}" ] && [ -f "${SCRIPT_PATH}" ]; then
-            RESOLVED_SCRIPT_PATH="${SCRIPT_PATH}"
-          elif [ -n "${SCRIPT_PATH}" ] && [ -d "${SCRIPT_PATH}" ]; then
-            RESOLVED_SCRIPT_PATH=$(find "${SCRIPT_PATH}" -type f \( -name '*.js' -o -name '*.ts' \) | sort | head -n 1)
-          fi
-
-          if [ -z "${RESOLVED_SCRIPT_PATH}" ]; then
-            RESOLVED_SCRIPT_PATH=$(find "${PERFORMANCE_TESTS_DIRECTORY}" -type f \( -name '*.js' -o -name '*.ts' \) | sort | head -n 1)
-          fi
-
-          if [ -z "${RESOLVED_SCRIPT_PATH}" ]; then
-            echo "❌ No k6 script (*.js or *.ts) found in ${PERFORMANCE_TESTS_DIRECTORY}."
+          if [ "${#RESOLVED_SCRIPT_PATHS[@]}" -eq 0 ]; then
+            echo "❌ No k6 scripts (*.js or *.ts) found in folder checks."
             exit 1
           fi
 
-          echo "resolved_script_path=${RESOLVED_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
+          {
+            echo "resolved_script_paths<<EOF"
+            printf "%s\n" "${RESOLVED_SCRIPT_PATHS[@]}"
+            echo "EOF"
+            echo "resolved_script_count=${#RESOLVED_SCRIPT_PATHS[@]}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "ℹ️ Discovered ${#RESOLVED_SCRIPT_PATHS[@]} k6 script(s)."
 
           echo "✅ Grafana Cloud prerequisites validated."
 
@@ -155,13 +160,23 @@ jobs:
           K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
           K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
           BASE_URL: ${{ inputs.target-base-url }}
-          SCRIPT_PATH: ${{ steps.validate.outputs.resolved_script_path }}
+          SCRIPT_PATHS: ${{ steps.validate.outputs.resolved_script_paths }}
+          SCRIPT_COUNT: ${{ steps.validate.outputs.resolved_script_count }}
         run: |
-          if [ -n "${BASE_URL}" ]; then
-            k6 run --out cloud -e BASE_URL="${BASE_URL}" "${SCRIPT_PATH}" | tee k6-output.log
-          else
-            k6 run --out cloud "${SCRIPT_PATH}" | tee k6-output.log
-          fi
+          set -euo pipefail
+
+          : > k6-output.log
+          echo "ℹ️ Running ${SCRIPT_COUNT} k6 script(s)." | tee -a k6-output.log
+
+          while IFS= read -r SCRIPT_PATH; do
+            [ -z "${SCRIPT_PATH}" ] && continue
+            echo "▶ Running k6 script: ${SCRIPT_PATH}" | tee -a k6-output.log
+            if [ -n "${BASE_URL}" ]; then
+              k6 run --out cloud -e BASE_URL="${BASE_URL}" "${SCRIPT_PATH}" | tee -a k6-output.log
+            else
+              k6 run --out cloud "${SCRIPT_PATH}" | tee -a k6-output.log
+            fi
+          done <<< "${SCRIPT_PATHS}"
 
       - name: Upload k6 artifacts
         if: ${{ inputs.upload-artifacts && always() }}
