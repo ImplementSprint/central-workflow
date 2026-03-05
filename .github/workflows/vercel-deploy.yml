@@ -36,6 +36,8 @@ on:
         required: true
       VERCEL_PROJECT_ID:
         required: true
+      GH_PR_TOKEN:
+        required: false
     outputs:
       deployment_url:
         description: "Vercel deployment URL"
@@ -46,8 +48,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
   vercel-deploy:
@@ -211,9 +211,11 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Comment Deployment URL on PR
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && secrets.GH_PR_TOKEN != '' }}
         continue-on-error: true
         uses: actions/github-script@v7
+        env:
+          GH_TOKEN: ${{ secrets.GH_PR_TOKEN }}
         with:
           script: |
             const url = '${{ steps.deploy.outputs.url }}';

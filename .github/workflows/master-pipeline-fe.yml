@@ -590,6 +590,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets[matrix.system.vercel_project_secret] }}
+      GH_PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
 
   deploy-uat:
     name: "UAT — ${{ matrix.system.name }}"
@@ -616,6 +617,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets[matrix.system.vercel_project_secret] }}
+      GH_PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
 
   production-gate:
     name: "Production Readiness Gate"
@@ -655,6 +657,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets[matrix.system.vercel_project_secret] }}
+      GH_PR_TOKEN: ${{ secrets.GH_PR_TOKEN }}
 
   update-about-link:
     name: "Update Repository About Link"
@@ -694,16 +697,12 @@ jobs:
         if: ${{ steps.resolve-url.outputs.deployment_url != '' }}
         env:
           GH_PR_TOKEN_PRIMARY: ${{ secrets.GH_PR_TOKEN }}
-          GH_PR_TOKEN_LEGACY: ${{ secrets.GHPR_TOKEN }}
           DEPLOYMENT_URL: ${{ steps.resolve-url.outputs.deployment_url }}
         run: |
           GH_TOKEN="${GH_PR_TOKEN_PRIMARY}"
-          if [ -z "${GH_TOKEN}" ]; then
-            GH_TOKEN="${GH_PR_TOKEN_LEGACY}"
-          fi
 
           if [ -z "${GH_TOKEN}" ]; then
-            echo "⚠️ GH_PR_TOKEN/GHPR_TOKEN is not set; skipping About homepage update."
+            echo "⚠️ GH_PR_TOKEN is not set; skipping About homepage update."
             exit 0
           fi
 
@@ -1176,7 +1175,7 @@ jobs:
       pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6-test-postdeploy.result == 'success' || needs.grafana-k6-test-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6-test-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
-      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || (secrets.GHPR_TOKEN != '' && secrets.GHPR_TOKEN || github.token) }}
+      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   create-pr-to-main:
     name: "Create PR → Main"
@@ -1212,7 +1211,7 @@ jobs:
       pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped') && (needs.grafana-k6-uat-postdeploy.result == 'success' || needs.grafana-k6-uat-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.grafana-k6-uat-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
-      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || (secrets.GHPR_TOKEN != '' && secrets.GHPR_TOKEN || github.token) }}
+      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   prepare-notify-prod-payload:
     name: "Prepare Notify Payload (MAIN)"

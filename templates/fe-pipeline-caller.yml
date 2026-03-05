@@ -6,6 +6,9 @@
 # Works for both single-system and multi-system FE repositories.
 # The pipeline_mode input controls which SYSTEMS_JSON variable
 # is read (auto = picks multi if available, else single).
+#
+# Required repo secret:
+# - GH_PR_TOKEN (used for auto-promotion PRs and Vercel deploy PR comments)
 # ──────────────────────────────────────────────────────────────
 name: "Master Pipeline — FE"
 

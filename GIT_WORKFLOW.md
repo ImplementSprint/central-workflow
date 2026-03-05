@@ -446,7 +446,7 @@ Per-environment secrets:
 ├── DESCOPE_PROJECT_ID / DESCOPE_BASE_URL / DESCOPE_ISSUER
 ├── DESCOPE_M2M_CLIENT_ID / DESCOPE_M2M_CLIENT_SECRET
 ├── SLACK_WEBHOOK_URL / DISCORD_WEBHOOK_URL
-├── GH_PR_TOKEN (for auto-promotion PRs)
+├── GH_PR_TOKEN (for auto-promotion PRs and Vercel deployment PR comments)
 └── GHCR credentials (main branch only)
 ```
 
