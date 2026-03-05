@@ -1213,10 +1213,10 @@ jobs:
           export GIT_EDITOR=:
 
           if git revert --no-edit "${GITHUB_SHA}"; then
-            git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
+            git commit --amend -m "$(git log -1 --pretty=%B) [skip-revert]"
             echo "✅ Created revert commit from ${GITHUB_SHA}."
           elif git revert -m 1 --no-edit "${GITHUB_SHA}"; then
-            git commit --amend -m "$(git log -1 --pretty=%B) [skip ci] [skip-revert]"
+            git commit --amend -m "$(git log -1 --pretty=%B) [skip-revert]"
             echo "✅ Created merge-revert commit from ${GITHUB_SHA}."
           else
             git revert --abort || true
@@ -1233,7 +1233,7 @@ jobs:
               FAILED_JOBS="unknown"
             fi
             RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip ci] [skip-revert]" -m "failed_jobs=${FAILED_JOBS}" -m "run_url=${RUN_URL}"
+            git commit --allow-empty -m "ci(auto-revert): manual rollback required for ${SHORT_SHA} [skip-revert]" -m "failed_jobs=${FAILED_JOBS}" -m "run_url=${RUN_URL}"
             echo "⚠️ Automatic revert conflicted; created marker commit for manual rollback."
           fi
 
