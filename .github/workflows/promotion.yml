@@ -187,8 +187,7 @@ jobs:
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
-              echo "❌ Unable to resolve TEST version tag for PR body."
-              exit 1
+              echo "⚠️ Unable to resolve TEST version tag for PR body; falling back to per-system versions or N/A."
             fi
           elif [ "${DIRECTION}" = "uat-to-main" ]; then
             SOURCE_BRANCH="uat"

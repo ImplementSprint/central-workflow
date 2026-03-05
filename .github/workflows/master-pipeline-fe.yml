@@ -895,7 +895,7 @@ jobs:
           echo "versions_json=${VERSIONS_JSON}" >> "$GITHUB_OUTPUT"
 
   selenium-e2e-postdeploy:
-    name: "Selenium E2E — ${{ matrix.env_name }} Post-Deploy (${{ matrix.system.name }})"
+    name: "Selenium E2E — Post-Deploy (${{ matrix.system.name }})"
     needs: [active-systems, frontend, qa-controls, deploy-preview, prepare-promotion-payload]
     if: >-
       always() &&
@@ -907,7 +907,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env_name: [TEST, UAT]
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
     uses: ./.github/workflows/selenium-e2e.yml
     with:
@@ -915,7 +914,7 @@ jobs:
       system-name: ${{ matrix.system.name }}
       browser-list: ${{ needs.qa-controls.outputs.selenium_browsers }}
       e2e-base-url: ${{ needs.qa-controls.outputs.e2e_base_url != '' && needs.qa-controls.outputs.e2e_base_url || fromJson(needs.prepare-promotion-payload.outputs.deployment_urls_json)[matrix.system.name] }}
-      run-only-on-branch: ${{ matrix.env_name == 'TEST' && 'test' || 'uat' }}
+      run-only-on-branch: ${{ needs.qa-controls.outputs.selenium_run_only_on_branch }}
       parallel-mode: matrix
       max-parallel: 3
       fail-fast: false
@@ -949,7 +948,7 @@ jobs:
           echo "target_base_url=${TARGET_BASE_URL}" >> "$GITHUB_OUTPUT"
 
   grafana-k6-postdeploy:
-    name: "Grafana k6 — ${{ matrix.env_name }} Post-Deploy"
+    name: "Grafana k6 — Post-Deploy"
     needs: [active-systems, frontend, qa-controls, deploy-preview, prepare-promotion-payload, resolve-k6-target-postdeploy]
     if: >-
       always() &&
@@ -958,17 +957,13 @@ jobs:
       needs.qa-controls.outputs.enable_grafana_k6 == 'true' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
       needs.prepare-promotion-payload.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        env_name: [TEST, UAT]
     uses: ./.github/workflows/grafana-k6.yml
     with:
       system-name: ${{ needs.active-systems.outputs.active_label }}
       working-directory: .
       script-path: ${{ needs.qa-controls.outputs.k6_script_path }}
       target-base-url: ${{ needs.resolve-k6-target-postdeploy.outputs.target_base_url }}
-      run-only-on-branch: ${{ matrix.env_name == 'TEST' && 'test' || 'uat' }}
+      run-only-on-branch: ${{ needs.qa-controls.outputs.k6_run_only_on_branch }}
       upload-artifacts: true
     secrets: inherit
 
