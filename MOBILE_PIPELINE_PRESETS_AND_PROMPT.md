@@ -43,7 +43,7 @@ Note:
 - SonarCloud runs once at the master mobile pipeline level, not inside each `mobile-workflow.yml` execution.
 - Detox runs by default for Expo systems and is not meant to be toggled per system.
 - Expo systems are required to use TypeScript, not JavaScript.
-- Expo systems are required to define EAS build profiles in `eas.json` and provide `EXPO_TOKEN` as a repository secret.
+- Expo systems are required to define EAS build profiles in `eas.json` with `android.image` and `ios.image`, and provide `EXPO_TOKEN` as a repository secret.
 
 ---
 
@@ -170,7 +170,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 >
 > - `package.json` exists at the Expo app folder
 > - `tsconfig.json` exists and strict TypeScript is enabled
-> - `eas.json` exists with `production` profiles for Android and iOS and explicit `image` values
+> - `eas.json` exists with `production` profiles for Android and iOS and explicit `android.image` / `ios.image` values
 > - basic test/lint scripts exist in `package.json`
 >
 > For `kotlin-single`, ensure:

@@ -169,18 +169,17 @@ jobs:
             throw new Error(`eas.json is missing build profile "${profileName}".`);
           }
 
-          const image = (profile[platform] && profile[platform].image) || profile.image || '';
+          const image = profile[platform] && profile[platform].image;
           if (!image) {
-            throw new Error(`eas.json build profile "${profileName}" must define an image for ${platform} or at the profile root.`);
+            throw new Error(`eas.json build profile "${profileName}" must define ${platform}.image.`);
           }
           NODE
 
       - name: Trigger Expo EAS build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          EAS_NO_VCS: 1
         run: |
-          npx eas-cli@latest build \
+          npx --yes eas-cli@latest build \
             --platform "${{ inputs.platform }}" \
             --profile "${{ inputs.build-profile }}" \
             --non-interactive \

@@ -28,7 +28,7 @@
 #
 # Expo systems must be TypeScript-based and EAS-configured:
 #   tsconfig.json + strict mode
-#   eas.json with android/ios build profiles and image values
+#   eas.json with android/ios build profiles and platform-specific image values
 #   EXPO_TOKEN secret available to the workflow
 # SonarCloud runs once at the master mobile pipeline level, and Detox
 # runs by default for Expo systems.
