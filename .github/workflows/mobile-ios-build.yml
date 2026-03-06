@@ -134,7 +134,12 @@ jobs:
             exit 1
           fi
 
-          SCHEME=$(printf "%s" "${LIST_JSON}" | python3 -c 'import json,sys; d=json.load(sys.stdin); schemes=[]; schemes += (d.get("workspace", {}).get("schemes") or []); schemes += (d.get("project", {}).get("schemes") or []); print(schemes[0] if schemes else "")')
+          AVAILABLE_SCHEMES=$(LIST_JSON="${LIST_JSON}" python3 -c "import json, os; data = json.loads(os.environ['LIST_JSON']); schemes = (data.get('workspace', {}).get('schemes') or []) + (data.get('project', {}).get('schemes') or []); seen = []; [seen.append(scheme) for scheme in schemes if scheme not in seen]; print('\\n'.join(seen))")
+
+            echo "ℹ️ Available schemes:"
+            printf '%s\n' "${AVAILABLE_SCHEMES}"
+
+          SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re, sys; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
 
           if [ -z "${SCHEME}" ]; then
             echo "❌ Could not resolve an iOS scheme for build."
@@ -144,6 +149,7 @@ jobs:
           echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
           echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
           echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
+          echo "✅ Using iOS scheme: ${SCHEME}"
 
       - name: Build iOS Simulator App
         id: build-ios

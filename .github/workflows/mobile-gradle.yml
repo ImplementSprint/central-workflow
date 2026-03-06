@@ -190,16 +190,17 @@ jobs:
           echo "gradle_dir=${GRADLE_DIR}" >> "$GITHUB_OUTPUT"
           echo "✅ Using gradle wrapper directory: ${GRADLE_DIR}"
 
-      - name: Normalize Kotlin Version
+      - name: Ensure Kotlin Version Fallback
         run: |
           if [ -f "${{ steps.gradle.outputs.gradle_dir }}/gradle.properties" ]; then
             TARGET_PROPS="${{ steps.gradle.outputs.gradle_dir }}/gradle.properties"
             if grep -q '^kotlinVersion=' "${TARGET_PROPS}"; then
-              sed -i 's/^kotlinVersion=.*/kotlinVersion=2.0.21/' "${TARGET_PROPS}"
+              CURRENT_VERSION=$(grep '^kotlinVersion=' "${TARGET_PROPS}" | head -n 1 | cut -d'=' -f2-)
+              echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> "${TARGET_PROPS}"
+              echo "✅ Added fallback kotlinVersion=2.0.21"
             fi
-            echo "✅ kotlinVersion set to 2.0.21"
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}

@@ -109,15 +109,16 @@ jobs:
             CI=1 npx expo prebuild --platform android
           fi
 
-      - name: Normalize Kotlin Version
+      - name: Ensure Kotlin Version Fallback
         run: |
           if [ -f "android/gradle.properties" ]; then
             if grep -q '^kotlinVersion=' android/gradle.properties; then
-              sed -i 's/^kotlinVersion=.*/kotlinVersion=2.0.21/' android/gradle.properties
+              CURRENT_VERSION=$(grep '^kotlinVersion=' android/gradle.properties | head -n 1 | cut -d'=' -f2-)
+              echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
               echo 'kotlinVersion=2.0.21' >> android/gradle.properties
+              echo "✅ Added fallback kotlinVersion=2.0.21"
             fi
-            echo "✅ kotlinVersion set to 2.0.21"
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}
