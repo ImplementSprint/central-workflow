@@ -62,8 +62,6 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "enable_governance": true,
   "enable_detox": true,
   "enable_gradle": true,
-  "build_android": true,
-  "build_variant": "assembleRelease",
   "gradle_task": "assembleDebug",
   "version_stream": "mobile-expo"
 }
@@ -114,8 +112,6 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "enable_governance": true,
     "enable_detox": true,
     "enable_gradle": true,
-    "build_android": true,
-    "build_variant": "assembleRelease",
     "gradle_task": "assembleDebug",
     "version_stream": "mobile-expo"
   },
@@ -197,6 +193,6 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 ## 6) Platform coverage note
 
 - Current CI implementation includes Android baseline plus iOS simulator build for React Native/Expo systems.
-- Android baseline: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts.
+- Android baseline: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts (produced in Stage 3 — Gradle build).
 - iOS path: macOS iOS simulator `.app` build artifact (zipped); this is for CI validation, not App Store distribution.
 - For real iOS distribution testing, add/enable a separate TestFlight lane (App Store Connect) as a staged follow-up.

@@ -7,6 +7,28 @@
 # Also used by MB (micro-backend) repositories.
 # The pipeline_mode input controls which SYSTEMS_JSON variable
 # is read (auto = picks multi if available, else single).
+#
+# ── Required repository variables ──────────────────────────────
+# Set MOBILE_SINGLE_SYSTEMS_JSON (or MOBILE_MULTI_SYSTEMS_JSON)
+# as a repository variable.
+#
+# Minimal config (all other fields have sensible defaults):
+#
+# { "name": "MyApp-Mobile", "dir": ".", "mobile_stack": "expo" }
+#
+# Optional overrides (showing defaults):
+#   enable_gradle: true          — full Gradle build stage
+#   gradle_task: "assembleDebug"
+#   enable_ios_build: true       — iOS simulator build stage
+#   enable_lint: true
+#   enable_security_scan: true
+#   enable_governance: true
+#   enable_detox: false
+#   coverage_threshold: 80
+#
+# For Expo repos WITHOUT committed android/ and ios/ directories,
+# the pipeline will auto-run `expo prebuild` to generate native
+# projects before Android builds. No manual prebuild is needed.
 # ──────────────────────────────────────────────────────────────
 name: "Master Pipeline — Mobile"
 

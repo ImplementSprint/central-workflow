@@ -69,6 +69,44 @@ jobs:
           fi
           echo "✅ No HIGH/CRITICAL vulnerabilities"
 
+      - name: Summarise Audit Results
+        if: always()
+        run: |
+          if [ ! -f "audit-report.json" ]; then
+            echo "⚠️ audit-report.json not found — skipping summary."
+            exit 0
+          fi
+
+          if ! jq -e '.vulnerabilities' audit-report.json >/dev/null 2>&1; then
+            echo "⚠️ Audit report has no vulnerabilities key — may be an older npm format."
+            cat audit-report.json | head -60
+            exit 0
+          fi
+
+          TOTAL=$(jq '[.vulnerabilities | to_entries[].value.severity] | length' audit-report.json)
+          CRITICAL=$(jq '[.vulnerabilities | to_entries[].value | select(.severity=="critical")] | length' audit-report.json)
+          HIGH=$(jq '[.vulnerabilities | to_entries[].value | select(.severity=="high")] | length' audit-report.json)
+          MODERATE=$(jq '[.vulnerabilities | to_entries[].value | select(.severity=="moderate")] | length' audit-report.json)
+          LOW=$(jq '[.vulnerabilities | to_entries[].value | select(.severity=="low")] | length' audit-report.json)
+          INFO=$(jq '[.vulnerabilities | to_entries[].value | select(.severity=="info")] | length' audit-report.json)
+
+          echo "╔══════════════════════════════════════════════════════╗"
+          echo "║          DEPENDENCY AUDIT SUMMARY                    ║"
+          echo "╠══════════════════════════════════════════════════════╣"
+          echo "║ Total vulnerabilities:  ${TOTAL}"
+          echo "║   Critical:            ${CRITICAL}"
+          echo "║   High:                ${HIGH}"
+          echo "║   Moderate:            ${MODERATE}"
+          echo "║   Low:                 ${LOW}"
+          echo "║   Info:                ${INFO}"
+          echo "╚══════════════════════════════════════════════════════╝"
+
+          if [ "${CRITICAL}" -gt 0 ] || [ "${HIGH}" -gt 0 ]; then
+            echo ""
+            echo "🔴 Packages with HIGH/CRITICAL vulnerabilities:"
+            jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | "  • \(.key) (\(.value.severity)) — via \(.value.via | if type == "array" then map(if type == "string" then . else .title // .url // "direct" end) | join(", ") else . end)"' audit-report.json
+          fi
+
       - name: Upload Audit Report
         if: always()
         uses: actions/upload-artifact@v4

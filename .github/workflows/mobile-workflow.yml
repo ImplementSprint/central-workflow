@@ -53,16 +53,6 @@ on:
         type: boolean
         default: true
         description: "Run governance checks"
-      build-android:
-        required: false
-        type: boolean
-        default: false
-        description: "Build Android APK"
-      build-variant:
-        required: false
-        type: string
-        default: "assembleRelease"
-        description: "Gradle build variant"
       enable-gradle:
         required: false
         type: boolean
@@ -128,11 +118,8 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      java-version: ${{ inputs.java-version }}
       test-command: "npx jest --coverage --verbose --ci --forceExit"
       coverage-threshold: ${{ inputs.coverage-threshold }}
-      build-android: ${{ inputs.build-android }}
-      build-variant: ${{ inputs.build-variant }}
 
   # ── Stage 1B: Lint (parallel with tests) ────────────────────────
   mobile-lint:
