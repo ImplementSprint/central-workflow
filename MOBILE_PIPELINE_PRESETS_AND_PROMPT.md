@@ -190,9 +190,28 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 - On `main`: release/version/publish jobs can run (subject to their `if` conditions and prior job success).
 - Seeing those branch-mismatched jobs as `skipped` is normal pipeline behavior, not a failure.
 
-## 6) Platform coverage note
+## 6) Pipeline stage architecture
+
+The mobile sub-workflow (`mobile-workflow.yml`) uses a two-stage design:
+
+**Stage 1 — Quality gates (parallel):**
+
+- Jest unit tests (+ coverage threshold check)
+- Lint check
+- Security scan (npm audit + license compliance)
+
+**Stage 2 — Build & advanced checks (parallel, starts after all Stage 1 gates pass):**
+
+- SonarCloud scan (needs unit-test coverage artifact only)
+- Detox E2E (optional, `enable_detox`)
+- Android Gradle build (APK/AAB artifact)
+- iOS simulator build (zipped `.app` artifact)
+
+All Stage 2 jobs run in parallel. A failure in any Stage 1 gate blocks Stage 2 entirely.
+
+## 7) Platform coverage note
 
 - Current CI implementation includes Android baseline plus iOS simulator build for React Native/Expo systems.
-- Android baseline: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts (produced in Stage 3 — Gradle build).
+- Android baseline: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts (produced in Stage 2 — Gradle build).
 - iOS path: macOS iOS simulator `.app` build artifact (zipped); this is for CI validation, not App Store distribution.
 - For real iOS distribution testing, add/enable a separate TestFlight lane (App Store Connect) as a staged follow-up.

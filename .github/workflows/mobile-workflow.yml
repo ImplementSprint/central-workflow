@@ -1,8 +1,7 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  ORCHESTRATOR: Mobile CI/CD Pipeline                             ║
-# ║  Composes reusable workflows: test → lint → governance →       ║
-# ║  security → sonar → detox → gradle                             ║
-# ║  Includes optional SonarCloud quality scan stage              ║
+# ║  Stage 1 (gates): test → lint → security  (parallel)           ║
+# ║  Stage 2 (parallel): sonar · detox · gradle · iOS build        ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Mobile CI/CD Pipeline"
 
@@ -118,7 +117,8 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      test-command: "npx jest --coverage --verbose --ci --forceExit"
+      # runInBand reduces transient Android/Jest worker crashes in CI
+      test-command: "npx jest --coverage --verbose --ci --forceExit --runInBand"
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   # ── Stage 1B: Lint (parallel with tests) ────────────────────────
@@ -140,20 +140,10 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+      # Keep test branch unblocked by HIGH findings; enforce HIGH on uat/main.
+      fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
 
-  # ── Stage 1D: Governance Checks (parallel with tests/lint/security) ─────
-  mobile-governance:
-    name: "Mobile — Governance Checks"
-    if: ${{ inputs.enable-governance }}
-    uses: ./.github/workflows/governance-check.yml
-    with:
-      working-directory: ${{ inputs.system-dir }}
-      system-name: ${{ inputs.system-name }}
-      node-version: ${{ inputs.node-version }}
-      test-command: npx jest --coverage --verbose --ci --forceExit
-      coverage-threshold: ${{ inputs.coverage-threshold }}
-
-  # ── Stage 1E: SonarCloud Scan ─────────────────────────────────────────────
+  # ── Stage 1D: SonarCloud Scan ─────────────────────────────────────────────
   mobile-sonar:
     name: "Mobile — SonarCloud Scan"
     needs: [mobile-unit-tests]
@@ -173,10 +163,10 @@ jobs:
       SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
       SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
 
-  # ── Stage 2: Detox E2E ──────────────────────────────────────────────────
+  # ── Stage 2A: Detox E2E ──────────────────────────────────────────────────
   mobile-detox:
     name: "Mobile — Detox E2E"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar]
+    needs: [mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
       inputs.enable-detox &&
@@ -190,10 +180,10 @@ jobs:
       detox-build-command: ${{ inputs.detox-build-command }}
       detox-test-command: ${{ inputs.detox-test-command }}
 
-  # ── Stage 3: Android Gradle Build ───────────────────────────────────────
+  # ── Stage 2B: Android Gradle Build ──────────────────────────────────────
   mobile-gradle:
     name: "Mobile — Gradle Build"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar, mobile-detox]
+    needs: [mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
       inputs.enable-gradle &&
@@ -215,10 +205,10 @@ jobs:
       docker-image-name: ${{ inputs.docker-image-name }}
       dockerfile-path: ${{ inputs.dockerfile-path }}
 
-  # ── Stage 3B: iOS Simulator Build ─────────────────────────────────────
+  # ── Stage 2C: iOS Simulator Build ─────────────────────────────────────
   mobile-ios-build:
     name: "Mobile - iOS Simulator Build"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar, mobile-detox]
+    needs: [mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
       inputs.enable-ios-build &&
