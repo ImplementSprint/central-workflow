@@ -151,6 +151,25 @@ jobs:
             CI=1 npx expo prebuild --platform android
           fi
 
+      - name: Normalize React Native New Architecture API
+        if: ${{ steps.detect.outputs.stack == 'react-native' }}
+        run: |
+          mapfile -t MAIN_APP_FILES < <(find . -type f -path '*/android/app/src/main/java/*/MainApplication.java')
+
+          if [ "${#MAIN_APP_FILES[@]}" -eq 0 ]; then
+            echo "ℹ️ No MainApplication.java files found to normalize."
+            exit 0
+          fi
+
+          for MAIN_APP in "${MAIN_APP_FILES[@]}"; do
+            if grep -q 'DefaultNewArchitectureEntryPoint\.releaseLevel' "${MAIN_APP}"; then
+              perl -0pi -e 's/DefaultNewArchitectureEntryPoint\.releaseLevel\s*=\s*([^;]+);/DefaultNewArchitectureEntryPoint.setReleaseLevel($1);/g' "${MAIN_APP}"
+              echo "✅ Normalized releaseLevel API usage in ${MAIN_APP}"
+            else
+              echo "ℹ️ ${MAIN_APP} already uses compatible release level API."
+            fi
+          done
+
       - name: Resolve Gradle Wrapper Directory
         id: gradle
         run: |
