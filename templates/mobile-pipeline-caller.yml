@@ -30,6 +30,8 @@
 #   tsconfig.json + strict mode
 #   eas.json with android/ios build profiles and platform-specific image values
 #   EXPO_TOKEN secret available to the workflow
+#   Optional: EXPO_PROJECT_ID and EXPO_OWNER secrets if you want Expo
+#   project linkage managed in CI instead of checked into the repo
 # SonarCloud runs once at the master mobile pipeline level, and Detox
 # runs by default for Expo systems.
 # ──────────────────────────────────────────────────────────────

@@ -85,6 +85,10 @@ on:
     secrets:
       EXPO_TOKEN:
         required: false
+      EXPO_PROJECT_ID:
+        required: false
+      EXPO_OWNER:
+        required: false
 
 permissions:
   contents: read
@@ -264,6 +268,8 @@ jobs:
       upload-artifact: true
     secrets:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+      EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
 
   # ── Stage 2C: Expo iOS EAS Build ────────────────────────────────────────
   expo-ios-build:
@@ -284,3 +290,5 @@ jobs:
       upload-artifact: true
     secrets:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+      EXPO_OWNER: ${{ secrets.EXPO_OWNER }}

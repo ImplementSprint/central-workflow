@@ -115,6 +115,10 @@ on:
         required: false
       EXPO_TOKEN:
         required: false
+      EXPO_PROJECT_ID:
+        required: false
+      EXPO_OWNER:
+        required: false
 
 permissions:
   contents: write
@@ -674,7 +678,7 @@ jobs:
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: ${{ matrix.system.name }}-android-*
+          pattern: ${{ matrix.system.name }}-*
           path: release-assets/${{ matrix.system.name }}
           merge-multiple: true
           if-no-files-found: ignore
@@ -685,7 +689,7 @@ jobs:
         run: |
           FILE_COUNT=$(find "release-assets/${SYSTEM_NAME}" -type f | wc -l)
           if [ "${FILE_COUNT}" -eq 0 ]; then
-            echo "❌ No Android artifacts found for ${SYSTEM_NAME} in this run."
+            echo "❌ No mobile artifacts found for ${SYSTEM_NAME} in this run."
             exit 1
           fi
 
@@ -695,7 +699,7 @@ jobs:
           SYSTEM_NAME: ${{ matrix.system.name }}
         run: |
           mkdir -p release-zips
-          ZIP_PATH="release-zips/${SYSTEM_NAME}-android-release.zip"
+          ZIP_PATH="release-zips/${SYSTEM_NAME}-mobile-release.zip"
           cd "release-assets/${SYSTEM_NAME}"
           zip -r "../../${ZIP_PATH}" .
           cd - >/dev/null

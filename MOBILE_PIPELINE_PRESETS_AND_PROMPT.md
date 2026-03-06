@@ -44,6 +44,7 @@ Note:
 - Detox runs by default for Expo systems and is not meant to be toggled per system.
 - Expo systems are required to use TypeScript, not JavaScript.
 - Expo systems are required to define EAS build profiles in `eas.json` with `android.image` and `ios.image`, and provide `EXPO_TOKEN` as a repository secret.
+- Expo project linkage can be supplied either in the app config (`expo.extra.eas.projectId`, optionally `expo.owner`) or through CI secrets `EXPO_PROJECT_ID` and `EXPO_OWNER`.
 
 ---
 
@@ -171,6 +172,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 > - `package.json` exists at the Expo app folder
 > - `tsconfig.json` exists and strict TypeScript is enabled
 > - `eas.json` exists with `production` profiles for Android and iOS and explicit `android.image` / `ios.image` values
+> - Expo project linkage exists either in app config or via CI secrets `EXPO_PROJECT_ID` and `EXPO_OWNER`
 > - basic test/lint scripts exist in `package.json`
 >
 > For `kotlin-single`, ensure:
@@ -238,3 +240,4 @@ All Stage 2 jobs run in parallel. A failure in any Stage 1 gate blocks Stage 2 e
 - Expo baseline: Jest + strict TypeScript + Detox Android emulator + EAS Android/iOS build artifacts.
 - Kotlin baseline: direct Gradle Android build artifacts.
 - For Expo systems, the repository must provide `EXPO_TOKEN` and valid EAS credentials/profile configuration.
+- Expo project linkage may be stored in repo config or injected from CI using `EXPO_PROJECT_ID` and `EXPO_OWNER`.

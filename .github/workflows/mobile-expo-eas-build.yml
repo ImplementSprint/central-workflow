@@ -44,6 +44,10 @@ on:
     secrets:
       EXPO_TOKEN:
         required: false
+      EXPO_PROJECT_ID:
+        required: false
+      EXPO_OWNER:
+        required: false
 
 permissions:
   contents: read
@@ -124,6 +128,8 @@ jobs:
           BUILD_PLATFORM: ${{ inputs.platform }}
           BUILD_PROFILE: ${{ inputs.build-profile }}
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
         run: |
           if [ -z "${EXPO_TOKEN}" ]; then
             echo "❌ EXPO_TOKEN secret is required for Expo EAS builds."
@@ -142,11 +148,17 @@ jobs:
             exit 1
           fi
 
+          if [ -n "${EXPO_PROJECT_ID}" ] || [ -n "${EXPO_OWNER}" ]; then
+            echo "ℹ️ Expo project identity will be supplied from CI secrets when possible."
+          fi
+
           node <<'NODE'
           const fs = require('fs');
 
           const platform = process.env.BUILD_PLATFORM;
           const profileName = process.env.BUILD_PROFILE;
+          const projectIdFromSecret = process.env.EXPO_PROJECT_ID || '';
+          const ownerFromSecret = process.env.EXPO_OWNER || '';
 
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           const deps = {
@@ -173,11 +185,67 @@ jobs:
           if (!image) {
             throw new Error(`eas.json build profile "${profileName}" must define ${platform}.image.`);
           }
+
+          const hasAppJson = fs.existsSync('app.json');
+          const hasDynamicAppConfig = fs.existsSync('app.config.js') || fs.existsSync('app.config.ts');
+
+          if (!projectIdFromSecret && !hasAppJson && hasDynamicAppConfig) {
+            // Dynamic app config may still provide linkage; leave this to EAS.
+            process.exit(0);
+          }
+
+          if (!projectIdFromSecret && hasAppJson) {
+            const appJson = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            const expo = appJson.expo || {};
+            const projectId = (((expo.extra || {}).eas || {}).projectId) || '';
+            if (!projectId && !hasDynamicAppConfig) {
+              throw new Error('Expo app must define project linkage in app.json (expo.extra.eas.projectId) or provide EXPO_PROJECT_ID in CI secrets.');
+            }
+          }
           NODE
+
+      - name: Inject Expo project identity from CI
+        env:
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
+        run: |
+          if [ -z "${EXPO_PROJECT_ID}" ] && [ -z "${EXPO_OWNER}" ]; then
+            echo "ℹ️ No CI-provided Expo project identity to inject."
+            exit 0
+          fi
+
+          if [ -f "app.json" ]; then
+            cp app.json app.json.ci-backup
+            node <<'NODE'
+            const fs = require('fs');
+
+            const projectId = process.env.EXPO_PROJECT_ID || '';
+            const owner = process.env.EXPO_OWNER || '';
+            const appJson = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+
+            appJson.expo = appJson.expo || {};
+            if (owner) {
+              appJson.expo.owner = owner;
+            }
+
+            if (projectId) {
+              appJson.expo.extra = appJson.expo.extra || {};
+              appJson.expo.extra.eas = appJson.expo.extra.eas || {};
+              appJson.expo.extra.eas.projectId = projectId;
+            }
+
+            fs.writeFileSync('app.json', JSON.stringify(appJson, null, 2) + '\n');
+            NODE
+            echo "✅ Injected Expo project identity into app.json for CI."
+          else
+            echo "ℹ️ Dynamic Expo app config detected. EXPO_PROJECT_ID and EXPO_OWNER will be exposed as environment variables for app.config.js/app.config.ts to consume."
+          fi
 
       - name: Trigger Expo EAS build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+          EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
         run: |
           npx --yes eas-cli@latest build \
             --platform "${{ inputs.platform }}" \
@@ -230,3 +298,10 @@ jobs:
           path: ${{ inputs.working-directory }}/build-artifacts/*
           retention-days: 14
           if-no-files-found: error
+
+      - name: Restore Expo config
+        if: ${{ always() }}
+        run: |
+          if [ -f "app.json.ci-backup" ]; then
+            mv app.json.ci-backup app.json
+          fi
