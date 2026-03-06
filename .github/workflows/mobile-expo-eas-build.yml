@@ -1,0 +1,233 @@
+name: "Reusable: Expo EAS Build"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Expo project directory"
+      system-name:
+        required: true
+        type: string
+        description: "System name for artifacts/display"
+      node-version:
+        required: false
+        type: number
+        default: 20
+        description: "Node.js version"
+      platform:
+        required: true
+        type: string
+        description: "EAS build platform (android|ios)"
+      build-profile:
+        required: false
+        type: string
+        default: "production"
+        description: "EAS build profile name"
+      upload-artifact:
+        required: false
+        type: boolean
+        default: true
+        description: "Download the EAS artifact and upload it to GitHub"
+    outputs:
+      build-id:
+        description: "EAS build identifier"
+        value: ${{ jobs.expo-eas-build.outputs.build_id }}
+      build-details-url:
+        description: "EAS build details URL"
+        value: ${{ jobs.expo-eas-build.outputs.build_details_url }}
+      artifact-url:
+        description: "Artifact URL returned by EAS"
+        value: ${{ jobs.expo-eas-build.outputs.artifact_url }}
+    secrets:
+      EXPO_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  expo-eas-build:
+    name: "Expo EAS Build (${{ inputs.platform }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      build_id: ${{ steps.parse.outputs.build_id }}
+      build_details_url: ${{ steps.parse.outputs.build_details_url }}
+      artifact_url: ${{ steps.parse.outputs.artifact_url }}
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect-pm
+        run: |
+          if [ -f "yarn.lock" ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ package.json is required for Expo EAS builds."
+            exit 1
+          fi
+
+      - name: Setup Node.js ${{ inputs.node-version }} (npm)
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Setup Node.js ${{ inputs.node-version }} (yarn)
+        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+          cache-dependency-path: |
+            **/yarn.lock
+
+      - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
+        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "pnpm"
+          cache-dependency-path: |
+            **/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+        run: |
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn install --frozen-lockfile --ignore-scripts
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          else
+            npm ci --ignore-scripts
+          fi
+
+      - name: Validate Expo EAS configuration
+        env:
+          BUILD_PLATFORM: ${{ inputs.platform }}
+          BUILD_PROFILE: ${{ inputs.build-profile }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "❌ EXPO_TOKEN secret is required for Expo EAS builds."
+            exit 1
+          fi
+
+          for REQUIRED_FILE in package.json tsconfig.json eas.json; do
+            if [ ! -f "${REQUIRED_FILE}" ]; then
+              echo "❌ ${REQUIRED_FILE} is required for Expo EAS builds."
+              exit 1
+            fi
+          done
+
+          if [ ! -f "app.json" ] && [ ! -f "app.config.js" ] && [ ! -f "app.config.ts" ]; then
+            echo "❌ Expo app config is required (app.json, app.config.js, or app.config.ts)."
+            exit 1
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const platform = process.env.BUILD_PLATFORM;
+          const profileName = process.env.BUILD_PROFILE;
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const deps = {
+            ...(pkg.dependencies || {}),
+            ...(pkg.devDependencies || {}),
+            ...(pkg.peerDependencies || {}),
+          };
+
+          if (!deps.expo) {
+            throw new Error('Expo standard requires dependency "expo".');
+          }
+
+          if (!deps.typescript) {
+            throw new Error('Expo standard requires dependency "typescript".');
+          }
+
+          const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          const profile = eas.build && eas.build[profileName];
+          if (!profile) {
+            throw new Error(`eas.json is missing build profile "${profileName}".`);
+          }
+
+          const image = (profile[platform] && profile[platform].image) || profile.image || '';
+          if (!image) {
+            throw new Error(`eas.json build profile "${profileName}" must define an image for ${platform} or at the profile root.`);
+          }
+          NODE
+
+      - name: Trigger Expo EAS build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_NO_VCS: 1
+        run: |
+          npx eas-cli@latest build \
+            --platform "${{ inputs.platform }}" \
+            --profile "${{ inputs.build-profile }}" \
+            --non-interactive \
+            --wait \
+            --json > eas-build-result.json
+
+      - name: Parse EAS build result
+        id: parse
+        run: |
+          BUILD_ID=$(jq -r 'if type=="array" then (.[0].id // "") else (.id // "") end' eas-build-result.json)
+          BUILD_DETAILS_URL=$(jq -r 'if type=="array" then (.[0].webUrl // .[0].buildDetailsPageUrl // .[0].logsUrl // "") else (.webUrl // .buildDetailsPageUrl // .logsUrl // "") end' eas-build-result.json)
+          ARTIFACT_URL=$(jq -r 'if type=="array" then (.[0].artifacts.buildUrl // .[0].artifacts.applicationArchiveUrl // .[0].artifacts.xcarchiveUrl // .[0].artifacts.url // "") else (.artifacts.buildUrl // .artifacts.applicationArchiveUrl // .artifacts.xcarchiveUrl // .artifacts.url // "") end' eas-build-result.json)
+
+          echo "build_id=${BUILD_ID}" >> "$GITHUB_OUTPUT"
+          echo "build_details_url=${BUILD_DETAILS_URL}" >> "$GITHUB_OUTPUT"
+          echo "artifact_url=${ARTIFACT_URL}" >> "$GITHUB_OUTPUT"
+
+          echo "✅ EAS build completed: ${BUILD_ID}"
+          if [ -n "${BUILD_DETAILS_URL}" ]; then
+            echo "ℹ️ Build details: ${BUILD_DETAILS_URL}"
+          fi
+
+      - name: Download Expo artifact
+        if: ${{ inputs.upload-artifact && steps.parse.outputs.artifact_url != '' }}
+        env:
+          ARTIFACT_URL: ${{ steps.parse.outputs.artifact_url }}
+          PLATFORM: ${{ inputs.platform }}
+          SYSTEM_NAME: ${{ inputs.system-name }}
+        run: |
+          mkdir -p build-artifacts
+
+          FILE_NAME=$(basename "${ARTIFACT_URL%%\?*}")
+          if [ -z "${FILE_NAME}" ] || [ "${FILE_NAME}" = "/" ] || [[ "${FILE_NAME}" != *.* ]]; then
+            if [ "${PLATFORM}" = "android" ]; then
+              FILE_NAME="${SYSTEM_NAME}-android-build.bin"
+            else
+              FILE_NAME="${SYSTEM_NAME}-ios-build.bin"
+            fi
+          fi
+
+          curl -fsSL "${ARTIFACT_URL}" -o "build-artifacts/${FILE_NAME}"
+
+      - name: Upload Expo artifact
+        if: ${{ inputs.upload-artifact && steps.parse.outputs.artifact_url != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-${{ inputs.platform }}-build
+          path: ${{ inputs.working-directory }}/build-artifacts/*
+          retention-days: 14
+          if-no-files-found: error

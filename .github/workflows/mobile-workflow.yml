@@ -1,9 +1,9 @@
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║  ORCHESTRATOR: Mobile CI/CD Pipeline                             ║
-# ║  Stage 1 (gates): test → lint → security  (parallel)           ║
-# ║  Stage 2 (parallel): sonar · detox · gradle · iOS build        ║
+# ║  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ║
+# ║  Stage 1 (gates): test → typescript → lint → security         ║
+# ║  Stage 2 (parallel): detox · EAS Android · EAS iOS            ║
 # ╚══════════════════════════════════════════════════════════════════╝
-name: "Mobile CI/CD Pipeline"
+name: "Expo Mobile CI/CD Pipeline"
 
 on:
   workflow_call:
@@ -12,7 +12,7 @@ on:
         required: false
         type: string
         default: "."
-        description: "Project directory (e.g. BayaniHub-Mobile, or '.' for root)"
+        description: "Expo project directory (e.g. BayaniHub-Mobile, or '.' for root)"
       system-name:
         required: true
         type: string
@@ -42,50 +42,35 @@ on:
         type: boolean
         default: true
         description: "Run security scanning"
-      enable-sonar:
-        required: false
-        type: boolean
-        default: true
-        description: "Run SonarCloud scan"
       enable-governance:
         required: false
         type: boolean
         default: true
-        description: "Run governance checks"
-      enable-gradle:
+        description: "Reserved for compatibility"
+      enable-android-build:
         required: false
         type: boolean
         default: true
-        description: "Run Gradle Android build"
+        description: "Run Expo Android EAS build"
       enable-ios-build:
         required: false
         type: boolean
         default: true
-        description: "Run iOS simulator build"
-      gradle-task:
+        description: "Run Expo iOS EAS build"
+      android-build-profile:
         required: false
         type: string
-        default: "assembleDebug"
-        description: "Gradle task to execute"
-      enable-docker-build:
-        required: false
-        type: boolean
-        default: false
-        description: "Build and optionally push Docker image"
-      docker-image-name:
+        default: "production"
+        description: "EAS build profile for Android"
+      ios-build-profile:
         required: false
         type: string
-        default: ""
-        description: "Docker image name for GHCR (required when Docker build is enabled)"
-      dockerfile-path:
-        required: false
-        type: string
-        default: "Dockerfile"
-        description: "Path to Dockerfile relative to system-dir"
+        default: "production"
+        description: "EAS build profile for iOS"
       enable-detox:
         required: false
         type: boolean
-        default: false
+        default: true
         description: "Run Detox E2E tests"
       detox-build-command:
         required: false
@@ -98,17 +83,117 @@ on:
         default: "npx detox test --configuration android.emu.debug --headless"
         description: "Detox test command"
     secrets:
-      SONAR_TOKEN:
-        required: false
-      SONAR_PROJECT_KEY:
-        required: false
-      SONAR_ORGANIZATION:
+      EXPO_TOKEN:
         required: false
 
 permissions:
   contents: read
 
 jobs:
+  expo-typescript-standard:
+    name: "Expo — TypeScript Standard"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./${{ inputs.system-dir }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Expo + TypeScript standard
+        run: |
+          if [ ! -f "package.json" ]; then
+            echo "❌ package.json is required for Expo systems."
+            exit 1
+          fi
+
+          if [ ! -f "tsconfig.json" ]; then
+            echo "❌ tsconfig.json is required for Expo systems."
+            exit 1
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const deps = {
+            ...(pkg.dependencies || {}),
+            ...(pkg.devDependencies || {}),
+            ...(pkg.peerDependencies || {}),
+          };
+
+          if (!deps.expo) {
+            throw new Error('Expo standard requires dependency "expo".');
+          }
+
+          if (!deps.typescript) {
+            throw new Error('Expo standard requires dependency "typescript".');
+          }
+
+          const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+          if (!(tsconfig.compilerOptions && tsconfig.compilerOptions.strict === true)) {
+            throw new Error('Expo standard requires tsconfig.compilerOptions.strict=true.');
+          }
+
+          const ignoreDirs = new Set(['node_modules', 'android', 'ios', '.git', '.expo', 'dist', 'build', 'coverage']);
+          const sourceDirs = ['app', 'src', 'components', 'screens', 'features', 'hooks', 'utils'];
+          const jsLike = [];
+          let hasTsSource = false;
+
+          function walk(target) {
+            const entries = fs.readdirSync(target, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.name.startsWith('.')) {
+                continue;
+              }
+
+              const fullPath = path.join(target, entry.name);
+              if (entry.isDirectory()) {
+                if (!ignoreDirs.has(entry.name)) {
+                  walk(fullPath);
+                }
+                continue;
+              }
+
+              if (/\.(ts|tsx)$/i.test(entry.name)) {
+                hasTsSource = true;
+              }
+
+              if (/\.(js|jsx)$/i.test(entry.name)) {
+                jsLike.push(fullPath.replace(/\\/g, '/'));
+              }
+            }
+          }
+
+          for (const sourceDir of sourceDirs) {
+            if (fs.existsSync(sourceDir) && fs.statSync(sourceDir).isDirectory()) {
+              walk(sourceDir);
+            }
+          }
+
+          for (const rootFile of ['App.ts', 'App.tsx']) {
+            if (fs.existsSync(rootFile)) {
+              hasTsSource = true;
+            }
+          }
+
+          for (const rootFile of ['App.js', 'App.jsx']) {
+            if (fs.existsSync(rootFile)) {
+              jsLike.push(rootFile);
+            }
+          }
+
+          if (!hasTsSource) {
+            throw new Error('Expo standard requires TypeScript application source files (.ts/.tsx).');
+          }
+
+          if (jsLike.length > 0) {
+            throw new Error('Expo standard forbids JS/JSX application source files. Found:\n' + jsLike.slice(0, 20).join('\n'));
+          }
+          NODE
+
   # ── Stage 1A: Unit Tests (Jest) ─────────────────────────────────
   mobile-unit-tests:
     name: "Mobile — Jest Unit Tests"
@@ -143,30 +228,10 @@ jobs:
       # Keep test branch unblocked by HIGH findings; enforce HIGH on uat/main.
       fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
 
-  # ── Stage 1D: SonarCloud Scan ─────────────────────────────────────────────
-  mobile-sonar:
-    name: "Mobile — SonarCloud Scan"
-    needs: [mobile-unit-tests]
-    if: ${{ inputs.enable-sonar }}
-    uses: ./.github/workflows/sonarcloud-scan.yml
-    with:
-      working-directory: ${{ inputs.system-dir }}
-      system-name: ${{ inputs.system-name }}
-      sources-path: .
-      tests-path: tests,e2e
-      sources-exclusions: tests/**,e2e/**,coverage/**,android/**,ios/**,.expo/**,node_modules/**
-      coverage-report-path: coverage/lcov.info
-      coverage-artifact-name: ${{ format('{0}-coverage', inputs.system-name) }}
-      quality-gate-wait: true
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
-
   # ── Stage 2A: Detox E2E ──────────────────────────────────────────────────
   mobile-detox:
     name: "Mobile — Detox E2E"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security]
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
       inputs.enable-detox &&
@@ -180,42 +245,42 @@ jobs:
       detox-build-command: ${{ inputs.detox-build-command }}
       detox-test-command: ${{ inputs.detox-test-command }}
 
-  # ── Stage 2B: Android Gradle Build ──────────────────────────────────────
-  mobile-gradle:
-    name: "Mobile — Gradle Build"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security]
+  # ── Stage 2B: Expo Android EAS Build ────────────────────────────────────
+  expo-android-build:
+    name: "Expo — Android EAS Build"
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
-      inputs.enable-gradle &&
+      inputs.enable-android-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-      
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-      
-    uses: ./.github/workflows/mobile-gradle.yml
+
+    uses: ./.github/workflows/mobile-expo-eas-build.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      java-version: ${{ inputs.java-version }}
-      gradle-task: ${{ inputs.gradle-task }}
-      enable-docker-build: ${{ inputs.enable-docker-build }}
-      docker-image-name: ${{ inputs.docker-image-name }}
-      dockerfile-path: ${{ inputs.dockerfile-path }}
+      platform: android
+      build-profile: ${{ inputs.android-build-profile }}
+      upload-artifact: true
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-  # ── Stage 2C: iOS Simulator Build ─────────────────────────────────────
-  mobile-ios-build:
-    name: "Mobile - iOS Simulator Build"
-    needs: [mobile-unit-tests, mobile-lint, mobile-security]
+  # ── Stage 2C: Expo iOS EAS Build ────────────────────────────────────────
+  expo-ios-build:
+    name: "Expo — iOS EAS Build"
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
       inputs.enable-ios-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    uses: ./.github/workflows/mobile-ios-build.yml
+
+    uses: ./.github/workflows/mobile-expo-eas-build.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+      platform: ios
+      build-profile: ${{ inputs.ios-build-profile }}
       upload-artifact: true
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

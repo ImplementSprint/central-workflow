@@ -3,7 +3,7 @@
 # Copy this file into the target repo at:
 #   .github/workflows/master-pipeline-mobile.yml
 #
-# Works for React Native, Expo, Kotlin/Android, and mixed repos.
+# Works for Expo + TypeScript, Kotlin/Android, and mixed repos.
 # Also used by MB (micro-backend) repositories.
 # The pipeline_mode input controls which SYSTEMS_JSON variable
 # is read (auto = picks multi if available, else single).
@@ -17,18 +17,21 @@
 # { "name": "MyApp-Mobile", "dir": ".", "mobile_stack": "expo" }
 #
 # Optional overrides (showing defaults):
-#   enable_gradle: true          — full Gradle build stage
-#   gradle_task: "assembleDebug"
+#   enable_android_build: true   — Expo Android EAS build stage
+#   eas_profile_android: "production"
+#   eas_profile_ios: "production"
 #   enable_ios_build: true       — iOS simulator build stage
 #   enable_lint: true
 #   enable_security_scan: true
 #   enable_governance: true
-#   enable_detox: false
 #   coverage_threshold: 80
 #
-# For Expo repos WITHOUT committed android/ and ios/ directories,
-# the pipeline will auto-run `expo prebuild` to generate native
-# projects before Android builds. No manual prebuild is needed.
+# Expo systems must be TypeScript-based and EAS-configured:
+#   tsconfig.json + strict mode
+#   eas.json with android/ios build profiles and image values
+#   EXPO_TOKEN secret available to the workflow
+# SonarCloud runs once at the master mobile pipeline level, and Detox
+# runs by default for Expo systems.
 # ──────────────────────────────────────────────────────────────
 name: "Master Pipeline — Mobile"
 

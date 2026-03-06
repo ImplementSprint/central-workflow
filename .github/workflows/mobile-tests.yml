@@ -73,7 +73,7 @@ jobs:
           elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
             echo "pm=npm" >> "$GITHUB_OUTPUT"
           else
-            echo "❌ package.json is required for React Native tests."
+            echo "❌ package.json is required for Expo tests."
             exit 1
           fi
 
