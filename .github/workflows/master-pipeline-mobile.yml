@@ -423,7 +423,7 @@ jobs:
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
       enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
       enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
-      enable-sonar: ${{ inputs.enable_sonar != false && (matrix.system.enable_sonar == true || matrix.system.enable_sonar == null) }}
+      enable-sonar: false
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       build-android: ${{ matrix.system.build_android == true || matrix.system.build_android == null }}
       build-variant: ${{ matrix.system.build_variant || 'assembleRelease' }}
@@ -477,6 +477,60 @@ jobs:
       docker-image-name: ${{ matrix.system.docker_image || '' }}
       dockerfile-path: ${{ matrix.system.dockerfile_path || 'Dockerfile' }}
       upload-artifact: true
+
+  sonarcloud-mobile:
+    name: "SonarCloud — Mobile Monorepo Analysis"
+    needs: [active-systems, classify-systems, mobile-react-native, mobile-kotlin]
+    if: >-
+      always() &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      inputs.enable_sonar != false &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate SonarCloud project access
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          if [ -z "${SONAR_TOKEN}" ] || [ -z "${SONAR_ORGANIZATION}" ] || [ -z "${SONAR_PROJECT_KEY}" ]; then
+            echo "❌ SonarCloud preflight failed: one or more required secrets are empty."
+            exit 1
+          fi
+
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -u "${SONAR_TOKEN}:" "https://sonarcloud.io/api/projects/search?organization=${SONAR_ORGANIZATION}&projects=${SONAR_PROJECT_KEY}")
+          HTTP_CODE=$(echo "${RESPONSE}" | tail -n 1)
+          BODY=$(echo "${RESPONSE}" | sed '$d')
+          TOTAL=$(echo "${BODY}" | jq -r '.paging.total // 0')
+
+          echo "🔎 Sonar preflight: org='${SONAR_ORGANIZATION}', project='${SONAR_PROJECT_KEY}', http=${HTTP_CODE}, total=${TOTAL}"
+
+          if [ "${HTTP_CODE}" -ne 200 ] || [ "${TOTAL}" -lt 1 ]; then
+            echo "❌ SonarCloud preflight failed: project not found or token has no access."
+            echo "Check SONAR_ORGANIZATION, SONAR_PROJECT_KEY, and SONAR_TOKEN permissions for this repository."
+            exit 1
+          fi
+
+          echo "✅ SonarCloud preflight passed."
+
+      - name: Run SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
   k6-systems:
     name: "Detect k6-Enabled Mobile Systems"
@@ -541,7 +595,7 @@ jobs:
 
   version-test:
     name: "Version Tag — TEST (${{ matrix.system.name }})"
-    needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems]
+    needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -549,7 +603,8 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
-      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -561,7 +616,7 @@ jobs:
 
   version-main-release:
     name: "Version Tag — MAIN Release (${{ matrix.system.name }})"
-    needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems]
+    needs: [mobile-react-native, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
     if: >-
       always() &&
       github.ref == 'refs/heads/main' &&
@@ -569,7 +624,8 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
-      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -581,7 +637,7 @@ jobs:
 
   publish-mobile-release:
     name: "Publish Mobile Release — ${{ matrix.system.name }}"
-    needs: [active-systems, qa-controls, k6-systems, mobile-react-native, mobile-kotlin, mobile-grafana-k6, version-main-release]
+    needs: [active-systems, qa-controls, k6-systems, mobile-react-native, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-main-release]
     if: >-
       always() &&
       github.repository != 'ImplementSprint/central-workflow' &&
@@ -592,6 +648,7 @@ jobs:
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped') &&
       needs.version-main-release.result == 'success' &&
       (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || needs.mobile-grafana-k6.result == 'success')
     runs-on: ubuntu-latest
@@ -667,7 +724,7 @@ jobs:
 
   aggregate-mobile-status:
     name: "Aggregate Mobile Status"
-    needs: [qa-controls, active-systems, classify-systems, mobile-react-native, mobile-kotlin, k6-systems, mobile-grafana-k6]
+    needs: [qa-controls, active-systems, classify-systems, mobile-react-native, mobile-kotlin, k6-systems, mobile-grafana-k6, sonarcloud-mobile]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -679,6 +736,7 @@ jobs:
         id: aggregate
         env:
           ENABLE_GRAFANA_K6: ${{ needs.qa-controls.outputs.enable_grafana_k6 }}
+          ENABLE_SONAR_INPUT: ${{ inputs.enable_sonar }}
           ACTIVE_COUNT_RAW: ${{ needs.active-systems.outputs.active_count }}
           RN_COUNT_RAW: ${{ needs.classify-systems.outputs.react_native_count }}
           KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
@@ -686,11 +744,21 @@ jobs:
           RN_RESULT: ${{ needs.mobile-react-native.result }}
           KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
           K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
+          SONAR_RESULT: ${{ needs.sonarcloud-mobile.result }}
         run: |
           ACTIVE_COUNT="${ACTIVE_COUNT_RAW:-0}"
           RN_COUNT="${RN_COUNT_RAW:-0}"
           KOTLIN_COUNT="${KOTLIN_COUNT_RAW:-0}"
           K6_COUNT="${K6_COUNT_RAW:-0}"
+          ENABLE_SONAR="${ENABLE_SONAR_INPUT}"
+
+          if [ -z "${ENABLE_SONAR}" ]; then
+            ENABLE_SONAR="true"
+          fi
+
+          if [ "${ENABLE_SONAR}" != "true" ] && [ "${ENABLE_SONAR}" != "false" ]; then
+            ENABLE_SONAR="true"
+          fi
 
           if ! [[ "${ACTIVE_COUNT}" =~ ^[0-9]+$ ]]; then ACTIVE_COUNT=0; fi
           if ! [[ "${RN_COUNT}" =~ ^[0-9]+$ ]]; then RN_COUNT=0; fi
@@ -731,6 +799,14 @@ jobs:
               esac
             fi
 
+            if [ "${ENABLE_SONAR}" = "true" ]; then
+              case "${SONAR_RESULT}" in
+                success|skipped) ;;
+                cancelled) CANCELLED=true ;;
+                *) FAILED=true ;;
+              esac
+            fi
+
             if [ "${RN_COUNT}" -eq 0 ] && [ "${KOTLIN_COUNT}" -eq 0 ]; then
               OVERALL="skipped"
               DETAILS="No applicable mobile execution targets were detected."
@@ -748,7 +824,7 @@ jobs:
 
   prepare-notify-test-payload:
     name: "Prepare Notify Payload (TEST)"
-    needs: [active-systems]
+    needs: [active-systems, aggregate-mobile-status]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -769,7 +845,7 @@ jobs:
 
   prepare-notify-uat-payload:
     name: "Prepare Notify Payload (UAT)"
-    needs: [active-systems]
+    needs: [active-systems, aggregate-mobile-status]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -790,7 +866,7 @@ jobs:
 
   prepare-notify-main-payload:
     name: "Prepare Notify Payload (MAIN)"
-    needs: [active-systems]
+    needs: [active-systems, aggregate-mobile-status, publish-mobile-release]
     if: >-
       always() &&
       github.ref == 'refs/heads/main' &&
@@ -835,6 +911,7 @@ jobs:
         mobile-kotlin,
         k6-systems,
         mobile-grafana-k6,
+        sonarcloud-mobile,
         aggregate-mobile-status,
         version-test,
         version-main-release,

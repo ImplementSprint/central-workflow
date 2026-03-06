@@ -82,7 +82,7 @@ jobs:
         run: |
           cd "${{ steps.gradle.outputs.gradle_dir }}"
           chmod +x gradlew
-          ./gradlew ${{ inputs.governance-task }} --no-daemon --stacktrace
+          ./gradlew ${{ inputs.governance-task }} --no-daemon --stacktrace --warning-mode all
 
       - name: Upload Governance Reports
         if: ${{ inputs.upload-artifact && always() }}

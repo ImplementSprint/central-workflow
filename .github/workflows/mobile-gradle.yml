@@ -196,7 +196,7 @@ jobs:
         run: |
           cd "${{ steps.gradle.outputs.gradle_dir }}"
           chmod +x gradlew
-          ./gradlew ${{ inputs.gradle-task }} --no-daemon --stacktrace
+          ./gradlew ${{ inputs.gradle-task }} --no-daemon --stacktrace --warning-mode all
 
       - name: Upload Android Artifact
         if: ${{ inputs.upload-artifact }}
