@@ -206,6 +206,12 @@ jobs:
       always() &&
       inputs.enable-gradle &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+      
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      
     uses: ./.github/workflows/mobile-gradle.yml
     with:
       working-directory: ${{ inputs.system-dir }}
