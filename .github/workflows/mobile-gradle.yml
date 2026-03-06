@@ -212,6 +212,12 @@ jobs:
     name: "Docker Build"
     needs: [gradle-build]
     if: ${{ inputs.enable-docker-build && inputs.docker-image-name != '' }}
+    
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      
     uses: ./.github/workflows/docker-build.yml
     with:
       working-directory: ${{ inputs.working-directory }}
