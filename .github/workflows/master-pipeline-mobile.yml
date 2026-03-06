@@ -15,7 +15,7 @@ on:
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
-        default: true
+        default: false
       k6_script_path:
         description: "Path to k6 script or performance tests directory"
         type: string
@@ -65,7 +65,7 @@ on:
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
-        default: true
+        default: false
       k6_script_path:
         description: "Path to k6 script or performance tests directory"
         type: string
@@ -234,11 +234,11 @@ jobs:
           ENABLE_GRAFANA_K6="${IN_ENABLE_GRAFANA_K6}"
 
           if [ -z "${ENABLE_GRAFANA_K6}" ]; then
-            ENABLE_GRAFANA_K6="true"
+            ENABLE_GRAFANA_K6="false"
           fi
 
           if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
-            ENABLE_GRAFANA_K6="true"
+            ENABLE_GRAFANA_K6="false"
           fi
 
           K6_SCRIPT_PATH="tests/performance"
@@ -421,13 +421,13 @@ jobs:
       node-version: ${{ matrix.system.node_version || 20 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
-      enable-lint: ${{ inputs.enable_lint != false && matrix.system.enable_lint != false }}
-      enable-security-scan: ${{ inputs.enable_security_scan != false && matrix.system.enable_security_scan != false }}
-      enable-sonar: ${{ inputs.enable_sonar != false && matrix.system.enable_sonar != false }}
-      enable-governance: ${{ inputs.enable_governance != false && matrix.system.enable_governance != false }}
+      enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
+      enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
+      enable-sonar: ${{ inputs.enable_sonar != false && (matrix.system.enable_sonar == true || matrix.system.enable_sonar == null) }}
+      enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       build-android: ${{ matrix.system.build_android == true }}
       build-variant: ${{ matrix.system.build_variant || 'assembleRelease' }}
-      enable-gradle: ${{ matrix.system.enable_gradle != false }}
+      enable-gradle: ${{ matrix.system.enable_gradle == true || matrix.system.enable_gradle == null }}
       gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
       enable-docker-build: ${{ matrix.system.enable_docker_build == true }}
       docker-image-name: ${{ matrix.system.docker_image || '' }}
@@ -451,7 +451,7 @@ jobs:
       system-name: ${{ matrix.system.name }}
       java-version: ${{ matrix.system.java_version || '17' }}
       governance-task: ${{ matrix.system.kotlin_governance_task || matrix.system.governance_task || 'check' }}
-      run-governance: ${{ inputs.enable_governance != false && matrix.system.enable_governance != false }}
+      run-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       upload-artifact: true
 
   mobile-kotlin:

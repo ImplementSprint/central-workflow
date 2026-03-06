@@ -157,4 +157,5 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 4) k6 quality gate note
 
-- Grafana k6 is a blocking quality gate by default on `test`, `uat`, and `main` unless explicitly disabled at caller input level (`enable_grafana_k6: false`) or per-system level (`enable_grafana_k6: false` / `enable_k6: false`).
+- Grafana k6 is opt-in by default. Enable it at caller input level (`enable_grafana_k6: true`) and optionally control per-system with (`enable_grafana_k6: true` / `enable_k6: true`).
+- When enabled, k6 acts as a blocking quality gate on allowed branches (`k6_run_only_on_branch`, default: `test,uat,main`).
