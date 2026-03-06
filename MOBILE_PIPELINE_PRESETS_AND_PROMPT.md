@@ -6,6 +6,31 @@ This file gives you:
 
 ---
 
+## 0) Minimal JSON standard (recommended)
+
+The mobile pipeline now supports a minimal per-system JSON contract.
+
+Required per system:
+- `name`
+- `dir`
+
+Recommended for clear stack routing:
+- `mobile_stack` (`expo`, `react-native`, or `kotlin`)
+
+Minimal single-system example:
+
+```json
+{
+  "name": "mobile-expo",
+  "dir": ".",
+  "mobile_stack": "expo"
+}
+```
+
+All other flags are optional overrides. If omitted, workflow defaults are used.
+
+---
+
 ## 1) JSON presets for mobile pipeline scenarios
 
 Use these values in repository variables:
@@ -21,7 +46,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "name": "mobile-expo",
   "dir": ".",
   "mobile_stack": "expo",
-  "enable_grafana_k6": true,
+  "enable_grafana_k6": false,
   "k6_script_path": "tests/performance",
   "k6_base_url": "",
   "k6_run_only_on_branch": "test,uat,main",
@@ -50,7 +75,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "name": "mobile-kotlin",
   "dir": ".",
   "mobile_stack": "kotlin",
-  "enable_grafana_k6": true,
+  "enable_grafana_k6": false,
   "k6_script_path": "tests/performance",
   "k6_base_url": "",
   "k6_run_only_on_branch": "test,uat,main",
@@ -73,7 +98,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "name": "mobile-expo",
     "dir": "apps/mobile-expo",
     "mobile_stack": "expo",
-    "enable_grafana_k6": true,
+    "enable_grafana_k6": false,
     "k6_script_path": "tests/performance",
     "k6_base_url": "",
     "k6_run_only_on_branch": "test,uat,main",
@@ -95,7 +120,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "name": "mobile-kotlin",
     "dir": "apps/mobile-kotlin",
     "mobile_stack": "kotlin",
-    "enable_grafana_k6": true,
+    "enable_grafana_k6": false,
     "k6_script_path": "tests/performance",
     "k6_base_url": "",
     "k6_run_only_on_branch": "test,uat,main",
@@ -159,3 +184,15 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 - Grafana k6 is opt-in by default. Enable it at caller input level (`enable_grafana_k6: true`) and optionally control per-system with (`enable_grafana_k6: true` / `enable_k6: true`).
 - When enabled, k6 acts as a blocking quality gate on allowed branches (`k6_run_only_on_branch`, default: `test,uat,main`).
+
+## 5) Expected branch skips
+
+- On `test`: `Version Tag - TEST` runs; `Version Tag - MAIN Release`, `Publish Mobile Release`, and auto-revert jobs are expected to be skipped.
+- On `main`: release/version/publish jobs can run (subject to their `if` conditions and prior job success).
+- Seeing those branch-mismatched jobs as `skipped` is normal pipeline behavior, not a failure.
+
+## 6) Platform coverage note
+
+- Current CI implementation is Android-first: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts.
+- iOS simulator/device testing is not yet part of this default pipeline.
+- If iOS testing is required, add a separate macOS lane (simulator tests and/or TestFlight flow) without changing the minimal JSON contract.

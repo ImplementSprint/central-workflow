@@ -425,7 +425,7 @@ jobs:
       enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
       enable-sonar: ${{ inputs.enable_sonar != false && (matrix.system.enable_sonar == true || matrix.system.enable_sonar == null) }}
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
-      build-android: ${{ matrix.system.build_android == true }}
+      build-android: ${{ matrix.system.build_android == true || matrix.system.build_android == null }}
       build-variant: ${{ matrix.system.build_variant || 'assembleRelease' }}
       enable-gradle: ${{ matrix.system.enable_gradle == true || matrix.system.enable_gradle == null }}
       gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
