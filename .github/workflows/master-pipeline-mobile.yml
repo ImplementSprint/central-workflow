@@ -428,6 +428,7 @@ jobs:
       build-android: ${{ matrix.system.build_android == true || matrix.system.build_android == null }}
       build-variant: ${{ matrix.system.build_variant || 'assembleRelease' }}
       enable-gradle: ${{ matrix.system.enable_gradle == true || matrix.system.enable_gradle == null }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
       gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
       enable-docker-build: ${{ matrix.system.enable_docker_build == true }}
       docker-image-name: ${{ matrix.system.docker_image || '' }}

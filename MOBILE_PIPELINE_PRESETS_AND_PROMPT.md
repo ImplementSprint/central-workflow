@@ -29,6 +29,9 @@ Minimal single-system example:
 
 All other flags are optional overrides. If omitted, workflow defaults are used.
 
+Optional iOS override:
+- `enable_ios_build` (defaults to `true` for React Native/Expo systems)
+
 ---
 
 ## 1) JSON presets for mobile pipeline scenarios
@@ -193,6 +196,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 6) Platform coverage note
 
-- Current CI implementation is Android-first: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts.
-- iOS simulator/device testing is not yet part of this default pipeline.
-- If iOS testing is required, add a separate macOS lane (simulator tests and/or TestFlight flow) without changing the minimal JSON contract.
+- Current CI implementation includes Android baseline plus iOS simulator build for React Native/Expo systems.
+- Android baseline: Jest + optional Detox Android emulator + Gradle APK/AAB build artifacts.
+- iOS path: macOS iOS simulator `.app` build artifact (zipped); this is for CI validation, not App Store distribution.
+- For real iOS distribution testing, add/enable a separate TestFlight lane (App Store Connect) as a staged follow-up.

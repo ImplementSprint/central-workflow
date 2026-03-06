@@ -68,6 +68,11 @@ on:
         type: boolean
         default: true
         description: "Run Gradle Android build"
+      enable-ios-build:
+        required: false
+        type: boolean
+        default: true
+        description: "Run iOS simulator build"
       gradle-task:
         required: false
         type: string
@@ -222,3 +227,18 @@ jobs:
       enable-docker-build: ${{ inputs.enable-docker-build }}
       docker-image-name: ${{ inputs.docker-image-name }}
       dockerfile-path: ${{ inputs.dockerfile-path }}
+
+  # ── Stage 3B: iOS Simulator Build ─────────────────────────────────────
+  mobile-ios-build:
+    name: "Mobile - iOS Simulator Build"
+    needs: [mobile-unit-tests, mobile-lint, mobile-security, mobile-governance, mobile-sonar, mobile-detox]
+    if: |
+      always() &&
+      inputs.enable-ios-build &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-ios-build.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      upload-artifact: true

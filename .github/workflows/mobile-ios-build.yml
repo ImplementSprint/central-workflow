@@ -1,0 +1,175 @@
+name: "Reusable: Mobile iOS Build"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory"
+      system-name:
+        required: true
+        type: string
+        description: "System name for artifacts/display"
+      node-version:
+        required: false
+        type: number
+        default: 20
+        description: "Node.js version"
+      upload-artifact:
+        required: false
+        type: boolean
+        default: true
+        description: "Upload iOS simulator build artifact"
+
+permissions:
+  contents: read
+
+jobs:
+  ios-build:
+    name: "iOS Simulator Build"
+    runs-on: macos-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect-pm
+        run: |
+          if [ -f "yarn.lock" ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ package.json is required for iOS builds."
+            exit 1
+          fi
+
+      - name: Setup Node.js ${{ inputs.node-version }} (npm)
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Setup Node.js ${{ inputs.node-version }} (yarn)
+        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+          cache-dependency-path: |
+            **/yarn.lock
+
+      - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
+        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "pnpm"
+          cache-dependency-path: |
+            **/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+        run: |
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn install --frozen-lockfile --ignore-scripts
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          else
+            npm ci --ignore-scripts
+          fi
+
+      - name: Ensure iOS Native Project
+        run: |
+          if [ ! -d "ios" ]; then
+            CI=1 npx expo prebuild --platform ios
+          fi
+
+      - name: Install CocoaPods Dependencies
+        if: ${{ hashFiles(format('{0}/ios/Podfile', inputs.working-directory)) != '' }}
+        run: |
+          if command -v npx >/dev/null 2>&1; then
+            npx pod-install --project-directory=ios
+          else
+            cd ios
+            pod install
+            cd - >/dev/null
+          fi
+
+      - name: Resolve iOS scheme
+        id: scheme
+        run: |
+          WORKSPACE_PATH=$(find ios -maxdepth 2 -name "*.xcworkspace" | head -n 1)
+          PROJECT_PATH=$(find ios -maxdepth 2 -name "*.xcodeproj" | head -n 1)
+
+          if [ -n "${WORKSPACE_PATH}" ]; then
+            LIST_JSON=$(xcodebuild -list -json -workspace "${WORKSPACE_PATH}")
+            CONTAINER_FLAG="-workspace"
+            CONTAINER_PATH="${WORKSPACE_PATH}"
+          elif [ -n "${PROJECT_PATH}" ]; then
+            LIST_JSON=$(xcodebuild -list -json -project "${PROJECT_PATH}")
+            CONTAINER_FLAG="-project"
+            CONTAINER_PATH="${PROJECT_PATH}"
+          else
+            echo "❌ No Xcode workspace/project found under ios/."
+            exit 1
+          fi
+
+          SCHEME=$(printf "%s" "${LIST_JSON}" | python3 -c 'import json,sys; d=json.load(sys.stdin); schemes=[]; schemes += (d.get("workspace", {}).get("schemes") or []); schemes += (d.get("project", {}).get("schemes") or []); print(schemes[0] if schemes else "")')
+
+          if [ -z "${SCHEME}" ]; then
+            echo "❌ Could not resolve an iOS scheme for build."
+            exit 1
+          fi
+
+          echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
+          echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
+          echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build iOS Simulator App
+        env:
+          CONTAINER_FLAG: ${{ steps.scheme.outputs.container_flag }}
+          CONTAINER_PATH: ${{ steps.scheme.outputs.container_path }}
+          SCHEME: ${{ steps.scheme.outputs.scheme }}
+        run: |
+          xcodebuild \
+            ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
+            -scheme "${SCHEME}" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+          APP_PATH=$(find build/ios/Build/Products -type d -name "*.app" | head -n 1)
+          if [ -z "${APP_PATH}" ]; then
+            echo "❌ iOS simulator app output (.app) not found."
+            exit 1
+          fi
+
+          ZIP_PATH="build/${{ inputs.system-name }}-ios-simulator-app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload iOS Build Artifact
+        if: ${{ inputs.upload-artifact }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-ios-simulator-build
+          path: ${{ inputs.working-directory }}/${{ steps.scheme.outputs.zip_path }}
+          retention-days: 14
