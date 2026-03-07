@@ -216,26 +216,20 @@ jobs:
 
           if [ -f "app.json" ]; then
             cp app.json app.json.ci-backup
-            node <<'NODE'
-            const fs = require('fs');
-
-            const projectId = process.env.EXPO_PROJECT_ID || '';
-            const owner = process.env.EXPO_OWNER || '';
-            const appJson = JSON.parse(fs.readFileSync('app.json', 'utf8'));
-
-            appJson.expo = appJson.expo || {};
-            if (owner) {
-              appJson.expo.owner = owner;
-            }
-
-            if (projectId) {
-              appJson.expo.extra = appJson.expo.extra || {};
-              appJson.expo.extra.eas = appJson.expo.extra.eas || {};
-              appJson.expo.extra.eas.projectId = projectId;
-            }
-
-            fs.writeFileSync('app.json', JSON.stringify(appJson, null, 2) + '\n');
-            NODE
+            jq \
+              --arg projectId "${EXPO_PROJECT_ID}" \
+              --arg owner "${EXPO_OWNER}" \
+              '
+              .expo = (.expo // {})
+              | (if $owner != "" then .expo.owner = $owner else . end)
+              | (if $projectId != ""
+                 then .expo.extra = (.expo.extra // {})
+                 | .expo.extra.eas = (.expo.extra.eas // {})
+                 | .expo.extra.eas.projectId = $projectId
+                 else .
+                 end)
+              ' app.json > app.json.ci-updated
+            mv app.json.ci-updated app.json
             echo "✅ Injected Expo project identity into app.json for CI."
           else
             echo "ℹ️ Dynamic Expo app config detected. EXPO_PROJECT_ID and EXPO_OWNER will be exposed as environment variables for app.config.js/app.config.ts to consume."
