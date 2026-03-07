@@ -137,6 +137,19 @@ jobs:
             echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
           fi
 
+          mapfile -t DETOX_INIT_FILES < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \))
+          if [ "${#DETOX_INIT_FILES[@]}" -gt 0 ]; then
+            mapfile -t JASMINE_INIT_FILES < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" || true)
+            if [ "${#JASMINE_INIT_FILES[@]}" -gt 0 ]; then
+              echo "❌ Detected legacy Jasmine-based Detox init setup that is incompatible with the installed Jest/Detox runner."
+              printf '   - %s\n' "${JASMINE_INIT_FILES[@]}"
+              echo "Remove jasmine.getEnv() reporter wiring from the Detox init file and migrate the repo to the current Detox Jest setup."
+              echo "Typical fix: replace legacy init code that calls jasmine.getEnv().addReporter(...) with the current Detox setup used by the repo's installed Detox version."
+              echo "This usually means keeping Detox lifecycle hooks (beforeAll/afterAll/etc.) but dropping Jasmine globals entirely."
+              exit 1
+            fi
+          fi
+
       - name: Download pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         uses: actions/download-artifact@v4

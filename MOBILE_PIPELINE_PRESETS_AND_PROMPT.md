@@ -174,6 +174,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 > - `tsconfig.json` exists and strict TypeScript is enabled
 > - Detox configuration exists (`.detoxrc.js` or `detox` config in `package.json`) with `android.emu.debug` and `ios.sim.debug` configurations
 > - `detox` is installed as a local devDependency and the repo's Jest E2E config is compatible with the installed Detox version, either through a supported Detox runner entrypoint such as `detox/runners/jest/testEnvironment`, `detox/runners/jest`, legacy `detox/runners/jest-circus/...`, or a custom Jest environment file
+> - Do not keep legacy Detox init code that calls `jasmine.getEnv().addReporter(...)`; current Jest/Detox setups should not depend on the global `jasmine` object
 > - basic test/lint scripts exist in `package.json`
 >
 > For `kotlin-single`, ensure:
