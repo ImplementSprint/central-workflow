@@ -17,8 +17,8 @@
 # { "name": "MyApp-Mobile", "dir": ".", "mobile_stack": "expo" }
 #
 # Optional overrides (showing defaults):
-#   enable_android_build: true   — Local Android build (Detox debug APK)
-#   enable_ios_build: true       — Local iOS simulator build (Detox debug .app)
+#   enable_android_build: true   — Local Android app build for Detox (debug APK)
+#   enable_ios_build: true       — Local iOS simulator app build for Detox (.app)
 #   enable_lint: true
 #   enable_security_scan: true
 #   enable_governance: true

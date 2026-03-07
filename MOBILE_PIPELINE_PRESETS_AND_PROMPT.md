@@ -45,7 +45,7 @@ Note:
 - Detox runs by default for Expo systems and is not meant to be toggled per system.
 - Detox Android and Detox iOS run by default for Expo systems. Disable iOS Detox with `enable_detox_ios: false`.
 - Expo systems are required to use TypeScript, not JavaScript.
-- Builds are local (xcodebuild for iOS / Gradle for Android) — no EAS or EXPO_TOKEN needed.
+- Builds are local (xcodebuild for iOS / Gradle for Android) — Detox consumes those app binaries for E2E, but is not the underlying builder.
 - Detox E2E tests consume build artifacts from the build stage (build → test flow).
 - The pipeline produces debug APK and simulator .app artifacts for each system.
 

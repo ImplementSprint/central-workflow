@@ -52,12 +52,12 @@ on:
         required: false
         type: boolean
         default: true
-        description: "Run local Android build (Detox debug APK)"
+        description: "Run local Android app build for Detox (debug APK)"
       enable-ios-build:
         required: false
         type: boolean
         default: true
-        description: "Run local iOS simulator build (Detox debug .app)"
+        description: "Run local iOS simulator app build for Detox (.app)"
       enable-detox:
         required: false
         type: boolean
@@ -72,7 +72,7 @@ on:
         required: false
         type: string
         default: "npx detox build --configuration android.emu.debug"
-        description: "Detox Android build command"
+        description: "Command used to produce the Android app binary for Detox"
       detox-test-command:
         required: false
         type: string
@@ -82,7 +82,7 @@ on:
         required: false
         type: string
         default: "npx detox build --configuration ios.sim.debug"
-        description: "Detox iOS build command"
+        description: "Command used to produce the iOS app binary for Detox"
       detox-ios-test-command:
         required: false
         type: string
@@ -233,7 +233,7 @@ jobs:
 
   # ── Stage 2A: Local Android Build ──────────────────────────────────────
   android-build:
-    name: "Android Build (Detox Debug APK)"
+    name: "Android App Build for Detox (Debug APK)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
@@ -327,14 +327,14 @@ jobs:
           distribution: "temurin"
           java-version: ${{ inputs.java-version }}
 
-      - name: Build Android app (Detox)
+      - name: Build Android app binary
         run: ${{ inputs.detox-build-command }}
 
       - name: Archive Android build outputs
         run: |
           BUILD_DIR=$(find android -type d -name "build" -path "*/app/build" | head -n 1)
           if [ -z "${BUILD_DIR}" ]; then
-            echo "❌ Android build outputs not found after detox build."
+            echo "❌ Android build outputs not found after the app build step."
             exit 1
           fi
           tar czf detox-android-build.tar.gz "${BUILD_DIR}"
@@ -349,7 +349,7 @@ jobs:
 
   # ── Stage 2B: Local iOS Build ────────────────────────────────────────────
   ios-build:
-    name: "iOS Build (Detox Debug Simulator .app)"
+    name: "iOS Simulator App Build for Detox (.app)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
@@ -436,15 +436,79 @@ jobs:
             cd - >/dev/null
           fi
 
-      - name: Build iOS app (Detox)
-        run: ${{ inputs.detox-ios-build-command }}
+      - name: Resolve iOS scheme
+        id: ios-scheme
+        run: |
+          WORKSPACE_PATH=$(find ios -maxdepth 2 -type d -name "*.xcworkspace" ! -path "*/.xcodeproj/*" | head -n 1)
+          if [ -z "${WORKSPACE_PATH}" ]; then
+            WORKSPACE_PATH=$(find ios -maxdepth 3 -type d -name "*.xcworkspace" | head -n 1)
+          fi
+          PROJECT_PATH=$(find ios -maxdepth 2 -name "*.xcodeproj" | head -n 1)
+
+          if [ -n "${WORKSPACE_PATH}" ]; then
+            LIST_JSON=$(xcodebuild -list -json -workspace "${WORKSPACE_PATH}")
+            CONTAINER_FLAG="-workspace"
+            CONTAINER_PATH="${WORKSPACE_PATH}"
+          elif [ -n "${PROJECT_PATH}" ]; then
+            LIST_JSON=$(xcodebuild -list -json -project "${PROJECT_PATH}")
+            CONTAINER_FLAG="-project"
+            CONTAINER_PATH="${PROJECT_PATH}"
+          else
+            echo "❌ No Xcode workspace/project found under ios/."
+            exit 1
+          fi
+
+          AVAILABLE_SCHEMES=$(LIST_JSON="${LIST_JSON}" python3 -c "import json, os; data = json.loads(os.environ['LIST_JSON']); schemes = (data.get('workspace', {}).get('schemes') or []) + (data.get('project', {}).get('schemes') or []); seen = []; [seen.append(scheme) for scheme in schemes if scheme not in seen]; print('\\n'.join(seen))")
+
+          echo "ℹ️ Available schemes:"
+          printf '%s\n' "${AVAILABLE_SCHEMES}"
+
+          SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
+
+          if [ -z "${SCHEME}" ]; then
+            echo "❌ Could not resolve an iOS scheme for build."
+            exit 1
+          fi
+
+          echo "container_flag=${CONTAINER_FLAG}" >> "$GITHUB_OUTPUT"
+          echo "container_path=${CONTAINER_PATH}" >> "$GITHUB_OUTPUT"
+          echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
+          echo "✅ Using iOS scheme: ${SCHEME}"
+
+      - name: Build iOS app binary
+        env:
+          CONTAINER_FLAG: ${{ steps.ios-scheme.outputs.container_flag }}
+          CONTAINER_PATH: ${{ steps.ios-scheme.outputs.container_path }}
+          SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
+          DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-ios-build-command }}
+        run: |
+          DEFAULT_CMD='npx detox build --configuration ios.sim.debug'
+          if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
+            echo "ℹ️ Running custom iOS app build command for Detox."
+            eval "${DETOX_IOS_BUILD_COMMAND}"
+            exit 0
+          fi
+
+          echo "ℹ️ Running explicit xcodebuild for the default Detox iOS simulator configuration."
+          xcodebuild \
+            ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
+            -scheme "${SCHEME}" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
+            GCC_TREAT_WARNINGS_AS_ERRORS=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
+            clean build
 
       - name: Archive iOS build outputs
         run: |
           # Find the .app produced by the build
           APP_PATH=$(find . -type d -name "*.app" \( -path "*/Products/*" -o -path "*/build/*" \) 2>/dev/null | head -n 1)
           if [ -z "${APP_PATH}" ]; then
-            echo "❌ iOS .app bundle not found after detox build."
+            echo "❌ iOS .app bundle not found after the app build step."
             exit 1
           fi
 

@@ -26,7 +26,7 @@ on:
         required: false
         type: string
         default: "npx detox build --configuration android.emu.debug"
-        description: "Command used to build Detox binaries"
+        description: "Command used to produce the Android app binary for Detox"
       detox-test-command:
         required: false
         type: string
@@ -36,7 +36,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: "Skip Detox build step and use a pre-built artifact instead"
+        description: "Skip the app build step and use a pre-built artifact instead"
       build-artifact-name:
         required: false
         type: string
@@ -153,7 +153,7 @@ jobs:
           distribution: "temurin"
           java-version: ${{ inputs.java-version }}
 
-      - name: Build Detox app
+      - name: Build Android app binary
         if: ${{ !inputs.skip-build }}
         run: ${{ inputs.detox-build-command }}
 
