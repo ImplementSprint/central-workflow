@@ -1,7 +1,7 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ║
 # ║  Stage 1 (gates): test → typescript → lint → security         ║
-# ║  Stage 2 (parallel): detox · EAS Android · EAS iOS            ║
+# ║  Stage 2 (parallel): Detox Android · Detox iOS · EAS builds   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Expo Mobile CI/CD Pipeline"
 
@@ -71,17 +71,32 @@ on:
         required: false
         type: boolean
         default: true
-        description: "Run Detox E2E tests"
+        description: "Run Detox Android E2E tests"
+      enable-detox-ios:
+        required: false
+        type: boolean
+        default: false
+        description: "Run Detox iOS E2E tests"
       detox-build-command:
         required: false
         type: string
         default: "npx detox build --configuration android.emu.debug"
-        description: "Detox build command"
+        description: "Detox Android build command"
       detox-test-command:
         required: false
         type: string
         default: "npx detox test --configuration android.emu.debug --headless"
-        description: "Detox test command"
+        description: "Detox Android test command"
+      detox-ios-build-command:
+        required: false
+        type: string
+        default: "npx detox build --configuration ios.sim.debug"
+        description: "Detox iOS build command"
+      detox-ios-test-command:
+        required: false
+        type: string
+        default: "npx detox test --configuration ios.sim.debug --cleanup"
+        description: "Detox iOS test command"
     secrets:
       EXPO_TOKEN:
         required: false
@@ -232,9 +247,9 @@ jobs:
       # Keep test branch unblocked by HIGH findings; enforce HIGH on uat/main.
       fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
 
-  # ── Stage 2A: Detox E2E ──────────────────────────────────────────────────
+  # ── Stage 2A: Detox Android E2E ─────────────────────────────────────────
   mobile-detox:
-    name: "Mobile — Detox E2E"
+    name: "Mobile — Detox Android E2E"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
@@ -249,7 +264,23 @@ jobs:
       detox-build-command: ${{ inputs.detox-build-command }}
       detox-test-command: ${{ inputs.detox-test-command }}
 
-  # ── Stage 2B: Expo Android EAS Build ────────────────────────────────────
+  # ── Stage 2B: Detox iOS E2E (optional) ──────────────────────────────────
+  mobile-detox-ios:
+    name: "Mobile — Detox iOS E2E"
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    if: |
+      always() &&
+      inputs.enable-detox-ios &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-detox-ios.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      detox-build-command: ${{ inputs.detox-ios-build-command }}
+      detox-test-command: ${{ inputs.detox-ios-test-command }}
+
+  # ── Stage 2C: Expo Android EAS Build ────────────────────────────────────
   expo-android-build:
     name: "Expo — Android EAS Build"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
@@ -271,7 +302,7 @@ jobs:
       EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
       EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
 
-  # ── Stage 2C: Expo iOS EAS Build ────────────────────────────────────────
+  # ── Stage 2D: Expo iOS EAS Build ────────────────────────────────────────
   expo-ios-build:
     name: "Expo — iOS EAS Build"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]

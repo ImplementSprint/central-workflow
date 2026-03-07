@@ -37,11 +37,13 @@ All other flags are optional overrides. If omitted, workflow defaults are used.
 Optional iOS override:
 
 - `enable_ios_build` (defaults to `true` for Expo systems)
+- `enable_detox_ios` (defaults to `false` for Expo systems)
 
 Note:
 
 - SonarCloud runs once at the master mobile pipeline level, not inside each `mobile-workflow.yml` execution.
 - Detox runs by default for Expo systems and is not meant to be toggled per system.
+- Detox Android runs by default for Expo systems. Detox iOS is optional via `enable_detox_ios: true`.
 - Expo systems are required to use TypeScript, not JavaScript.
 - Expo systems are required to define EAS build profiles in `eas.json` with `android.image` and `ios.image`, and provide `EXPO_TOKEN` as a repository secret.
 - Expo project linkage can be supplied either in the app config (`expo.extra.eas.projectId`, optionally `expo.owner`) or through CI secrets. In most cases `EXPO_PROJECT_ID` is sufficient; `EXPO_OWNER` is optional and mainly useful for org/owner disambiguation.
@@ -75,6 +77,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "enable_security_scan": true,
   "enable_governance": true,
   "enable_android_build": true,
+  "enable_detox_ios": false,
   "eas_profile_android": "production",
   "eas_profile_ios": "production",
   "version_stream": "mobile-expo"
@@ -124,6 +127,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "enable_security_scan": true,
     "enable_governance": true,
     "enable_android_build": true,
+    "enable_detox_ios": false,
     "eas_profile_android": "production",
     "eas_profile_ios": "production",
     "version_stream": "mobile-expo"

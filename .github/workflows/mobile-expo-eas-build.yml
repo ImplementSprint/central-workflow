@@ -204,6 +204,26 @@ jobs:
           }
           NODE
 
+          # Resolve final Expo config (supports app.json and dynamic app.config.*)
+          # and enforce platform identifiers required by EAS non-interactive builds.
+          npx --yes expo config --json --type public > expo-public-config.json
+
+          if [ "${BUILD_PLATFORM}" = "ios" ]; then
+            if ! jq -e '((.expo // .).ios.bundleIdentifier // "") | type == "string" and length > 0' expo-public-config.json >/dev/null; then
+              echo "❌ The ios.bundleIdentifier is required in Expo app config for non-interactive iOS EAS builds."
+              echo "Set expo.ios.bundleIdentifier in app.json/app.config.(js|ts)."
+              exit 1
+            fi
+          fi
+
+          if [ "${BUILD_PLATFORM}" = "android" ]; then
+            if ! jq -e '((.expo // .).android.package // "") | type == "string" and length > 0' expo-public-config.json >/dev/null; then
+              echo "❌ The android.package is required in Expo app config for non-interactive Android EAS builds."
+              echo "Set expo.android.package in app.json/app.config.(js|ts)."
+              exit 1
+            fi
+          fi
+
       - name: Inject Expo project identity from CI
         env:
           EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
