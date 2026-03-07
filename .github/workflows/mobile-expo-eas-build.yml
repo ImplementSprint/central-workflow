@@ -255,18 +255,65 @@ jobs:
             echo "ℹ️ Dynamic Expo app config detected. EXPO_PROJECT_ID and EXPO_OWNER will be exposed as environment variables for app.config.js/app.config.ts to consume."
           fi
 
+      - name: Prepare Android native sources for RN compatibility
+        if: ${{ inputs.platform == 'android' }}
+        run: |
+          if [ ! -d "android" ]; then
+            echo "ℹ️ Android directory not found. Running Expo prebuild for android."
+            CI=1 npx --yes expo prebuild --platform android --non-interactive
+          fi
+
+          mapfile -t MAIN_APP_FILES < <(find . -type f -path '*/android/app/src/main/java/*/MainApplication.java')
+
+          if [ "${#MAIN_APP_FILES[@]}" -eq 0 ]; then
+            echo "ℹ️ No MainApplication.java files found to normalize."
+            exit 0
+          fi
+
+          for MAIN_APP in "${MAIN_APP_FILES[@]}"; do
+            if grep -q 'DefaultNewArchitectureEntryPoint\.releaseLevel' "${MAIN_APP}"; then
+              perl -0pi -e 's/DefaultNewArchitectureEntryPoint\.releaseLevel\s*=\s*([^;]+);/DefaultNewArchitectureEntryPoint.setReleaseLevel($1);/g' "${MAIN_APP}"
+              echo "✅ Normalized releaseLevel API usage in ${MAIN_APP}"
+            else
+              echo "ℹ️ ${MAIN_APP} already uses compatible release level API."
+            fi
+          done
+
       - name: Trigger Expo EAS build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
           EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
         run: |
-          npx --yes eas-cli@latest build \
+          set -o pipefail
+
+          if ! npx --yes eas-cli@latest build \
             --platform "${{ inputs.platform }}" \
             --profile "${{ inputs.build-profile }}" \
             --non-interactive \
             --wait \
-            --json > eas-build-result.json
+            --json > eas-build-result.json 2> eas-build-error.log; then
+
+            if [ "${{ inputs.platform }}" = "ios" ] && \
+              grep -Eq 'Credentials are not set up|Distribution Certificate is not validated for non-interactive builds|Failed to set up credentials' eas-build-error.log; then
+              echo "❌ iOS EAS non-interactive build failed because iOS credentials are not fully configured on Expo."
+              echo ""
+              echo "How to fix once (interactive setup):"
+              echo "  1) Run locally: npx eas login"
+              echo "  2) Run locally: npx eas credentials --platform ios"
+              echo "  3) Create or upload Distribution Certificate + Provisioning Profile"
+              echo "  4) Re-run CI"
+              echo ""
+              echo "Alternative: configure iOS credentials in Expo dashboard (Project -> Credentials)."
+              echo ""
+              echo "Tip: add expo.ios.infoPlist.ITSAppUsesNonExemptEncryption as true/false in app config"
+              echo "to avoid App Store export compliance warnings during iOS builds."
+            fi
+
+            echo "--- EAS stderr (tail) ---"
+            tail -n 80 eas-build-error.log || true
+            exit 1
+          fi
 
       - name: Parse EAS build result
         id: parse
