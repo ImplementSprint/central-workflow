@@ -331,6 +331,7 @@ jobs:
         run: ${{ inputs.detox-build-command }}
 
       - name: Archive Android build outputs
+        id: archive-android
         run: |
           BUILD_DIR=$(find android -type d -name "build" -path "*/app/build" | head -n 1)
           if [ -z "${BUILD_DIR}" ]; then
@@ -338,13 +339,14 @@ jobs:
             exit 1
           fi
           tar czf detox-android-build.tar.gz "${BUILD_DIR}"
+          echo "artifact_path=${PWD}/detox-android-build.tar.gz" >> "$GITHUB_OUTPUT"
           echo "✅ Archived Android build outputs."
 
       - name: Upload Android build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.system-name }}-android-detox-build
-          path: ./${{ inputs.system-dir }}/detox-android-build.tar.gz
+          path: ${{ steps.archive-android.outputs.artifact_path }}
           retention-days: 14
 
   # ── Stage 2B: Local iOS Build ────────────────────────────────────────────
@@ -504,6 +506,7 @@ jobs:
             clean build
 
       - name: Archive iOS build outputs
+        id: archive-ios
         run: |
           # Find the .app produced by the build
           APP_PATH=$(find . -type d -name "*.app" \( -path "*/Products/*" -o -path "*/build/*" \) 2>/dev/null | head -n 1)
@@ -522,13 +525,14 @@ jobs:
             PRODUCTS_DIR=$(dirname "$(dirname "${APP_PATH}")")
             tar czf detox-ios-build.tar.gz "${PRODUCTS_DIR}"
           fi
+          echo "artifact_path=${PWD}/detox-ios-build.tar.gz" >> "$GITHUB_OUTPUT"
           echo "✅ Archived iOS build outputs."
 
       - name: Upload iOS build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.system-name }}-ios-detox-build
-          path: ./${{ inputs.system-dir }}/detox-ios-build.tar.gz
+          path: ${{ steps.archive-ios.outputs.artifact_path }}
           retention-days: 14
 
   # ── Stage 3A: Detox Android E2E ──────────────────────────────────────────

@@ -180,11 +180,12 @@ jobs:
           ZIP_PATH="build/${{ inputs.system-name }}-ios-simulator-app.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
           echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
 
       - name: Upload iOS Build Artifact
         if: ${{ inputs.upload-artifact }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.system-name }}-ios-simulator-build
-          path: ${{ inputs.working-directory }}/${{ steps.build-ios.outputs.zip_path }}
+          path: ${{ steps.build-ios.outputs.artifact_path }}
           retention-days: 14
