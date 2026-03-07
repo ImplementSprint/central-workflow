@@ -107,22 +107,12 @@ on:
         description: "Preview-only mode (skip version tag push)"
         type: boolean
         default: false
-      pr_labels:
-        description: "Comma-separated PR labels from caller (used for label-triggered Expo EAS builds)"
-        type: string
-        default: ""
     secrets:
       SONAR_TOKEN:
         required: false
       SONAR_PROJECT_KEY:
         required: false
       SONAR_ORGANIZATION:
-        required: false
-      EXPO_TOKEN:
-        required: false
-      EXPO_PROJECT_ID:
-        required: false
-      EXPO_OWNER:
         required: false
 
 permissions:
@@ -409,96 +399,14 @@ jobs:
           echo "kotlin_systems_json=${KOTLIN_SYSTEMS}" >> "$GITHUB_OUTPUT"
           echo "kotlin_count=$(echo "${KOTLIN_SYSTEMS}" | jq 'length')" >> "$GITHUB_OUTPUT"
 
-  expo-label-overrides:
-    name: "Resolve Expo PR Label Overrides"
-    needs: [classify-systems]
-    if: fromJson(needs.classify-systems.outputs.expo_count) > 0
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      expo_systems_json: ${{ steps.resolve.outputs.expo_systems_json }}
-      expo_count: ${{ steps.resolve.outputs.expo_count }}
-      label_override_active: ${{ steps.resolve.outputs.label_override_active }}
-      label_override_summary: ${{ steps.resolve.outputs.label_override_summary }}
-    steps:
-      - name: Resolve EAS label overrides
-        id: resolve
-        env:
-          EXPO_SYSTEMS_JSON: ${{ needs.classify-systems.outputs.expo_systems_json }}
-          PR_LABELS_INPUT: ${{ inputs.pr_labels }}
-          EVENT_PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: |
-          LABELS_RAW="${PR_LABELS_INPUT}"
-          if [ -z "${LABELS_RAW}" ]; then
-            LABELS_RAW="${EVENT_PR_LABELS}"
-          fi
-
-          ANDROID_PROFILE=""
-          IOS_PROFILE=""
-          LABEL_OVERRIDE_ACTIVE="false"
-
-          IFS=',' read -r -a LABELS_ARRAY <<< "${LABELS_RAW}"
-          for RAW_LABEL in "${LABELS_ARRAY[@]}"; do
-            LABEL=$(echo "${RAW_LABEL}" | xargs)
-            [ -z "${LABEL}" ] && continue
-
-            if [[ "${LABEL}" =~ ^eas-build-android:([A-Za-z0-9._-]+)$ ]]; then
-              ANDROID_PROFILE="${BASH_REMATCH[1]}"
-              LABEL_OVERRIDE_ACTIVE="true"
-            elif [[ "${LABEL}" =~ ^eas-build-ios:([A-Za-z0-9._-]+)$ ]]; then
-              IOS_PROFILE="${BASH_REMATCH[1]}"
-              LABEL_OVERRIDE_ACTIVE="true"
-            fi
-          done
-
-          UPDATED_EXPO_SYSTEMS_JSON="${EXPO_SYSTEMS_JSON}"
-          SUMMARY="none"
-
-          if [ "${LABEL_OVERRIDE_ACTIVE}" = "true" ]; then
-            ENABLE_ANDROID="false"
-            ENABLE_IOS="false"
-
-            if [ -n "${ANDROID_PROFILE}" ]; then
-              ENABLE_ANDROID="true"
-            fi
-            if [ -n "${IOS_PROFILE}" ]; then
-              ENABLE_IOS="true"
-            fi
-
-            UPDATED_EXPO_SYSTEMS_JSON=$(echo "${EXPO_SYSTEMS_JSON}" | jq -c \
-              --argjson enable_android "${ENABLE_ANDROID}" \
-              --argjson enable_ios "${ENABLE_IOS}" \
-              --arg android_profile "${ANDROID_PROFILE}" \
-              --arg ios_profile "${IOS_PROFILE}" \
-              'map(
-                . + {
-                  enable_android_build: $enable_android,
-                  enable_ios_build: $enable_ios
-                }
-                + (if $android_profile != "" then { eas_profile_android: $android_profile } else {} end)
-                + (if $ios_profile != "" then { eas_profile_ios: $ios_profile } else {} end)
-              )'
-            )
-
-            SUMMARY="android=${ANDROID_PROFILE:-off};ios=${IOS_PROFILE:-off}"
-            echo "ℹ️ Applying PR label EAS overrides: ${SUMMARY}"
-          else
-            echo "ℹ️ No PR label EAS override detected."
-          fi
-
-          echo "expo_systems_json=${UPDATED_EXPO_SYSTEMS_JSON}" >> "$GITHUB_OUTPUT"
-          echo "expo_count=$(echo "${UPDATED_EXPO_SYSTEMS_JSON}" | jq 'length')" >> "$GITHUB_OUTPUT"
-          echo "label_override_active=${LABEL_OVERRIDE_ACTIVE}" >> "$GITHUB_OUTPUT"
-          echo "label_override_summary=${SUMMARY}" >> "$GITHUB_OUTPUT"
-
   mobile-expo:
     name: "Mobile Expo — ${{ matrix.system.name }}"
-    needs: [classify-systems, expo-label-overrides]
-    if: fromJson(needs.expo-label-overrides.outputs.expo_count) > 0
+    needs: [classify-systems]
+    if: fromJson(needs.classify-systems.outputs.expo_count) > 0
     strategy:
       fail-fast: false
       matrix:
-        system: ${{ fromJson(needs.expo-label-overrides.outputs.expo_systems_json) }}
+        system: ${{ fromJson(needs.classify-systems.outputs.expo_systems_json) }}
     uses: ./.github/workflows/mobile-workflow.yml
     with:
       system-dir: ${{ matrix.system.dir }}
@@ -511,8 +419,6 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      android-build-profile: ${{ matrix.system.eas_profile_android || 'production' }}
-      ios-build-profile: ${{ matrix.system.eas_profile_ios || 'production' }}
       enable-detox: true
       detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build --configuration android.emu.debug' }}
       detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test --configuration android.emu.debug --headless' }}

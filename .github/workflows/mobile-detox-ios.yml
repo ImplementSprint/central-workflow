@@ -27,6 +27,16 @@ on:
         type: string
         default: "npx detox test --configuration ios.sim.debug --cleanup"
         description: "Command used to execute Detox iOS tests"
+      skip-build:
+        required: false
+        type: boolean
+        default: false
+        description: "Skip Detox build step and use a pre-built artifact instead"
+      build-artifact-name:
+        required: false
+        type: string
+        default: ""
+        description: "GitHub artifact name containing pre-built iOS Detox output (tar.gz)"
 
 permissions:
   contents: read
@@ -98,14 +108,29 @@ jobs:
             npm ci --ignore-scripts
           fi
 
+      - name: Download pre-built iOS artifact
+        if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: ./${{ inputs.working-directory }}
+
+      - name: Extract pre-built iOS artifact
+        if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
+        run: |
+          tar xzf detox-ios-build.tar.gz
+          rm -f detox-ios-build.tar.gz
+          echo "✅ Extracted pre-built iOS artifact."
+
       - name: Ensure iOS Native Project
+        if: ${{ !inputs.skip-build }}
         run: |
           if [ ! -d "ios" ]; then
             CI=1 npx expo prebuild --platform ios
           fi
 
       - name: Install CocoaPods Dependencies
-        if: ${{ hashFiles(format('{0}/ios/Podfile', inputs.working-directory)) != '' }}
+        if: ${{ !inputs.skip-build && hashFiles(format('{0}/ios/Podfile', inputs.working-directory)) != '' }}
         run: |
           if command -v npx >/dev/null 2>&1; then
             npx pod-install --project-directory=ios
@@ -116,6 +141,7 @@ jobs:
           fi
 
       - name: Build Detox iOS app
+        if: ${{ !inputs.skip-build }}
         run: ${{ inputs.detox-build-command }}
 
       - name: Run Detox iOS tests

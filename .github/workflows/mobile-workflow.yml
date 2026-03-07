@@ -1,7 +1,8 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ║
 # ║  Stage 1 (gates): test → typescript → lint → security         ║
-# ║  Stage 2 (parallel): Detox Android · Detox iOS · EAS builds   ║
+# ║  Stage 2 (build): local Android build · local iOS build        ║
+# ║  Stage 3 (test):  Detox Android E2E  · Detox iOS E2E           ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Expo Mobile CI/CD Pipeline"
 
@@ -51,22 +52,12 @@ on:
         required: false
         type: boolean
         default: true
-        description: "Run Expo Android EAS build"
+        description: "Run local Android build (Detox debug APK)"
       enable-ios-build:
         required: false
         type: boolean
         default: true
-        description: "Run Expo iOS EAS build"
-      android-build-profile:
-        required: false
-        type: string
-        default: "production"
-        description: "EAS build profile for Android"
-      ios-build-profile:
-        required: false
-        type: string
-        default: "production"
-        description: "EAS build profile for iOS"
+        description: "Run local iOS simulator build (Detox debug .app)"
       enable-detox:
         required: false
         type: boolean
@@ -97,13 +88,6 @@ on:
         type: string
         default: "npx detox test --configuration ios.sim.debug --cleanup"
         description: "Detox iOS test command"
-    secrets:
-      EXPO_TOKEN:
-        required: false
-      EXPO_PROJECT_ID:
-        required: false
-      EXPO_OWNER:
-        required: false
 
 permissions:
   contents: read
@@ -247,14 +231,254 @@ jobs:
       # Keep test branch unblocked by HIGH findings; enforce HIGH on uat/main.
       fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
 
-  # ── Stage 2A: Detox Android E2E ─────────────────────────────────────────
-  mobile-detox:
-    name: "Mobile — Detox Android E2E"
+  # ── Stage 2A: Local Android Build ──────────────────────────────────────
+  android-build:
+    name: "Android Build (Detox Debug APK)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
-      inputs.enable-detox &&
+      inputs.enable-android-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ./${{ inputs.system-dir }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect-pm
+        run: |
+          if [ -f "yarn.lock" ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ package.json is required."
+            exit 1
+          fi
+
+      - name: Setup Node.js ${{ inputs.node-version }} (npm)
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Setup Node.js ${{ inputs.node-version }} (yarn)
+        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+          cache-dependency-path: |
+            **/yarn.lock
+
+      - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
+        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "pnpm"
+          cache-dependency-path: |
+            **/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+        run: |
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn install --frozen-lockfile --ignore-scripts
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          else
+            npm ci --ignore-scripts
+          fi
+
+      - name: Ensure Android Native Project
+        run: |
+          if [ ! -d "android" ]; then
+            CI=1 npx expo prebuild --platform android
+          fi
+
+      - name: Ensure Kotlin Version Fallback
+        run: |
+          if [ -f "android/gradle.properties" ]; then
+            if grep -q '^kotlinVersion=' android/gradle.properties; then
+              CURRENT_VERSION=$(grep '^kotlinVersion=' android/gradle.properties | head -n 1 | cut -d'=' -f2-)
+              echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
+            else
+              echo 'kotlinVersion=2.0.21' >> android/gradle.properties
+              echo "✅ Added fallback kotlinVersion=2.0.21"
+            fi
+          fi
+
+      - name: Setup JDK ${{ inputs.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: ${{ inputs.java-version }}
+
+      - name: Build Android app (Detox)
+        run: ${{ inputs.detox-build-command }}
+
+      - name: Archive Android build outputs
+        run: |
+          BUILD_DIR=$(find android -type d -name "build" -path "*/app/build" | head -n 1)
+          if [ -z "${BUILD_DIR}" ]; then
+            echo "❌ Android build outputs not found after detox build."
+            exit 1
+          fi
+          tar czf detox-android-build.tar.gz "${BUILD_DIR}"
+          echo "✅ Archived Android build outputs."
+
+      - name: Upload Android build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-android-detox-build
+          path: ./${{ inputs.system-dir }}/detox-android-build.tar.gz
+          retention-days: 14
+
+  # ── Stage 2B: Local iOS Build ────────────────────────────────────────────
+  ios-build:
+    name: "iOS Build (Detox Debug Simulator .app)"
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    if: |
+      always() &&
+      inputs.enable-ios-build &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ./${{ inputs.system-dir }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect-pm
+        run: |
+          if [ -f "yarn.lock" ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ package.json is required."
+            exit 1
+          fi
+
+      - name: Setup Node.js ${{ inputs.node-version }} (npm)
+        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Setup Node.js ${{ inputs.node-version }} (yarn)
+        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+          cache-dependency-path: |
+            **/yarn.lock
+
+      - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
+        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "pnpm"
+          cache-dependency-path: |
+            **/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+        run: |
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn install --frozen-lockfile --ignore-scripts
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          else
+            npm ci --ignore-scripts
+          fi
+
+      - name: Ensure iOS Native Project
+        run: |
+          if [ ! -d "ios" ]; then
+            CI=1 npx expo prebuild --platform ios
+          fi
+
+      - name: Install CocoaPods Dependencies
+        if: ${{ hashFiles(format('{0}/ios/Podfile', inputs.system-dir)) != '' }}
+        run: |
+          if command -v npx >/dev/null 2>&1; then
+            npx pod-install --project-directory=ios
+          else
+            cd ios
+            pod install
+            cd - >/dev/null
+          fi
+
+      - name: Build iOS app (Detox)
+        run: ${{ inputs.detox-ios-build-command }}
+
+      - name: Archive iOS build outputs
+        run: |
+          # Find the .app produced by the build
+          APP_PATH=$(find . -type d -name "*.app" \( -path "*/Products/*" -o -path "*/build/*" \) 2>/dev/null | head -n 1)
+          if [ -z "${APP_PATH}" ]; then
+            echo "❌ iOS .app bundle not found after detox build."
+            exit 1
+          fi
+
+          # Archive the ios build directory that contains the .app
+          if [ -d "ios/build" ]; then
+            tar czf detox-ios-build.tar.gz ios/build/
+          elif [ -d "ios/DerivedData" ]; then
+            tar czf detox-ios-build.tar.gz ios/DerivedData/
+          else
+            # Fall back to archiving the parent of the Products directory
+            PRODUCTS_DIR=$(dirname "$(dirname "${APP_PATH}")")
+            tar czf detox-ios-build.tar.gz "${PRODUCTS_DIR}"
+          fi
+          echo "✅ Archived iOS build outputs."
+
+      - name: Upload iOS build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-ios-detox-build
+          path: ./${{ inputs.system-dir }}/detox-ios-build.tar.gz
+          retention-days: 14
+
+  # ── Stage 3A: Detox Android E2E ──────────────────────────────────────────
+  mobile-detox:
+    name: "Mobile — Detox Android E2E"
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
+    if: |
+      always() &&
+      inputs.enable-detox &&
+      (needs.android-build.result == 'success' || needs.android-build.result == 'skipped') &&
+      !contains(needs.expo-typescript-standard.result, 'failure') &&
+      !contains(needs.mobile-unit-tests.result, 'failure') &&
+      !contains(needs.expo-typescript-standard.result, 'cancelled') &&
+      !contains(needs.mobile-unit-tests.result, 'cancelled')
     uses: ./.github/workflows/mobile-detox.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -263,15 +487,21 @@ jobs:
       java-version: ${{ inputs.java-version }}
       detox-build-command: ${{ inputs.detox-build-command }}
       detox-test-command: ${{ inputs.detox-test-command }}
+      skip-build: ${{ needs.android-build.result == 'success' }}
+      build-artifact-name: ${{ needs.android-build.result == 'success' && format('{0}-android-detox-build', inputs.system-name) || '' }}
 
-  # ── Stage 2B: Detox iOS E2E (optional) ──────────────────────────────────
+  # ── Stage 3B: Detox iOS E2E ─────────────────────────────────────────────
   mobile-detox-ios:
     name: "Mobile — Detox iOS E2E"
-    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&
       inputs.enable-detox-ios &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+      (needs.ios-build.result == 'success' || needs.ios-build.result == 'skipped') &&
+      !contains(needs.expo-typescript-standard.result, 'failure') &&
+      !contains(needs.mobile-unit-tests.result, 'failure') &&
+      !contains(needs.expo-typescript-standard.result, 'cancelled') &&
+      !contains(needs.mobile-unit-tests.result, 'cancelled')
     uses: ./.github/workflows/mobile-detox-ios.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -279,47 +509,5 @@ jobs:
       node-version: ${{ inputs.node-version }}
       detox-build-command: ${{ inputs.detox-ios-build-command }}
       detox-test-command: ${{ inputs.detox-ios-test-command }}
-
-  # ── Stage 2C: Expo Android EAS Build ────────────────────────────────────
-  expo-android-build:
-    name: "Expo — Android EAS Build"
-    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
-    if: |
-      always() &&
-      inputs.enable-android-build &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-
-    uses: ./.github/workflows/mobile-expo-eas-build.yml
-    with:
-      working-directory: ${{ inputs.system-dir }}
-      system-name: ${{ inputs.system-name }}
-      node-version: ${{ inputs.node-version }}
-      platform: android
-      build-profile: ${{ inputs.android-build-profile }}
-      upload-artifact: true
-    secrets:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
-      EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
-
-  # ── Stage 2D: Expo iOS EAS Build ────────────────────────────────────────
-  expo-ios-build:
-    name: "Expo — iOS EAS Build"
-    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
-    if: |
-      always() &&
-      inputs.enable-ios-build &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-
-    uses: ./.github/workflows/mobile-expo-eas-build.yml
-    with:
-      working-directory: ${{ inputs.system-dir }}
-      system-name: ${{ inputs.system-name }}
-      node-version: ${{ inputs.node-version }}
-      platform: ios
-      build-profile: ${{ inputs.ios-build-profile }}
-      upload-artifact: true
-    secrets:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
-      EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
+      skip-build: ${{ needs.ios-build.result == 'success' }}
+      build-artifact-name: ${{ needs.ios-build.result == 'success' && format('{0}-ios-detox-build', inputs.system-name) || '' }}

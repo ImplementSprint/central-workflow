@@ -45,8 +45,9 @@ Note:
 - Detox runs by default for Expo systems and is not meant to be toggled per system.
 - Detox Android and Detox iOS run by default for Expo systems. Disable iOS Detox with `enable_detox_ios: false`.
 - Expo systems are required to use TypeScript, not JavaScript.
-- Expo systems are required to define EAS build profiles in `eas.json` with `android.image` and `ios.image`, and provide `EXPO_TOKEN` as a repository secret.
-- Expo project linkage can be supplied either in the app config (`expo.extra.eas.projectId`, optionally `expo.owner`) or through CI secrets. In most cases `EXPO_PROJECT_ID` is sufficient; `EXPO_OWNER` is optional and mainly useful for org/owner disambiguation.
+- Builds are local (xcodebuild for iOS / Gradle for Android) — no EAS or EXPO_TOKEN needed.
+- Detox E2E tests consume build artifacts from the build stage (build → test flow).
+- The pipeline produces debug APK and simulator .app artifacts for each system.
 
 ---
 
@@ -78,8 +79,6 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "enable_governance": true,
   "enable_android_build": true,
   "enable_detox_ios": true,
-  "eas_profile_android": "production",
-  "eas_profile_ios": "production",
   "version_stream": "mobile-expo"
 }
 ```
@@ -128,8 +127,6 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "enable_governance": true,
     "enable_android_build": true,
     "enable_detox_ios": true,
-    "eas_profile_android": "production",
-    "eas_profile_ios": "production",
     "version_stream": "mobile-expo"
   },
   {
@@ -175,8 +172,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 >
 > - `package.json` exists at the Expo app folder
 > - `tsconfig.json` exists and strict TypeScript is enabled
-> - `eas.json` exists with `production` profiles for Android and iOS and explicit `android.image` / `ios.image` values
-> - Expo project linkage exists either in app config or via CI secrets (`EXPO_PROJECT_ID` recommended, `EXPO_OWNER` optional)
+> - Detox configuration exists (`.detoxrc.js` or `detox` config in `package.json`) with `android.emu.debug` and `ios.sim.debug` configurations
 > - basic test/lint scripts exist in `package.json`
 >
 > For `kotlin-single`, ensure:

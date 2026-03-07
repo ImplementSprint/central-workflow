@@ -32,6 +32,16 @@ on:
         type: string
         default: "npx detox test --configuration android.emu.debug --headless"
         description: "Command used to execute Detox tests"
+      skip-build:
+        required: false
+        type: boolean
+        default: false
+        description: "Skip Detox build step and use a pre-built artifact instead"
+      build-artifact-name:
+        required: false
+        type: string
+        default: ""
+        description: "GitHub artifact name containing pre-built Android Detox output (tar.gz)"
 
 permissions:
   contents: read
@@ -103,13 +113,29 @@ jobs:
             npm ci --ignore-scripts
           fi
 
+      - name: Download pre-built Android artifact
+        if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.build-artifact-name }}
+          path: ./${{ inputs.working-directory }}
+
+      - name: Extract pre-built Android artifact
+        if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
+        run: |
+          tar xzf detox-android-build.tar.gz
+          rm -f detox-android-build.tar.gz
+          echo "✅ Extracted pre-built Android artifact."
+
       - name: Ensure Android Native Project
+        if: ${{ !inputs.skip-build }}
         run: |
           if [ ! -d "android" ]; then
             CI=1 npx expo prebuild --platform android
           fi
 
       - name: Ensure Kotlin Version Fallback
+        if: ${{ !inputs.skip-build }}
         run: |
           if [ -f "android/gradle.properties" ]; then
             if grep -q '^kotlinVersion=' android/gradle.properties; then
@@ -128,6 +154,7 @@ jobs:
           java-version: ${{ inputs.java-version }}
 
       - name: Build Detox app
+        if: ${{ !inputs.skip-build }}
         run: ${{ inputs.detox-build-command }}
 
       - name: Run Detox tests on Android emulator

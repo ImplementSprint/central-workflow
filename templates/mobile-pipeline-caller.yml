@@ -17,21 +17,17 @@
 # { "name": "MyApp-Mobile", "dir": ".", "mobile_stack": "expo" }
 #
 # Optional overrides (showing defaults):
-#   enable_android_build: true   — Expo Android EAS build stage
-#   eas_profile_android: "production"
-#   eas_profile_ios: "ios-simulator" (simulator build, no signing credentials)
-#   enable_ios_build: true       — iOS simulator build stage
+#   enable_android_build: true   — Local Android build (Detox debug APK)
+#   enable_ios_build: true       — Local iOS simulator build (Detox debug .app)
 #   enable_lint: true
 #   enable_security_scan: true
 #   enable_governance: true
 #   coverage_threshold: 80
 #
-# Expo systems must be TypeScript-based and EAS-configured:
+# Expo systems must be TypeScript-based:
 #   tsconfig.json + strict mode
-#   eas.json with android/ios build profiles and platform-specific image values
-#   EXPO_TOKEN secret available to the workflow
-#   Optional: EXPO_PROJECT_ID and EXPO_OWNER secrets if you want Expo
-#   project linkage managed in CI instead of checked into the repo
+# Builds are local (xcodebuild / Gradle) — no EAS or EXPO_TOKEN needed.
+# Detox E2E tests consume build artifacts from the build stage.
 # SonarCloud runs once at the master mobile pipeline level, and Detox
 # runs by default for Expo systems.
 # ──────────────────────────────────────────────────────────────
