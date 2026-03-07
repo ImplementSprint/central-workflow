@@ -113,6 +113,20 @@ jobs:
             npm ci --ignore-scripts
           fi
 
+      - name: Validate Detox Jest environment
+        run: |
+          if ! node -e "require.resolve('detox/package.json')" >/dev/null 2>&1; then
+            echo "❌ Detox is not installed in this repository."
+            echo "Add detox as a local devDependency in the target mobile repo before enabling Detox CI."
+            exit 1
+          fi
+
+          if ! node -e "require.resolve('detox/runners/jest/testEnvironment')" >/dev/null 2>&1; then
+            echo "❌ Jest cannot resolve detox/runners/jest/testEnvironment from this repository."
+            echo "Install a Detox version that exposes the Jest runner, or update the repo's Detox/Jest configuration to match the installed Detox version."
+            exit 1
+          fi
+
       - name: Download pre-built Android artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         uses: actions/download-artifact@v4

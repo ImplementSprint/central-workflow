@@ -515,16 +515,9 @@ jobs:
             exit 1
           fi
 
-          # Archive the ios build directory that contains the .app
-          if [ -d "ios/build" ]; then
-            tar czf detox-ios-build.tar.gz ios/build/
-          elif [ -d "ios/DerivedData" ]; then
-            tar czf detox-ios-build.tar.gz ios/DerivedData/
-          else
-            # Fall back to archiving the parent of the Products directory
-            PRODUCTS_DIR=$(dirname "$(dirname "${APP_PATH}")")
-            tar czf detox-ios-build.tar.gz "${PRODUCTS_DIR}"
-          fi
+          # Archive only the simulator .app bundle. Archiving the full build/DerivedData
+          # tree balloons the artifact with intermediates, symbols, indexes, and logs.
+          tar czf detox-ios-build.tar.gz "${APP_PATH}"
           echo "artifact_path=${PWD}/detox-ios-build.tar.gz" >> "$GITHUB_OUTPUT"
           echo "✅ Archived iOS build outputs."
 
