@@ -144,9 +144,9 @@ jobs:
         if: ${{ !inputs.skip-build }}
         id: ios-scheme
         run: |
-          WORKSPACE_PATH=$(find ios -maxdepth 2 -type d -name "*.xcworkspace" ! -path "*/.xcodeproj/*" | head -n 1)
+          WORKSPACE_PATH=$(find ios -maxdepth 2 -type d -name "*.xcworkspace" ! -path "*/*.xcodeproj/*" | head -n 1)
           if [ -z "${WORKSPACE_PATH}" ]; then
-            WORKSPACE_PATH=$(find ios -maxdepth 3 -type d -name "*.xcworkspace" | head -n 1)
+            WORKSPACE_PATH=$(find ios -maxdepth 3 -type d -name "*.xcworkspace" ! -path "*/*.xcodeproj/*" | head -n 1)
           fi
           PROJECT_PATH=$(find ios -maxdepth 2 -name "*.xcodeproj" | head -n 1)
 
