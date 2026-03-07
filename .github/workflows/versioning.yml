@@ -6,7 +6,7 @@ on:
       mode:
         required: true
         type: string
-        description: "Versioning mode: test or release (main is accepted as alias)"
+        description: "Versioning mode: test, uat, or release (main is accepted as alias)"
       stream:
         required: false
         type: string
@@ -47,11 +47,35 @@ jobs:
 
           if [ "${STREAM_KEY}" = "global" ]; then
             TEST_PREFIX="test-v"
+            UAT_PREFIX="uat-v"
             MAIN_PREFIX="main-v"
           else
             TEST_PREFIX="test-${STREAM_KEY}-v"
+            UAT_PREFIX="uat-${STREAM_KEY}-v"
             MAIN_PREFIX="main-${STREAM_KEY}-v"
           fi
+
+          resolve_latest_test_tag() {
+            local latest_test=""
+            local effective_prefix="${TEST_PREFIX}"
+
+            latest_test=$(git tag -l "${TEST_PREFIX}*" | grep -E "^${TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+
+            if [ -z "${latest_test}" ] && [ "${STREAM_KEY}" != "global" ]; then
+              local legacy_test_prefix="test-v"
+              local legacy_latest_test=""
+
+              legacy_latest_test=$(git tag -l "${legacy_test_prefix}*" | grep -E "^${legacy_test_prefix}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+              if [ -n "${legacy_latest_test}" ]; then
+                latest_test="${legacy_latest_test}"
+                effective_prefix="${legacy_test_prefix}"
+                echo "ℹ️ No stream-specific test tag found for '${STREAM_KEY}'. Falling back to legacy '${legacy_test_prefix}*' tags."
+              fi
+            fi
+
+            RESOLVED_TAG="${latest_test}"
+            RESOLVED_PREFIX="${effective_prefix}"
+          }
 
           if [ "${MODE}" = "test" ]; then
             PREFIX="${TEST_PREFIX}"
@@ -83,29 +107,48 @@ jobs:
             fi
 
             TAG="${PREFIX}${NEXT_VERSION}"
-          elif [ "${MODE}" = "release" ] || [ "${MODE}" = "main" ]; then
-            LATEST_TEST=$(git tag -l "${TEST_PREFIX}*" | grep -E "^${TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
-            EFFECTIVE_TEST_PREFIX="${TEST_PREFIX}"
+          elif [ "${MODE}" = "uat" ]; then
+            resolve_latest_test_tag
 
-            if [ -z "${LATEST_TEST}" ] && [ "${STREAM_KEY}" != "global" ]; then
-              LEGACY_TEST_PREFIX="test-v"
-              LEGACY_LATEST_TEST=$(git tag -l "${LEGACY_TEST_PREFIX}*" | grep -E "^${LEGACY_TEST_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
-              if [ -n "${LEGACY_LATEST_TEST}" ]; then
-                LATEST_TEST="${LEGACY_LATEST_TEST}"
-                EFFECTIVE_TEST_PREFIX="${LEGACY_TEST_PREFIX}"
-                echo "ℹ️ No stream-specific test tag found for '${STREAM_KEY}'. Falling back to legacy '${LEGACY_TEST_PREFIX}*' tags for this release."
-              fi
-            fi
-
-            if [ -z "${LATEST_TEST}" ]; then
-              echo "❌ No test version tag found for stream '${STREAM_KEY}'. main release tag requires a prior test tag."
+            if [ -z "${RESOLVED_TAG}" ]; then
+              echo "❌ No test version tag found for stream '${STREAM_KEY}'. uat tag requires a prior test tag."
               exit 1
             fi
 
-            VERSION_FROM_TEST="${LATEST_TEST#${EFFECTIVE_TEST_PREFIX}}"
-            TAG="${MAIN_PREFIX}${VERSION_FROM_TEST}"
+            VERSION_FROM_TEST="${RESOLVED_TAG#${RESOLVED_PREFIX}}"
+            TAG="${UAT_PREFIX}${VERSION_FROM_TEST}"
+          elif [ "${MODE}" = "release" ] || [ "${MODE}" = "main" ]; then
+            LATEST_PROMOTED=$(git tag -l "${UAT_PREFIX}*" | grep -E "^${UAT_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+            EFFECTIVE_PROMOTED_PREFIX="${UAT_PREFIX}"
+
+            if [ -z "${LATEST_PROMOTED}" ] && [ "${STREAM_KEY}" != "global" ]; then
+              LEGACY_UAT_PREFIX="uat-v"
+              LEGACY_LATEST_UAT=$(git tag -l "${LEGACY_UAT_PREFIX}*" | grep -E "^${LEGACY_UAT_PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+              if [ -n "${LEGACY_LATEST_UAT}" ]; then
+                LATEST_PROMOTED="${LEGACY_LATEST_UAT}"
+                EFFECTIVE_PROMOTED_PREFIX="${LEGACY_UAT_PREFIX}"
+                echo "ℹ️ No stream-specific uat tag found for '${STREAM_KEY}'. Falling back to legacy '${LEGACY_UAT_PREFIX}*' tags for this release."
+              fi
+            fi
+
+            if [ -z "${LATEST_PROMOTED}" ]; then
+              resolve_latest_test_tag
+              LATEST_PROMOTED="${RESOLVED_TAG}"
+              EFFECTIVE_PROMOTED_PREFIX="${RESOLVED_PREFIX}"
+              if [ -n "${LATEST_PROMOTED}" ]; then
+                echo "ℹ️ No uat tag found for stream '${STREAM_KEY}'. Falling back to test tag history for this release."
+              fi
+            fi
+
+            if [ -z "${LATEST_PROMOTED}" ]; then
+              echo "❌ No uat or test version tag found for stream '${STREAM_KEY}'. main release tag requires a prior promoted tag."
+              exit 1
+            fi
+
+            VERSION_FROM_PROMOTION="${LATEST_PROMOTED#${EFFECTIVE_PROMOTED_PREFIX}}"
+            TAG="${MAIN_PREFIX}${VERSION_FROM_PROMOTION}"
           else
-            echo "❌ Invalid mode: ${MODE}. Expected test or release (main alias is accepted)."
+            echo "❌ Invalid mode: ${MODE}. Expected test, uat, or release (main alias is accepted)."
             exit 1
           fi
 
@@ -120,6 +163,8 @@ jobs:
 
           if [ "${MODE}" = "test" ]; then
             git tag -a "${TAG}" -m "TEST version ${TAG}"
+          elif [ "${MODE}" = "uat" ]; then
+            git tag -a "${TAG}" -m "UAT version ${TAG}"
           else
             git tag -a "${TAG}" -m "MAIN release ${TAG}"
           fi

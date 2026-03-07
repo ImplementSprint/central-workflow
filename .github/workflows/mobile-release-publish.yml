@@ -1,0 +1,131 @@
+name: "Reusable: Mobile Release Publish"
+
+on:
+  workflow_call:
+    inputs:
+      system-name:
+        required: true
+        type: string
+        description: "System name used for artifact lookup and release asset naming"
+      version-stream:
+        required: false
+        type: string
+        default: "global"
+        description: "Version stream key used to resolve branch-specific tags"
+      release-mode:
+        required: true
+        type: string
+        description: "Release mode: test, uat, or main"
+    outputs:
+      release_tag:
+        description: "Resolved release tag"
+        value: ${{ jobs.publish.outputs.release_tag }}
+      release_url:
+        description: "Resolved GitHub release URL"
+        value: ${{ jobs.publish.outputs.release_url }}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: "Publish Mobile Release Assets"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      release_tag: ${{ steps.resolve-tag.outputs.tag }}
+      release_url: ${{ steps.resolve-tag.outputs.release_url }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve-tag
+        env:
+          VERSION_STREAM: ${{ inputs.version-stream }}
+          RELEASE_MODE: ${{ inputs.release-mode }}
+        run: |
+          STREAM_KEY=$(echo "${VERSION_STREAM}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+          if [ -z "${STREAM_KEY}" ]; then
+            STREAM_KEY="global"
+          fi
+
+          case "${RELEASE_MODE}" in
+            test)
+              if [ "${STREAM_KEY}" = "global" ]; then
+                PREFIX="test-v"
+              else
+                PREFIX="test-${STREAM_KEY}-v"
+              fi
+              ;;
+            uat)
+              if [ "${STREAM_KEY}" = "global" ]; then
+                PREFIX="uat-v"
+              else
+                PREFIX="uat-${STREAM_KEY}-v"
+              fi
+              ;;
+            main|release)
+              if [ "${STREAM_KEY}" = "global" ]; then
+                PREFIX="main-v"
+              else
+                PREFIX="main-${STREAM_KEY}-v"
+              fi
+              ;;
+            *)
+              echo "❌ Unsupported release mode: ${RELEASE_MODE}"
+              exit 1
+              ;;
+          esac
+
+          TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+          if [ -z "${TAG}" ]; then
+            echo "❌ No release tag found for prefix ${PREFIX}"
+            exit 1
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "release_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Download mobile artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.system-name }}-*
+          path: release-assets/${{ inputs.system-name }}
+          merge-multiple: true
+
+      - name: Validate release artifacts
+        env:
+          SYSTEM_NAME: ${{ inputs.system-name }}
+        run: |
+          FILE_COUNT=$(find "release-assets/${SYSTEM_NAME}" -type f | wc -l)
+          if [ "${FILE_COUNT}" -eq 0 ]; then
+            echo "❌ No mobile artifacts found for ${SYSTEM_NAME} in this run."
+            exit 1
+          fi
+
+      - name: Zip release assets
+        id: zip
+        env:
+          SYSTEM_NAME: ${{ inputs.system-name }}
+        run: |
+          mkdir -p release-zips
+          ZIP_PATH="release-zips/${SYSTEM_NAME}-mobile-release.zip"
+          cd "release-assets/${SYSTEM_NAME}"
+          zip -r "../../${ZIP_PATH}" .
+          cd - >/dev/null
+          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.resolve-tag.outputs.tag }}
+          name: ${{ steps.resolve-tag.outputs.tag }}
+          files: ${{ steps.zip.outputs.zip_path }}
+          fail_on_unmatched_files: true
+          append_body: true
+          prerelease: ${{ inputs.release-mode == 'test' || inputs.release-mode == 'uat' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -51,6 +51,21 @@ on:
         required: false
         type: string
         default: "{}"
+      artifact-kind:
+        required: false
+        type: string
+        default: "deployment"
+        description: "Artifact kind shown in the PR body (deployment or release)"
+      artifact-links-json:
+        required: false
+        type: string
+        default: ""
+        description: "Artifact links JSON keyed by system; overrides deployment links when provided"
+      quality-gates-json:
+        required: false
+        type: string
+        default: "{}"
+        description: "Optional quality gates JSON object {label: result}"
       results-json:
         required: false
         type: string
@@ -143,6 +158,9 @@ jobs:
           SYSTEM3_RESULT: ${{ inputs.system3-result }}
           SYSTEMS_JSON_INPUT: ${{ inputs.systems-json }}
           DEPLOYMENT_URLS_JSON_INPUT: ${{ inputs.deployment-urls-json }}
+          ARTIFACT_KIND_INPUT: ${{ inputs.artifact-kind }}
+          ARTIFACT_LINKS_JSON_INPUT: ${{ inputs.artifact-links-json }}
+          QUALITY_GATES_JSON_INPUT: ${{ inputs.quality-gates-json }}
           RESULTS_JSON_INPUT: ${{ inputs.results-json }}
           VERSION_TAG_INPUT: ${{ inputs.version-tag }}
           VERSIONS_JSON_INPUT: ${{ inputs.versions-json }}
@@ -199,11 +217,33 @@ jobs:
             INTRO="This PR was **automatically created** after all CI checks and UAT deployments passed on the ${BT}uat${BT} branch."
 
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
+              VERSION_TAG=$(git tag -l 'uat-v*' | grep -E '^uat-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            fi
+            if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
             fi
           else
             echo "❌ Invalid direction: ${DIRECTION}. Expected test-to-uat or uat-to-main."
             exit 1
+          fi
+
+          ARTIFACT_KIND="${ARTIFACT_KIND_INPUT}"
+          if [ -z "${ARTIFACT_KIND}" ]; then
+            ARTIFACT_KIND="deployment"
+          fi
+
+          if [ "${ARTIFACT_KIND}" = "release" ]; then
+            LINKS_SECTION_TITLE="### 📦 GitHub ${CONTEXT_LABEL} Release Links"
+            LINKS_COLUMN_HEADER="${CONTEXT_LABEL} Release Link"
+            LINKS_ACTION_TEXT="View release"
+            REVIEW_LINK_STEP="2. Open each **Release Link** and verify the published artifacts"
+            CHECKLIST_TEMPLATE="Verified **%s** release assets on ${CONTEXT_LABEL}"
+          else
+            LINKS_SECTION_TITLE="### 🔗 Vercel ${CONTEXT_LABEL} Deployment Links"
+            LINKS_COLUMN_HEADER="${CONTEXT_LABEL} Preview Link"
+            LINKS_ACTION_TEXT="Open deployment"
+            REVIEW_LINK_STEP="2. Open each **Deployment Link** and verify the changes visually"
+            CHECKLIST_TEMPLATE="Verified **%s** deployment on ${CONTEXT_LABEL}"
           fi
 
           COMPARE_URL="${{ github.server_url }}/${{ github.repository }}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}"
@@ -249,6 +289,12 @@ jobs:
             fi
           fi
 
+          if [ -n "${ARTIFACT_LINKS_JSON_INPUT}" ] && echo "${ARTIFACT_LINKS_JSON_INPUT}" | jq -e . >/dev/null 2>&1 && [ "$(echo "${ARTIFACT_LINKS_JSON_INPUT}" | jq 'length')" -gt 0 ]; then
+            ARTIFACT_LINKS_JSON="${ARTIFACT_LINKS_JSON_INPUT}"
+          else
+            ARTIFACT_LINKS_JSON="${DEPLOYMENT_URLS_JSON}"
+          fi
+
           if [ -n "${RESULTS_JSON_INPUT}" ] && echo "${RESULTS_JSON_INPUT}" | jq -e . >/dev/null 2>&1 && [ "$(echo "${RESULTS_JSON_INPUT}" | jq 'length')" -gt 0 ]; then
             RESULTS_JSON="${RESULTS_JSON_INPUT}"
           else
@@ -271,6 +317,12 @@ jobs:
             VERSIONS_JSON="${VERSIONS_JSON_INPUT}"
           else
             VERSIONS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg version "${VERSION_TAG}" 'reduce .[] as $s ({}; .[$s.name] = $version)')
+          fi
+
+          if [ -n "${QUALITY_GATES_JSON_INPUT}" ] && echo "${QUALITY_GATES_JSON_INPUT}" | jq -e . >/dev/null 2>&1 && [ "$(echo "${QUALITY_GATES_JSON_INPUT}" | jq 'length')" -gt 0 ]; then
+            QUALITY_GATES_JSON="${QUALITY_GATES_JSON_INPUT}"
+          else
+            QUALITY_GATES_JSON='{}'
           fi
 
             if [ "${PIPELINE_KIND}" = "single" ]; then
@@ -319,19 +371,31 @@ jobs:
 
           # ── Compute readiness badge ──
           ALL_GATES_PASSED="true"
-          for _gate in "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${SELENIUM_STATUS}" "${GRAFANA_STATUS}"; do
-            if [ "${_gate}" != "success" ] && [ "${_gate}" != "skipped" ]; then
-              ALL_GATES_PASSED="false"
-              break
-            fi
-          done
+          if [ "$(echo "${QUALITY_GATES_JSON}" | jq 'length')" -gt 0 ]; then
+            while IFS= read -r _gate; do
+              if [ -z "${_gate}" ]; then
+                continue
+              fi
+              if [ "${_gate}" != "success" ] && [ "${_gate}" != "skipped" ]; then
+                ALL_GATES_PASSED="false"
+                break
+              fi
+            done < <(echo "${QUALITY_GATES_JSON}" | jq -r '.[]')
+          else
+            for _gate in "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${SELENIUM_STATUS}" "${GRAFANA_STATUS}"; do
+              if [ "${_gate}" != "success" ] && [ "${_gate}" != "skipped" ]; then
+                ALL_GATES_PASSED="false"
+                break
+              fi
+            done
+          fi
           if [ "${ALL_GATES_PASSED}" = "true" ] && [ "${PIPELINE_RESULT}" = "success" ]; then
             READINESS_BADGE="> 🟢 **READY FOR REVIEW** — All quality gates passed"
           else
             READINESS_BADGE="> 🔴 **NOT READY** — One or more quality gates failed"
           fi
 
-            DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
+            ARTIFACT_LINKS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${ARTIFACT_LINKS_JSON}" --arg runUrl "${RUN_URL}" '
               reduce .[] as $s ({};
                 .[$s.name] = ((($urls[$s.name] // "") | tostring) | if length > 0 then . else $runUrl end)
               )')
@@ -348,7 +412,12 @@ jobs:
 
           # ── Pre-merge checklist ──
           CHECKLIST="- [ ] Reviewed the [changes between branches](${COMPARE_URL})"
-          CHECKLIST+=$'\n'"$(echo "${SYSTEMS_JSON}" | jq -r --arg label "${CONTEXT_LABEL}" 'map("- [ ] Verified **" + .name + "** deployment on " + $label) | join("\n")')"
+          while IFS= read -r SYSTEM_NAME; do
+            if [ -z "${SYSTEM_NAME}" ]; then
+              continue
+            fi
+            CHECKLIST+=$'\n'"- [ ] $(printf "${CHECKLIST_TEMPLATE}" "${SYSTEM_NAME}")"
+          done < <(echo "${SYSTEMS_JSON}" | jq -r '.[].name')
           if [ "${DIRECTION}" = "test-to-uat" ]; then
             CHECKLIST+=$'\n- [ ] Ready for UAT validation'
           else
@@ -357,27 +426,40 @@ jobs:
           fi
 
           # ── Deployment links table rows ──
-          ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson urls "${DEPLOYMENT_URLS_JSON}" --arg runUrl "${RUN_URL}" '
+          ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson urls "${ARTIFACT_LINKS_JSON}" --arg runUrl "${RUN_URL}" --arg linkText "${LINKS_ACTION_TEXT}" '
             .[]
             | (($urls[.name] // "") | tostring) as $raw
             | (if ($raw | length) > 0 then $raw else $runUrl end) as $url
-            | "| \(.name) | [🔗 Open deployment](" + $url + ") |"
+            | "| \(.name) | [🔗 " + $linkText + "](" + $url + ") |"
           ')
 
           # ── Quality gates table with emoji ──
-          QG_TESTS_ICON=$(status_icon "${TESTS_STATUS}")
-          QG_LINT_ICON=$(status_icon "${LINT_STATUS}")
-          QG_SEC_ICON=$(status_icon "${SECURITY_STATUS}")
-          QG_SONAR_ICON=$(status_icon "${SONAR_STATUS}")
-          QG_SELENIUM_ICON=$(status_icon "${SELENIUM_STATUS}")
-          QG_GRAFANA_ICON=$(status_icon "${GRAFANA_STATUS}")
-          QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | ${BT}%s${BT} |\n| Lint | %s | ${BT}%s${BT} |\n| Security | %s | ${BT}%s${BT} |\n| SonarCloud | %s | ${BT}%s${BT} |\n| Selenium E2E | %s | ${BT}%s${BT} |\n| Grafana k6 | %s | ${BT}%s${BT} |" \
-            "${QG_TESTS_ICON}" "${TESTS_STATUS}" \
-            "${QG_LINT_ICON}" "${LINT_STATUS}" \
-            "${QG_SEC_ICON}" "${SECURITY_STATUS}" \
-            "${QG_SONAR_ICON}" "${SONAR_STATUS}" \
-            "${QG_SELENIUM_ICON}" "${SELENIUM_STATUS}" \
-            "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
+          if [ "$(echo "${QUALITY_GATES_JSON}" | jq 'length')" -gt 0 ]; then
+            QUALITY_GATE_ROWS=$(echo "${QUALITY_GATES_JSON}" | jq -r --arg bt "${BT}" '
+              to_entries
+              | map(
+                  "| " + .key + " | " +
+                  (if .value == "success" then "✅" elif .value == "failure" then "❌" elif .value == "cancelled" then "⚠️" elif .value == "skipped" then "⏭️" else "⬜" end) +
+                  " | " + $bt + (.value | tostring) + $bt + " |"
+                )
+              | join("\n")
+            ')
+            QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n%s" "${QUALITY_GATE_ROWS}")
+          else
+            QG_TESTS_ICON=$(status_icon "${TESTS_STATUS}")
+            QG_LINT_ICON=$(status_icon "${LINT_STATUS}")
+            QG_SEC_ICON=$(status_icon "${SECURITY_STATUS}")
+            QG_SONAR_ICON=$(status_icon "${SONAR_STATUS}")
+            QG_SELENIUM_ICON=$(status_icon "${SELENIUM_STATUS}")
+            QG_GRAFANA_ICON=$(status_icon "${GRAFANA_STATUS}")
+            QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | ${BT}%s${BT} |\n| Lint | %s | ${BT}%s${BT} |\n| Security | %s | ${BT}%s${BT} |\n| SonarCloud | %s | ${BT}%s${BT} |\n| Selenium E2E | %s | ${BT}%s${BT} |\n| Grafana k6 | %s | ${BT}%s${BT} |" \
+              "${QG_TESTS_ICON}" "${TESTS_STATUS}" \
+              "${QG_LINT_ICON}" "${LINT_STATUS}" \
+              "${QG_SEC_ICON}" "${SECURITY_STATUS}" \
+              "${QG_SONAR_ICON}" "${SONAR_STATUS}" \
+              "${QG_SELENIUM_ICON}" "${SELENIUM_STATUS}" \
+              "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
+          fi
 
           # ── Version tags table ──
           VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" --arg bt "${BT}" '.[] | "| " + .name + " | " + $bt + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + $bt + " |"')
@@ -410,7 +492,7 @@ jobs:
 
           # ── How to review section ──
           HOW_TO_REVIEW="1. Check the **Quality Gates** table — all gates should show ✅"
-          HOW_TO_REVIEW+=$'\n'"2. Open each **Deployment Link** and verify the changes visually"
+          HOW_TO_REVIEW+=$'\n'"${REVIEW_LINK_STEP}"
           HOW_TO_REVIEW+=$'\n'"3. Review the [code diff between branches](${COMPARE_URL})"
           HOW_TO_REVIEW+=$'\n'"4. Complete all items in the **Pre-merge Checklist** above"
 
@@ -430,8 +512,8 @@ jobs:
           ### 📋 Pre-merge Checklist
           ${CHECKLIST}
 
-          ### 🔗 Vercel ${CONTEXT_LABEL} Deployment Links
-          | System | ${CONTEXT_LABEL} Preview Link |
+          ${LINKS_SECTION_TITLE}
+          | System | ${LINKS_COLUMN_HEADER} |
           |--------|------------------|
           ${ROWS}
 

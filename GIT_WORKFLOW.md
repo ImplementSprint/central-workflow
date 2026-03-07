@@ -321,6 +321,7 @@ Four-segment semantic versioning with auto-increment.
 | Branch | Global Prefix | Per-Stream Prefix | Example |
 |--------|--------------|-------------------|---------|
 | `test` | `test-v` | `test-{stream}-v` | `test-v1.0.0.3`, `test-frontend-a-v1.0.1.0` |
+| `uat` | `uat-v` | `uat-{stream}-v` | `uat-v1.0.0.3`, `uat-mobile-expo-v1.0.0.5` |
 | `main` | `main-v` | `main-{stream}-v` | `main-v1.0.0.3`, `main-frontend-a-v1.0.1.0` |
 
 ### Auto-Increment Rules (test branch)
@@ -333,9 +334,13 @@ MINOR rolls over at 10 → MAJOR + 1, MINOR resets to 0
 First tag starts at: 1.0.0.0
 ```
 
+### Promotion Tags (uat branch)
+
+When code reaches `uat`, the latest matching `test-v*` or `test-{stream}-v*` version is mirrored to a `uat-v*` or `uat-{stream}-v*` tag. This keeps the same version number while marking the promotion into UAT.
+
 ### Release Tags (main branch)
 
-When code reaches `main`, the latest `test-v*` version is **mirrored** to a `main-v*` tag — no additional version bump, just a re-tag confirming the production release.
+When code reaches `main`, the latest matching `uat-v*` or `uat-{stream}-v*` version is **mirrored** to a `main-v*` or `main-{stream}-v*` tag. If a repository has not adopted UAT tags yet, the workflow falls back to the latest matching `test` tag.
 
 ### Multi-System Versioning
 

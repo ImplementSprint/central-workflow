@@ -208,8 +208,9 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 5) Expected branch skips
 
-- On `test`: `Version Tag - TEST` runs; `Version Tag - MAIN Release`, `Publish Mobile Release`, and auto-revert jobs are expected to be skipped.
-- On `main`: release/version/publish jobs can run (subject to their `if` conditions and prior job success).
+- On `test`: `Version Tag - TEST` and `Publish Mobile Release` can run; `Version Tag - UAT`, `Version Tag - MAIN Release`, and auto-revert jobs are expected to be skipped.
+- On `uat`: `Version Tag - UAT` and `Publish Mobile Release` can run; `Version Tag - TEST` and `Version Tag - MAIN Release` are expected to be skipped.
+- On `main`: `Version Tag - MAIN Release` and `Publish Mobile Release` can run (subject to their `if` conditions and prior job success).
 - Seeing those branch-mismatched jobs as `skipped` is normal pipeline behavior, not a failure.
 
 ## 6) Pipeline stage architecture

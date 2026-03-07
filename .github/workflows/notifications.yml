@@ -35,6 +35,21 @@ on:
         type: string
         default: "{}"
         description: "Deployment URLs by system as JSON object"
+      artifact-kind:
+        required: false
+        type: string
+        default: "deployment"
+        description: "Artifact kind shown in notifications (deployment or release)"
+      release-url:
+        required: false
+        type: string
+        default: ""
+        description: "Release URL to include when available"
+      release-urls-json:
+        required: false
+        type: string
+        default: "{}"
+        description: "Release URLs by system as JSON object"
       success-image-url:
         required: false
         type: string
@@ -90,6 +105,11 @@ on:
         type: string
         default: "{}"
         description: "Version tags JSON object {system: tag}"
+      quality-gates-json:
+        required: false
+        type: string
+        default: "{}"
+        description: "Optional quality gates JSON object {label: result}"
       pipeline-result:
         required: false
         type: string
@@ -265,11 +285,21 @@ jobs:
               --arg envLabel '${{ steps.prepare.outputs.env_emoji }} ${{ steps.prepare.outputs.env_label }}' \
               --arg deploymentUrl '${{ inputs['deployment-url'] }}' \
               --arg deploymentUrlsJson '${{ inputs['deployment-urls-json'] }}' \
+              --arg artifactKind '${{ inputs['artifact-kind'] }}' \
+              --arg releaseUrl '${{ inputs['release-url'] }}' \
+              --arg releaseUrlsJson '${{ inputs['release-urls-json'] }}' \
               --arg details '${{ inputs['error-details'] }}' \
+              --arg qualityGatesJson '${{ inputs['quality-gates-json'] }}' \
               '((try ($deploymentUrlsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $deploymentEntries |
-              ($deploymentEntries | map("• " + .key + ": " + (.value | tostring)) | join("\n")) as $deploymentLines |
-              ($deploymentEntries | length) as $deploymentCount |
-              ($deploymentEntries[0].value // "" | tostring) as $firstDeploymentUrl |
+              ($artifactKind | ascii_downcase) as $kind |
+              (if $kind == "release" then "Release" else "Deployment" end) as $artifactTitle |
+              (if $kind == "release" then "Releases" else "Deployments" end) as $artifactTitlePlural |
+              (if $kind == "release" and ($releaseUrlsJson | length) > 0 then $releaseUrlsJson else $deploymentUrlsJson end) as $artifactJson |
+              (if $kind == "release" and ($releaseUrl | length) > 0 then $releaseUrl else $deploymentUrl end) as $artifactUrl |
+              ((try ($artifactJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $artifactEntries |
+              ($artifactEntries | map("• " + .key + ": " + (.value | tostring)) | join("\n")) as $artifactLines |
+              ($artifactEntries | length) as $artifactCount |
+              ($artifactEntries[0].value // "" | tostring) as $firstArtifactUrl |
               {
                 text: $mention,
                 attachments: [
@@ -289,8 +319,8 @@ jobs:
                         {title:"Compare", value:$compareUrl, short:false},
                         {title:"Run", value:$runUrl, short:false}
                       ]
-                      + (if ($deploymentUrl | length) > 0 then [{title:"Deployment", value:$deploymentUrl, short:false}] else [] end)
-                      + (if ($deploymentLines | length) > 0 and ($deploymentCount > 1 or ($deploymentUrl | length) == 0 or $firstDeploymentUrl != $deploymentUrl) then [{title:"Deployments", value:$deploymentLines, short:false}] else [] end)
+                      + (if ($artifactUrl | length) > 0 then [{title:$artifactTitle, value:$artifactUrl, short:false}] else [] end)
+                      + (if ($artifactLines | length) > 0 and ($artifactCount > 1 or ($artifactUrl | length) == 0 or $firstArtifactUrl != $artifactUrl) then [{title:$artifactTitlePlural, value:$artifactLines, short:false}] else [] end)
                       + (if ($details | length) > 0 then [{title:"Details", value:$details, short:false}] else [] end)
                     ),
                     footer: ("<" + $runUrl + "|View Run>")
@@ -339,6 +369,9 @@ jobs:
               --arg envLabel '${{ steps.prepare.outputs.env_emoji }} ${{ steps.prepare.outputs.env_label }}' \
               --arg deploymentUrl '${{ inputs['deployment-url'] }}' \
               --arg deploymentUrlsJson '${{ inputs['deployment-urls-json'] }}' \
+              --arg artifactKind '${{ inputs['artifact-kind'] }}' \
+              --arg releaseUrl '${{ inputs['release-url'] }}' \
+              --arg releaseUrlsJson '${{ inputs['release-urls-json'] }}' \
               --arg details '${{ inputs['error-details'] }}' \
               --arg testsStatus '${{ inputs['tests-status'] }}' \
               --arg lintStatus '${{ inputs['lint-status'] }}' \
@@ -348,6 +381,7 @@ jobs:
               --arg grafanaStatus '${{ inputs['grafana-status'] }}' \
               --arg enforceStatus '${{ inputs['enforce-gate-status'] }}' \
               --arg versionsJson '${{ inputs['versions-json'] }}' \
+              --arg qualityGatesJson '${{ inputs['quality-gates-json'] }}' \
               --arg pipelineResult '${{ inputs['pipeline-result'] }}' \
               --argjson envColor ${{ steps.prepare.outputs.env_color }} \
               --arg imageUrl '${{ steps.prepare.outputs.image_url }}' \
@@ -359,8 +393,13 @@ jobs:
                 "**Pipeline Result:** " + ($pipelineResult | icon) + " `" + $pipelineResult + "`\n\n"
               else "" end) as $resultLine |
 
+              ((try ($qualityGatesJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $qualityGateEntries |
+
               # Build quality gates section
-              (if ($testsStatus | length) > 0 then
+              (if ($qualityGateEntries | length) > 0 then
+                "**Quality Gates**\n" +
+                ($qualityGateEntries | map((.value | icon) + " " + .key + " · `" + (.value | tostring) + "`") | join("\n"))
+              elif ($testsStatus | length) > 0 then
                 "**Quality Gates**\n" +
                 ($testsStatus | icon) + " Tests · " +
                 ($lintStatus | icon) + " Lint · " +
@@ -378,11 +417,16 @@ jobs:
                 (if ($details | length) > 0 then "\n\n⚠️ **Error:** " + $details else "" end)
               ) as $description |
 
-              # Deployments
-              ((try ($deploymentUrlsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $deploymentEntries |
-              ($deploymentEntries | map("• **" + .key + "**: " + (.value | tostring)) | join("\n")) as $deploymentLines |
-              ($deploymentEntries | length) as $deploymentCount |
-              ($deploymentEntries[0].value // "" | tostring) as $firstDeploymentUrl |
+              # Deployments / releases
+              ($artifactKind | ascii_downcase) as $kind |
+              (if $kind == "release" then "📦 Release" else "🔗 Deployment" end) as $artifactField |
+              (if $kind == "release" then "📦 Releases" else "🔗 Deployments" end) as $artifactFieldPlural |
+              (if $kind == "release" and ($releaseUrlsJson | length) > 0 then $releaseUrlsJson else $deploymentUrlsJson end) as $artifactJson |
+              (if $kind == "release" and ($releaseUrl | length) > 0 then $releaseUrl else $deploymentUrl end) as $artifactUrl |
+              ((try ($artifactJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $artifactEntries |
+              ($artifactEntries | map("• **" + .key + "**: " + (.value | tostring)) | join("\n")) as $artifactLines |
+              ($artifactEntries | length) as $artifactCount |
+              ($artifactEntries[0].value // "" | tostring) as $firstArtifactUrl |
 
               # Versions
               ((try ($versionsJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $versionEntries |
@@ -406,8 +450,8 @@ jobs:
                         {name: "Run Attempt", value: $attempt, inline: true}
                       ]
                       + (if ($versionLines | length) > 0 then [{name: "🏷️ Versions", value: $versionLines, inline: false}] else [] end)
-                      + (if ($deploymentUrl | length) > 0 then [{name: "🔗 Deployment", value: $deploymentUrl, inline: false}] else [] end)
-                      + (if ($deploymentLines | length) > 0 and ($deploymentCount > 1 or ($deploymentUrl | length) == 0 or $firstDeploymentUrl != $deploymentUrl) then [{name: "🔗 Deployments", value: $deploymentLines, inline: false}] else [] end)
+                      + (if ($artifactUrl | length) > 0 then [{name: $artifactField, value: $artifactUrl, inline: false}] else [] end)
+                      + (if ($artifactLines | length) > 0 and ($artifactCount > 1 or ($artifactUrl | length) == 0 or $firstArtifactUrl != $artifactUrl) then [{name: $artifactFieldPlural, value: $artifactLines, inline: false}] else [] end)
                       + [{name: "🔗 Links", value: ("[View Run ↗](" + $runUrl + ") · [Compare ↗](" + $compareUrl + ")"), inline: false}]
                     ),
                     image: (if ($imageUrl | length) > 0 then {url: $imageUrl} else null end),

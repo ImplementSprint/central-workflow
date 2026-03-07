@@ -603,6 +603,27 @@ jobs:
       mode: test
       stream: ${{ matrix.system.version_stream }}
 
+  version-uat:
+    name: "Version Tag — UAT (${{ matrix.system.name }})"
+    needs: [mobile-expo, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/uat' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: uat
+      stream: ${{ matrix.system.version_stream }}
+
   version-main-release:
     name: "Version Tag — MAIN Release (${{ matrix.system.name }})"
     needs: [mobile-expo, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
@@ -626,11 +647,11 @@ jobs:
 
   publish-mobile-release:
     name: "Publish Mobile Release — ${{ matrix.system.name }}"
-    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-main-release]
+    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
     if: >-
       always() &&
       github.repository != 'ImplementSprint/central-workflow' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
@@ -638,77 +659,233 @@ jobs:
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped') &&
-      needs.version-main-release.result == 'success' &&
+      (github.ref != 'refs/heads/test' || needs.version-test.result == 'success') &&
+      (github.ref != 'refs/heads/uat' || needs.version-uat.result == 'success') &&
+      (github.ref != 'refs/heads/main' || needs.version-main-release.result == 'success') &&
       (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || needs.mobile-grafana-k6.result == 'success')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/mobile-release-publish.yml
+    with:
+      system-name: ${{ matrix.system.name }}
+      version-stream: ${{ matrix.system.version_stream || 'global' }}
+      release-mode: ${{ github.ref_name == 'test' && 'test' || (github.ref_name == 'uat' && 'uat' || 'main') }}
+
+  prepare-promotion-payload:
+    name: "Prepare Promotion Payload"
+    needs: [active-systems, classify-systems, qa-controls, k6-systems, aggregate-mobile-status, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, publish-mobile-release]
+    if: >-
+      always() &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      needs.aggregate-mobile-status.outputs.overall_result == 'success' &&
+      needs.publish-mobile-release.result == 'success' &&
+      ((github.ref == 'refs/heads/test' && needs.version-test.result == 'success') || (github.ref == 'refs/heads/uat' && needs.version-uat.result == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      release_urls_json: ${{ steps.build.outputs.release_urls_json }}
+      results_json: ${{ steps.build.outputs.results_json }}
+      versions_json: ${{ steps.build.outputs.versions_json }}
+      quality_gates_json: ${{ steps.build.outputs.quality_gates_json }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Resolve MAIN stream tag
-        id: tag
+      - name: Build payload JSON
+        id: build
         env:
-          VERSION_STREAM: ${{ matrix.system.version_stream || 'global' }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OVERALL_RESULT: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
+          EXPO_COUNT_RAW: ${{ needs.classify-systems.outputs.expo_count }}
+          KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          K6_COUNT_RAW: ${{ needs.k6-systems.outputs.k6_count }}
+          EXPO_RESULT: ${{ needs.mobile-expo.result }}
+          KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+          SONAR_RESULT: ${{ needs.sonarcloud-mobile.result }}
+          K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
+          ENABLE_SONAR_INPUT: ${{ inputs.enable_sonar }}
+          ENABLE_GRAFANA_K6: ${{ needs.qa-controls.outputs.enable_grafana_k6 }}
+          VERSION_TEST_RESULT: ${{ needs.version-test.result }}
+          VERSION_UAT_RESULT: ${{ needs.version-uat.result }}
+          PUBLISH_RELEASE_RESULT: ${{ needs.publish-mobile-release.result }}
         run: |
-          if [ -z "${VERSION_STREAM}" ] || [ "${VERSION_STREAM}" = "global" ]; then
-            PREFIX="main-v"
+          resolve_prefix() {
+            local mode="$1"
+            local stream="$2"
+            local stream_key=""
+
+            stream_key=$(echo "${stream}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+            if [ -z "${stream_key}" ]; then
+              stream_key="global"
+            fi
+
+            if [ "${stream_key}" = "global" ]; then
+              case "${mode}" in
+                test) echo "test-v" ;;
+                uat) echo "uat-v" ;;
+                main) echo "main-v" ;;
+              esac
+            else
+              echo "${mode}-${stream_key}-v"
+            fi
+          }
+
+          normalize_gate() {
+            local enabled="$1"
+            local count="$2"
+            local result="$3"
+
+            if [ "${enabled}" = "false" ]; then
+              echo "skipped"
+              return
+            fi
+
+            if [ -z "${count}" ] || [ "${count}" = "0" ]; then
+              echo "skipped"
+              return
+            fi
+
+            if [ -z "${result}" ]; then
+              echo "skipped"
+              return
+            fi
+
+            echo "${result}"
+          }
+
+          MODE="${BRANCH_NAME}"
+          if [ "${MODE}" != "test" ] && [ "${MODE}" != "uat" ]; then
+            echo "❌ Unsupported promotion payload branch: ${MODE}"
+            exit 1
+          fi
+
+          if [ "${MODE}" = "test" ]; then
+            VERSION_GATE_RESULT="${VERSION_TEST_RESULT}"
           else
-            PREFIX="main-${VERSION_STREAM}-v"
+            VERSION_GATE_RESULT="${VERSION_UAT_RESULT}"
           fi
 
-          TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
-          if [ -z "${TAG}" ]; then
-            echo "❌ No release tag found for prefix ${PREFIX}"
-            exit 1
+          VERSIONS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c 'reduce .[] as $s ({}; .[$s.name] = "N/A")')
+          RELEASE_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
+
+          while IFS=$'\t' read -r NAME STREAM; do
+            if [ -z "${NAME}" ]; then
+              continue
+            fi
+
+            PREFIX=$(resolve_prefix "${MODE}" "${STREAM}")
+            TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+            if [ -z "${TAG}" ]; then
+              echo "❌ Missing required ${PREFIX}<version> tag for system '${NAME}'."
+              exit 1
+            fi
+
+            RELEASE_URL="${RUN_URL}"
+            if [ "${PUBLISH_RELEASE_RESULT}" = "success" ]; then
+              RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+            fi
+
+            VERSIONS_JSON=$(echo "${VERSIONS_JSON}" | jq -c --arg name "${NAME}" --arg tag "${TAG}" '. + {($name):$tag}')
+            RELEASE_URLS_JSON=$(echo "${RELEASE_URLS_JSON}" | jq -c --arg name "${NAME}" --arg url "${RELEASE_URL}" '. + {($name):$url}')
+          done < <(echo "${SYSTEMS_JSON}" | jq -r '.[] | "\(.name)\t\(.version_stream // "global")"')
+
+          RESULTS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg result "${OVERALL_RESULT}" 'reduce .[] as $s ({}; .[$s.name] = $result)')
+
+          EXPO_GATE=$(normalize_gate true "${EXPO_COUNT_RAW:-0}" "${EXPO_RESULT}")
+          KOTLIN_GATE=$(normalize_gate true "${KOTLIN_COUNT_RAW:-0}" "${KOTLIN_RESULT}")
+          SONAR_ENABLED="${ENABLE_SONAR_INPUT}"
+          if [ -z "${SONAR_ENABLED}" ]; then
+            SONAR_ENABLED="true"
           fi
+          SONAR_GATE=$(normalize_gate "${SONAR_ENABLED}" 1 "${SONAR_RESULT}")
+          K6_GATE=$(normalize_gate "${ENABLE_GRAFANA_K6}" "${K6_COUNT_RAW:-0}" "${K6_RESULT}")
 
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          QUALITY_GATES_JSON=$(jq -nc \
+            --arg expo "${EXPO_GATE}" \
+            --arg kotlin "${KOTLIN_GATE}" \
+            --arg sonar "${SONAR_GATE}" \
+            --arg grafana "${K6_GATE}" \
+            --arg version "${VERSION_GATE_RESULT}" \
+            --arg release "${PUBLISH_RELEASE_RESULT}" \
+            '{
+              "Mobile Expo": $expo,
+              "Mobile Kotlin": $kotlin,
+              "SonarCloud": $sonar,
+              "Grafana k6": $grafana,
+              "Version Tagging": $version,
+              "Release Publish": $release
+            }')
 
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: ${{ matrix.system.name }}-*
-          path: release-assets/${{ matrix.system.name }}
-          merge-multiple: true
+          echo "release_urls_json=${RELEASE_URLS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "results_json=${RESULTS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "versions_json=${VERSIONS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "quality_gates_json=${QUALITY_GATES_JSON}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate release artifacts
-        env:
-          SYSTEM_NAME: ${{ matrix.system.name }}
-        run: |
-          FILE_COUNT=$(find "release-assets/${SYSTEM_NAME}" -type f | wc -l)
-          if [ "${FILE_COUNT}" -eq 0 ]; then
-            echo "❌ No mobile artifacts found for ${SYSTEM_NAME} in this run."
-            exit 1
-          fi
+  create-pr-to-uat:
+    name: "Create PR → UAT"
+    needs: [systems-config, active-systems, aggregate-mobile-status, version-test, publish-mobile-release, prepare-promotion-payload]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/test' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_promotion == true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      needs.aggregate-mobile-status.outputs.overall_result == 'success' &&
+      needs.version-test.result == 'success' &&
+      needs.publish-mobile-release.result == 'success' &&
+      needs.prepare-promotion-payload.result == 'success'
+    uses: ./.github/workflows/promotion.yml
+    with:
+      pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode != '' && needs.systems-config.outputs.pipeline_mode || 'multi' }}
+      direction: test-to-uat
+      systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
+      artifact-kind: release
+      artifact-links-json: ${{ needs.prepare-promotion-payload.outputs.release_urls_json }}
+      results-json: ${{ needs.prepare-promotion-payload.outputs.results_json }}
+      versions-json: ${{ needs.prepare-promotion-payload.outputs.versions_json }}
+      quality-gates-json: ${{ needs.prepare-promotion-payload.outputs.quality_gates_json }}
+      system1-result: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
+      pipeline-result: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
+      dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
+    secrets:
+      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
-      - name: Zip release assets
-        id: zip
-        env:
-          SYSTEM_NAME: ${{ matrix.system.name }}
-        run: |
-          mkdir -p release-zips
-          ZIP_PATH="release-zips/${SYSTEM_NAME}-mobile-release.zip"
-          cd "release-assets/${SYSTEM_NAME}"
-          zip -r "../../${ZIP_PATH}" .
-          cd - >/dev/null
-          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          files: ${{ steps.zip.outputs.zip_path }}
-          fail_on_unmatched_files: true
-          append_body: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  create-pr-to-main:
+    name: "Create PR → Main"
+    needs: [systems-config, active-systems, aggregate-mobile-status, version-uat, publish-mobile-release, prepare-promotion-payload]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/uat' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_promotion == true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      needs.aggregate-mobile-status.outputs.overall_result == 'success' &&
+      needs.version-uat.result == 'success' &&
+      needs.publish-mobile-release.result == 'success' &&
+      needs.prepare-promotion-payload.result == 'success'
+    uses: ./.github/workflows/promotion.yml
+    with:
+      pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode != '' && needs.systems-config.outputs.pipeline_mode || 'multi' }}
+      direction: uat-to-main
+      systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
+      artifact-kind: release
+      artifact-links-json: ${{ needs.prepare-promotion-payload.outputs.release_urls_json }}
+      results-json: ${{ needs.prepare-promotion-payload.outputs.results_json }}
+      versions-json: ${{ needs.prepare-promotion-payload.outputs.versions_json }}
+      quality-gates-json: ${{ needs.prepare-promotion-payload.outputs.quality_gates_json }}
+      system1-result: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
+      pipeline-result: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
+      dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
+    secrets:
+      PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   aggregate-mobile-status:
     name: "Aggregate Mobile Status"
@@ -810,68 +987,157 @@ jobs:
           echo "overall_result=${OVERALL}" >> "$GITHUB_OUTPUT"
           echo "error_details=${DETAILS}" >> "$GITHUB_OUTPUT"
 
-  prepare-notify-test-payload:
-    name: "Prepare Notify Payload (TEST)"
-    needs: [active-systems, aggregate-mobile-status]
+  prepare-notify-payload:
+    name: "Prepare Notify Payload"
+    needs: [active-systems, classify-systems, qa-controls, k6-systems, aggregate-mobile-status, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release, publish-mobile-release]
     if: >-
       always() &&
-      github.ref == 'refs/heads/test' &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       fromJson(needs.active-systems.outputs.active_count) > 0
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      deployment_urls_json: ${{ steps.build.outputs.deployment_urls_json }}
+      release_urls_json: ${{ steps.build.outputs.release_urls_json }}
+      versions_json: ${{ steps.build.outputs.versions_json }}
+      quality_gates_json: ${{ steps.build.outputs.quality_gates_json }}
     steps:
-      - name: Build payload JSON
-        id: build
-        env:
-          SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
-          echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  prepare-notify-uat-payload:
-    name: "Prepare Notify Payload (UAT)"
-    needs: [active-systems, aggregate-mobile-status]
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/uat' &&
-      fromJson(needs.active-systems.outputs.active_count) > 0
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      deployment_urls_json: ${{ steps.build.outputs.deployment_urls_json }}
-    steps:
       - name: Build payload JSON
         id: build
         env:
+          BRANCH_NAME: ${{ github.ref_name }}
           SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXPO_COUNT_RAW: ${{ needs.classify-systems.outputs.expo_count }}
+          KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          K6_COUNT_RAW: ${{ needs.k6-systems.outputs.k6_count }}
+          EXPO_RESULT: ${{ needs.mobile-expo.result }}
+          KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+          SONAR_RESULT: ${{ needs.sonarcloud-mobile.result }}
+          K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
+          ENABLE_SONAR_INPUT: ${{ inputs.enable_sonar }}
+          ENABLE_GRAFANA_K6: ${{ needs.qa-controls.outputs.enable_grafana_k6 }}
+          VERSION_TEST_RESULT: ${{ needs.version-test.result }}
+          VERSION_UAT_RESULT: ${{ needs.version-uat.result }}
+          VERSION_MAIN_RESULT: ${{ needs.version-main-release.result }}
+          PUBLISH_RELEASE_RESULT: ${{ needs.publish-mobile-release.result }}
         run: |
-          DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
-          echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
+          resolve_prefix() {
+            local mode="$1"
+            local stream="$2"
+            local stream_key=""
 
-  prepare-notify-main-payload:
-    name: "Prepare Notify Payload (MAIN)"
-    needs: [active-systems, aggregate-mobile-status, publish-mobile-release]
-    if: >-
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      fromJson(needs.active-systems.outputs.active_count) > 0
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      deployment_urls_json: ${{ steps.build.outputs.deployment_urls_json }}
-    steps:
-      - name: Build payload JSON
-        id: build
-        env:
-          SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          DEPLOYMENT_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
-          echo "deployment_urls_json=${DEPLOYMENT_URLS_JSON}" >> "$GITHUB_OUTPUT"
+            stream_key=$(echo "${stream}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+            if [ -z "${stream_key}" ]; then
+              stream_key="global"
+            fi
+
+            if [ "${stream_key}" = "global" ]; then
+              case "${mode}" in
+                test) echo "test-v" ;;
+                uat) echo "uat-v" ;;
+                main) echo "main-v" ;;
+              esac
+            else
+              echo "${mode}-${stream_key}-v"
+            fi
+          }
+
+          normalize_gate() {
+            local enabled="$1"
+            local count="$2"
+            local result="$3"
+
+            if [ "${enabled}" = "false" ]; then
+              echo "skipped"
+              return
+            fi
+
+            if [ -z "${count}" ] || [ "${count}" = "0" ]; then
+              echo "skipped"
+              return
+            fi
+
+            if [ -z "${result}" ]; then
+              echo "skipped"
+              return
+            fi
+
+            echo "${result}"
+          }
+
+          MODE="${BRANCH_NAME}"
+          case "${MODE}" in
+            test)
+              VERSION_GATE_RESULT="${VERSION_TEST_RESULT}"
+              ;;
+            uat)
+              VERSION_GATE_RESULT="${VERSION_UAT_RESULT}"
+              ;;
+            main)
+              VERSION_GATE_RESULT="${VERSION_MAIN_RESULT}"
+              ;;
+            *)
+              echo "❌ Unsupported notify payload branch: ${MODE}"
+              exit 1
+              ;;
+          esac
+
+          VERSIONS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c 'reduce .[] as $s ({}; .[$s.name] = "N/A")')
+          RELEASE_URLS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --arg runUrl "${RUN_URL}" 'reduce .[] as $s ({}; .[$s.name] = $runUrl)')
+
+          if [ "${VERSION_GATE_RESULT}" = "success" ] || [ "${VERSION_GATE_RESULT}" = "skipped" ]; then
+            while IFS=$'\t' read -r NAME STREAM; do
+              if [ -z "${NAME}" ]; then
+                continue
+              fi
+
+              PREFIX=$(resolve_prefix "${MODE}" "${STREAM}")
+              TAG=$(git tag -l "${PREFIX}*" | grep -E "^${PREFIX}[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -n 1)
+              if [ -n "${TAG}" ]; then
+                RELEASE_URL="${RUN_URL}"
+                if [ "${PUBLISH_RELEASE_RESULT}" = "success" ]; then
+                  RELEASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+                fi
+
+                VERSIONS_JSON=$(echo "${VERSIONS_JSON}" | jq -c --arg name "${NAME}" --arg tag "${TAG}" '. + {($name):$tag}')
+                RELEASE_URLS_JSON=$(echo "${RELEASE_URLS_JSON}" | jq -c --arg name "${NAME}" --arg url "${RELEASE_URL}" '. + {($name):$url}')
+              fi
+            done < <(echo "${SYSTEMS_JSON}" | jq -r '.[] | "\(.name)\t\(.version_stream // "global")"')
+          fi
+
+          EXPO_GATE=$(normalize_gate true "${EXPO_COUNT_RAW:-0}" "${EXPO_RESULT}")
+          KOTLIN_GATE=$(normalize_gate true "${KOTLIN_COUNT_RAW:-0}" "${KOTLIN_RESULT}")
+          SONAR_ENABLED="${ENABLE_SONAR_INPUT}"
+          if [ -z "${SONAR_ENABLED}" ]; then
+            SONAR_ENABLED="true"
+          fi
+          SONAR_GATE=$(normalize_gate "${SONAR_ENABLED}" 1 "${SONAR_RESULT}")
+          K6_GATE=$(normalize_gate "${ENABLE_GRAFANA_K6}" "${K6_COUNT_RAW:-0}" "${K6_RESULT}")
+
+          QUALITY_GATES_JSON=$(jq -nc \
+            --arg expo "${EXPO_GATE}" \
+            --arg kotlin "${KOTLIN_GATE}" \
+            --arg sonar "${SONAR_GATE}" \
+            --arg grafana "${K6_GATE}" \
+            --arg version "${VERSION_GATE_RESULT}" \
+            --arg release "${PUBLISH_RELEASE_RESULT}" \
+            '{
+              "Mobile Expo": $expo,
+              "Mobile Kotlin": $kotlin,
+              "SonarCloud": $sonar,
+              "Grafana k6": $grafana,
+              "Version Tagging": $version,
+              "Release Publish": $release
+            }')
+
+          echo "release_urls_json=${RELEASE_URLS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "versions_json=${VERSIONS_JSON}" >> "$GITHUB_OUTPUT"
+          echo "quality_gates_json=${QUALITY_GATES_JSON}" >> "$GITHUB_OUTPUT"
 
   pipeline-summary:
     name: "Pipeline Summary"
@@ -902,11 +1168,10 @@ jobs:
         sonarcloud-mobile,
         aggregate-mobile-status,
         version-test,
+        version-uat,
         version-main-release,
         publish-mobile-release,
-        prepare-notify-test-payload,
-        prepare-notify-uat-payload,
-        prepare-notify-main-payload,
+        prepare-notify-payload,
         pipeline-summary,
       ]
     if: >-
@@ -968,7 +1233,7 @@ jobs:
 
   notify-pipeline:
     name: "Notify Pipeline Status"
-    needs: [systems-config, pipeline-summary, active-systems, aggregate-mobile-status, auto-revert-on-failure, prepare-notify-test-payload, prepare-notify-uat-payload, prepare-notify-main-payload]
+    needs: [systems-config, pipeline-summary, active-systems, aggregate-mobile-status, auto-revert-on-failure, prepare-notify-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
@@ -976,11 +1241,15 @@ jobs:
       system-dir: ${{ needs.active-systems.outputs.active_label != '' && needs.active-systems.outputs.active_label || 'None' }}
       pipeline-type: ${{ needs.systems-config.outputs.pipeline_mode == 'single' && 'Mobile Single Master' || 'Mobile Multi Master' }}
       error-details: ${{ needs.aggregate-mobile-status.outputs.error_details }}
-      deployment-url: ''
-      deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-main-payload.outputs.deployment_urls_json || (github.ref_name == 'uat' && needs.prepare-notify-uat-payload.outputs.deployment_urls_json || (github.ref_name == 'test' && needs.prepare-notify-test-payload.outputs.deployment_urls_json || '{}')) }}
+      artifact-kind: release
+      release-url: ''
+      release-urls-json: ${{ needs.prepare-notify-payload.outputs.release_urls_json }}
       success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL != '' && vars.DISCORD_SUCCESS_IMAGE_URL || vars.JED_SUCCESS_IMAGE_URL }}
       failure-image-url: ${{ vars.DISCORD_FAIL_IMAGE_URL != '' && vars.DISCORD_FAIL_IMAGE_URL || vars.JED_FAIL_IMAGE_URL }}
       cancelled-image-url: ${{ vars.DISCORD_CANCELLED_IMAGE_URL != '' && vars.DISCORD_CANCELLED_IMAGE_URL || vars.JED_CANCELLED_IMAGE_URL }}
+      versions-json: ${{ needs.prepare-notify-payload.outputs.versions_json }}
+      quality-gates-json: ${{ needs.prepare-notify-payload.outputs.quality_gates_json }}
+      pipeline-result: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
