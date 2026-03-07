@@ -116,11 +116,26 @@ jobs:
             exit 1
           fi
 
-          if ! node -e "require.resolve('detox/runners/jest/testEnvironment')" >/dev/null 2>&1; then
-            echo "❌ Jest cannot resolve detox/runners/jest/testEnvironment from this repository."
-            echo "Install a Detox version that exposes the Jest runner, or update the repo's Detox/Jest configuration to match the installed Detox version."
+          DETOX_JEST_ENTRYPOINT=""
+          for specifier in \
+            "detox/runners/jest/testEnvironment" \
+            "detox/runners/jest" \
+            "detox/runners/jest-circus/environment" \
+            "detox/runners/jest-circus"
+          do
+            if node -e "require.resolve(process.argv[1])" "${specifier}" >/dev/null 2>&1; then
+              DETOX_JEST_ENTRYPOINT="${specifier}"
+              break
+            fi
+          done
+
+          if [ -z "${DETOX_JEST_ENTRYPOINT}" ]; then
+            echo "❌ Jest cannot resolve a supported Detox runner entrypoint from this repository."
+            echo "Install a Detox version that exposes a Jest runner, or update the repo's Detox/Jest configuration to match the installed Detox version."
             exit 1
           fi
+
+          echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
 
       - name: Download pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}

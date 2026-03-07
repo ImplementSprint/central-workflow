@@ -173,7 +173,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 > - `package.json` exists at the Expo app folder
 > - `tsconfig.json` exists and strict TypeScript is enabled
 > - Detox configuration exists (`.detoxrc.js` or `detox` config in `package.json`) with `android.emu.debug` and `ios.sim.debug` configurations
-> - `detox` is installed as a local devDependency and the repo's Jest E2E config resolves `detox/runners/jest/testEnvironment`
+> - `detox` is installed as a local devDependency and the repo's Jest E2E config resolves a supported Detox runner entrypoint such as `detox/runners/jest/testEnvironment`, `detox/runners/jest`, or legacy `detox/runners/jest-circus/...`
 > - basic test/lint scripts exist in `package.json`
 >
 > For `kotlin-single`, ensure:

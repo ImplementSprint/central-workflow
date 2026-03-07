@@ -677,7 +677,6 @@ jobs:
           pattern: ${{ matrix.system.name }}-*
           path: release-assets/${{ matrix.system.name }}
           merge-multiple: true
-          if-no-files-found: ignore
 
       - name: Validate release artifacts
         env:
