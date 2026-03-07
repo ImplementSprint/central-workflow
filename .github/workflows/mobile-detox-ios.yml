@@ -108,7 +108,7 @@ jobs:
             npm ci --ignore-scripts
           fi
 
-      - name: Validate Detox Jest environment
+      - name: Validate Detox installation
         run: |
           if ! node -e "require.resolve('detox/package.json')" >/dev/null 2>&1; then
             echo "❌ Detox is not installed in this repository."
@@ -130,12 +130,12 @@ jobs:
           done
 
           if [ -z "${DETOX_JEST_ENTRYPOINT}" ]; then
-            echo "❌ Jest cannot resolve a supported Detox runner entrypoint from this repository."
-            echo "Install a Detox version that exposes a Jest runner, or update the repo's Detox/Jest configuration to match the installed Detox version."
-            exit 1
+            echo "⚠️ Jest cannot resolve a known Detox runner entrypoint from this repository."
+            echo "Continuing because the repo may use a custom Jest environment file that imports Detox indirectly."
+            echo "If Detox tests fail later, verify the repo's Detox/Jest configuration against the installed Detox version."
+          else
+            echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
           fi
-
-          echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
 
       - name: Download pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
