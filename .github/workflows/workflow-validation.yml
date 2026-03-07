@@ -58,6 +58,9 @@ jobs:
           assert_contains "$CALLER" "k6_script_path"
           assert_contains "$CALLER" "k6_base_url"
           assert_contains "$CALLER" "k6_run_only_on_branch"
+          assert_contains "$CALLER" "pr_labels"
+          assert_contains "$CALLER" "eas-build-android:<profile>"
+          assert_contains "$CALLER" "eas-build-ios:<profile>"
 
           echo "✅ Mobile caller template validated."
 

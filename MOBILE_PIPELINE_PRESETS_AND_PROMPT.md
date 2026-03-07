@@ -241,3 +241,27 @@ All Stage 2 jobs run in parallel. A failure in any Stage 1 gate blocks Stage 2 e
 - Kotlin baseline: direct Gradle Android build artifacts.
 - For Expo systems, the repository must provide `EXPO_TOKEN` and valid EAS credentials/profile configuration.
 - Expo project linkage may be stored in repo config or injected from CI using `EXPO_PROJECT_ID` and `EXPO_OWNER`.
+
+## 8) Build with GitHub labels (Expo PRs)
+
+You can trigger targeted Expo EAS builds on pull requests by applying labels:
+
+- `eas-build-android:<profile>`
+- `eas-build-ios:<profile>`
+
+Examples:
+
+- `eas-build-android:preview`
+- `eas-build-ios:production`
+
+Behavior:
+
+- If at least one valid `eas-build-*` label is present, Expo build targets are overridden for that run.
+- Only labeled platforms are built.
+- Profile values from labels override per-system `eas_profile_android` / `eas_profile_ios` for that run.
+- If no valid label is present, normal per-system JSON defaults are used.
+
+Notes:
+
+- Labels are consumed from pull request events (`opened`, `synchronize`, `reopened`, `labeled`).
+- The feature is implemented in `templates/mobile-pipeline-caller.yml` and orchestrated in `.github/workflows/master-pipeline-mobile.yml`.

@@ -34,6 +34,9 @@
 #   project linkage managed in CI instead of checked into the repo
 # SonarCloud runs once at the master mobile pipeline level, and Detox
 # runs by default for Expo systems.
+# PR label-triggered Expo EAS overrides are supported with labels:
+#   eas-build-android:<profile>
+#   eas-build-ios:<profile>
 # ──────────────────────────────────────────────────────────────
 name: "Master Pipeline — Mobile"
 
@@ -42,6 +45,7 @@ on:
     branches: [test, uat, main]
   pull_request:
     branches: [test, uat, main]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       pipeline_mode:
@@ -120,4 +124,5 @@ jobs:
       run_deploy: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.run_deploy || 'true') || github.event_name == 'push' }}
       run_promotion: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.run_promotion || 'true') || github.event_name == 'push' }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.dry_run || 'false') || false }}
+      pr_labels: ${{ github.event_name == 'pull_request' && join(github.event.pull_request.labels.*.name, ',') || '' }}
     secrets: inherit
