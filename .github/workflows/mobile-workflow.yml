@@ -75,7 +75,7 @@ on:
       enable-detox-ios:
         required: false
         type: boolean
-        default: false
+        default: true
         description: "Run Detox iOS E2E tests"
       detox-build-command:
         required: false
