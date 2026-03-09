@@ -96,34 +96,71 @@ jobs:
           path: release-assets/${{ inputs.system-name }}
           merge-multiple: true
 
-      - name: Validate release artifacts
+      - name: Collect release files
+        id: release-files
         env:
           SYSTEM_NAME: ${{ inputs.system-name }}
         run: |
-          FILE_COUNT=$(find "release-assets/${SYSTEM_NAME}" -type f | wc -l)
-          if [ "${FILE_COUNT}" -eq 0 ]; then
+          SOURCE_DIR="release-assets/${SYSTEM_NAME}"
+          OUTPUT_DIR="release-files/${SYSTEM_NAME}"
+          TEMP_DIR="release-temp/${SYSTEM_NAME}"
+          OUTPUT_ABS="${PWD}/${OUTPUT_DIR}"
+
+          mkdir -p "${OUTPUT_DIR}" "${TEMP_DIR}"
+
+          SOURCE_COUNT=$(find "${SOURCE_DIR}" -type f | wc -l)
+          if [ "${SOURCE_COUNT}" -eq 0 ]; then
             echo "❌ No mobile artifacts found for ${SYSTEM_NAME} in this run."
             exit 1
           fi
 
-      - name: Zip release assets
-        id: zip
-        env:
-          SYSTEM_NAME: ${{ inputs.system-name }}
-        run: |
-          mkdir -p release-zips
-          ZIP_PATH="release-zips/${SYSTEM_NAME}-mobile-release.zip"
-          cd "release-assets/${SYSTEM_NAME}"
-          zip -r "../../${ZIP_PATH}" .
-          cd - >/dev/null
-          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+          while IFS= read -r -d '' file_path; do
+            cp "${file_path}" "${OUTPUT_DIR}/$(basename "${file_path}")"
+          done < <(find "${SOURCE_DIR}" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.ipa" -o -name "*.zip" \) -print0)
+
+          if [ -f "${SOURCE_DIR}/detox-android-build.tar.gz" ]; then
+            mkdir -p "${TEMP_DIR}/android"
+            tar xzf "${SOURCE_DIR}/detox-android-build.tar.gz" -C "${TEMP_DIR}/android"
+
+            APK_PATH=$(find "${TEMP_DIR}/android" -type f -name "*.apk" | sort | head -n 1)
+            if [ -n "${APK_PATH}" ]; then
+              cp "${APK_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-android-debug.apk"
+            fi
+          fi
+
+          if [ -f "${SOURCE_DIR}/detox-ios-build.tar.gz" ] && [ ! -f "${OUTPUT_DIR}/${SYSTEM_NAME}-ios-simulator-app.zip" ]; then
+            mkdir -p "${TEMP_DIR}/ios"
+            tar xzf "${SOURCE_DIR}/detox-ios-build.tar.gz" -C "${TEMP_DIR}/ios"
+
+            APP_PATH=$(find "${TEMP_DIR}/ios" -type d -name "*.app" | head -n 1)
+            if [ -n "${APP_PATH}" ]; then
+              APP_PARENT=$(dirname "${APP_PATH}")
+              APP_NAME=$(basename "${APP_PATH}")
+              (
+                cd "${APP_PARENT}"
+                zip -r "${OUTPUT_ABS}/${SYSTEM_NAME}-ios-simulator-app.zip" "${APP_NAME}"
+              )
+            fi
+          fi
+
+          FILE_COUNT=$(find "${OUTPUT_DIR}" -maxdepth 1 -type f | wc -l)
+          if [ "${FILE_COUNT}" -eq 0 ]; then
+            echo "❌ No publishable mobile release files were produced for ${SYSTEM_NAME}."
+            exit 1
+          fi
+
+          {
+            echo "files<<EOF"
+            find "${OUTPUT_DIR}" -maxdepth 1 -type f | sort
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.resolve-tag.outputs.tag }}
           name: ${{ steps.resolve-tag.outputs.tag }}
-          files: ${{ steps.zip.outputs.zip_path }}
+          files: ${{ steps.release-files.outputs.files }}
           fail_on_unmatched_files: true
           append_body: true
           prerelease: ${{ inputs.release-mode == 'test' || inputs.release-mode == 'uat' }}
