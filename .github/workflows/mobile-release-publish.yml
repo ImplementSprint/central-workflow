@@ -115,7 +115,25 @@ jobs:
           fi
 
           while IFS= read -r -d '' file_path; do
-            cp "${file_path}" "${OUTPUT_DIR}/$(basename "${file_path}")"
+            base_name=$(basename "${file_path}")
+            target_name="${base_name}"
+
+            case "${base_name}" in
+              *.apk)
+                target_name="${SYSTEM_NAME}-android.apk"
+                ;;
+              *.aab)
+                target_name="${SYSTEM_NAME}-android.aab"
+                ;;
+              *.ipa)
+                target_name="${SYSTEM_NAME}-ios.ipa"
+                ;;
+              *ios*.zip|*simulator*.zip)
+                target_name="${SYSTEM_NAME}-ios.app.zip"
+                ;;
+            esac
+
+            cp "${file_path}" "${OUTPUT_DIR}/${target_name}"
           done < <(find "${SOURCE_DIR}" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.ipa" -o -name "*.zip" \) -print0)
 
           if [ -f "${SOURCE_DIR}/detox-android-build.tar.gz" ]; then
@@ -124,11 +142,11 @@ jobs:
 
             APK_PATH=$(find "${TEMP_DIR}/android" -type f -name "*.apk" | sort | head -n 1)
             if [ -n "${APK_PATH}" ]; then
-              cp "${APK_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-android-debug.apk"
+              cp "${APK_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-android.apk"
             fi
           fi
 
-          if [ -f "${SOURCE_DIR}/detox-ios-build.tar.gz" ] && [ ! -f "${OUTPUT_DIR}/${SYSTEM_NAME}-ios-simulator-app.zip" ]; then
+          if [ -f "${SOURCE_DIR}/detox-ios-build.tar.gz" ] && [ ! -f "${OUTPUT_DIR}/${SYSTEM_NAME}-ios.app.zip" ]; then
             mkdir -p "${TEMP_DIR}/ios"
             tar xzf "${SOURCE_DIR}/detox-ios-build.tar.gz" -C "${TEMP_DIR}/ios"
 
@@ -138,7 +156,7 @@ jobs:
               APP_NAME=$(basename "${APP_PATH}")
               (
                 cd "${APP_PARENT}"
-                zip -r "${OUTPUT_ABS}/${SYSTEM_NAME}-ios-simulator-app.zip" "${APP_NAME}"
+                zip -r "${OUTPUT_ABS}/${SYSTEM_NAME}-ios.app.zip" "${APP_NAME}"
               )
             fi
           fi
