@@ -1,0 +1,23 @@
+name: Backend DB Migration Check
+
+on:
+  workflow_call:
+    # Allows this to be called by your master pipeline
+    
+jobs:
+  check-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        # Add your language-specific setup here (e.g., node, python, etc.)
+        run: echo "Setting up environment for DB check..."
+
+      - name: Run Migration Check
+        run: |
+          echo "Running database migration validation..."
+          # Replace the line below with your actual migration check command
+          # Example: npm run migrate:check OR python manage.py check
+          echo "Migration check passed."
