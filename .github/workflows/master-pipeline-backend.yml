@@ -1,0 +1,272 @@
+name: "Master Pipeline Orchestrator — Backend"
+
+on:
+  push:
+    branches: [test, uat, main]
+  pull_request:
+    branches: [test, uat, main]
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      pipeline_mode:
+        type: choice
+        description: "Pipeline mode (auto|single|multi)"
+        options: [auto, single, multi]
+        default: auto
+
+      enable_security_scan:
+        description: "Run backend security scans"
+        type: boolean
+        default: true
+
+      enable_sonar:
+        description: "Run SonarCloud analysis"
+        type: boolean
+        default: true
+
+      enable_db_migration:
+        description: "Validate DB migrations"
+        type: boolean
+        default: true
+
+      enable_k6:
+        description: "Run Grafana k6 performance tests"
+        type: boolean
+        default: true
+
+      k6_script_path:
+        description: "k6 performance test path"
+        type: string
+        default: "tests/performance"
+
+      k6_base_url:
+        description: "Optional override base URL for k6"
+        type: string
+        default: ""
+
+      k6_run_only_on_branch:
+        description: "Allowed branches for k6"
+        type: string
+        default: "test,uat"
+
+      run_deploy:
+        description: "Enable deployment"
+        type: boolean
+        default: true
+
+      run_promotion:
+        description: "Enable PR promotions"
+        type: boolean
+        default: true
+
+      dry_run:
+        description: "Preview, skip deploy/tag push"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+  security-events: write
+
+concurrency:
+  group: backend-master-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  systems-config:
+    name: "Resolve Backend Systems Configuration"
+    uses: ./.github/workflows/backend-workflow.yml
+    secrets: inherit
+
+  active-systems:
+    name: "Detect Active Backend Systems"
+    needs: systems-config
+    uses: ./.github/workflows/workflow-validation.yml
+    with:
+      systems-json: ${{ needs.systems-config.outputs.systems_json }}
+    secrets: inherit
+
+  validate-directories:
+    name: "Validate Backend Directories"
+    needs: active-systems
+    runs-on: ubuntu-latest
+    if: fromJson(needs.active-systems.outputs.active_count) > 0
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo '${{ needs.active-systems.outputs.active_systems_json }}' |
+          jq -r '.[].dir' | while read DIR; do
+            if [ ! -d "$DIR" ]; then
+              echo "❌ Missing backend directory: $DIR"
+              exit 1
+            fi
+          done
+          echo "✅ All backend directories exist."
+
+  backend-build:
+    name: "Backend Build — ${{ matrix.service.name }}"
+    needs: [active-systems, validate-directories]
+    if: fromJson(needs.active-systems.outputs.active_count) > 0
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+      fail-fast: false
+    uses: ./.github/workflows/backend-tests.yml
+    with:
+      working-directory: ${{ matrix.service.dir }}
+      service-name: ${{ matrix.service.name }}
+    secrets: inherit
+
+  backend-security:
+    name: "Backend Security Scan — ${{ matrix.service.name }}"
+    needs: backend-build
+    if: inputs.enable_security_scan == true
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      working-directory: ${{ matrix.service.dir }}
+      system-name: ${{ matrix.service.name }}
+    secrets: inherit
+
+  backend-sonar:
+    name: "SonarCloud — Backend"
+    needs: backend-build
+    if: inputs.enable_sonar == true
+    uses: ./.github/workflows/sonarcloud-scan.yml
+    secrets: inherit
+
+  backend-db-migration:
+    name: "DB Migration Check"
+    needs: backend-build
+    if: inputs.enable_db_migration == true
+    uses: ./.github/workflows/backend-db-check.yml
+    secrets: inherit
+
+  docker-build-main:
+    name: "Backend Docker Build — ${{ matrix.service.name }}"
+    needs: [backend-security, backend-sonar]
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      working-directory: ${{ matrix.service.dir }}
+      image-name: ${{ matrix.service.image }}
+      push-image: false
+      scan-vulnerabilities: true
+    secrets: inherit
+
+  deploy-preview:
+    name: "${{ github.ref_name == 'test' && 'TEST' || 'UAT' }} Deploy — ${{ matrix.service.name }}"
+    needs: [docker-build-main, backend-db-migration]
+    if: >
+      inputs.run_deploy == true &&
+      (github.ref_name == 'test' || github.ref_name == 'uat')
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/deploy-staging.yml
+    with:
+      working-directory: ${{ matrix.service.dir }}
+      system-name: ${{ matrix.service.name }}
+      environment: preview
+    secrets: inherit
+
+  version-test:
+    name: "Version TEST — ${{ matrix.service.name }}"
+    needs: [backend-build, backend-sonar]
+    if: >
+      github.ref_name == 'test' &&
+      inputs.dry_run != true
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: test
+      stream: ${{ matrix.service.version_stream }}
+
+  version-uat:
+    name: "Version UAT — ${{ matrix.service.name }}"
+    needs: [backend-build, backend-sonar]
+    if: >
+      github.ref_name == 'uat' &&
+      inputs.dry_run != true
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: uat
+      stream: ${{ matrix.service.version_stream }}
+
+  version-main:
+    name: "Version MAIN — ${{ matrix.service.name }}"
+    needs: [backend-build, backend-sonar, deploy-preview]
+    if: >
+      github.ref_name == 'main' &&
+      inputs.dry_run != true
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: release
+      stream: ${{ matrix.service.version_stream }}
+
+  prepare-promotion-payload:
+    name: "Prepare Promotion Payload"
+    needs: [active-systems, deploy-preview, version-test]
+    uses: ./.github/workflows/workflow-validation.yml
+    with:
+      systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
+    secrets: inherit
+
+  pr-to-uat:
+    name: "Create PR → UAT"
+    needs: [prepare-promotion-payload, version-test]
+    if: >
+      github.ref_name == 'test' &&
+      inputs.run_promotion == true
+    uses: ./.github/workflows/promotion.yml
+    secrets: inherit
+
+  pr-to-main:
+    name: "Create PR → Main"
+    needs: [prepare-promotion-payload, version-uat]
+    if: >
+      github.ref_name == 'uat' &&
+      inputs.run_promotion == true
+    uses: ./.github/workflows/promotion.yml
+    secrets: inherit
+
+  pipeline-summary:
+    name: "Pipeline Summary"
+    needs: [backend-build, backend-security, backend-sonar, version-main]
+    uses: ./.github/workflows/pipeline-summary.yml
+
+  auto-revert:
+    name: "Auto Revert"
+    needs: [deploy-preview, version-main]
+    uses: ./.github/workflows/auto-revert.yml
+    secrets: inherit
+
+  notify:
+    name: "Notify Backend Pipeline"
+    needs: [pipeline-summary, auto-revert]
+    uses: ./.github/workflows/notifications.yml
+    secrets: inherit
+
+
+
