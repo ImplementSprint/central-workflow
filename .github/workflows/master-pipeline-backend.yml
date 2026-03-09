@@ -256,12 +256,6 @@ jobs:
     needs: [backend-build, backend-security, backend-sonar, version-main]
     uses: ./.github/workflows/pipeline-summary.yml
 
-  auto-revert:
-    name: "Auto Revert"
-    needs: [deploy-preview, version-main]
-    uses: ./.github/workflows/auto-revert.yml
-    secrets: inherit
-
   notify:
     name: "Notify Backend Pipeline"
     needs: [pipeline-summary, auto-revert]
