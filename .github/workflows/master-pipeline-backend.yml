@@ -2,9 +2,9 @@ name: "Master Pipeline Orchestrator — Backend"
 
 on:
   push:
-    branches: [test, uat, main]
+    branches: ["**"]
   pull_request:
-    branches: [test, uat, main]
+    branches: ["**"]
     types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
