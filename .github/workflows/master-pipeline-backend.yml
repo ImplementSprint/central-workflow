@@ -258,7 +258,7 @@ jobs:
 
   notify:
     name: "Notify Backend Pipeline"
-    needs: [pipeline-summary, auto-revert]
+    needs: [pipeline-summary]
     uses: ./.github/workflows/notifications.yml
     secrets: inherit
 
