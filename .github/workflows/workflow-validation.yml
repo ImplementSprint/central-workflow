@@ -8,6 +8,12 @@ on:
       - "MOBILE_PIPELINE_PRESETS_AND_PROMPT.md"
       - "USER_STORIES_STATUS.md"
   workflow_dispatch:
+  # Added this block to allow the master pipeline to call this workflow
+  workflow_call:
+    inputs:
+      systems-json:
+        required: false
+        type: string
 
 permissions:
   contents: read
