@@ -20,117 +20,48 @@ This file reorganizes the existing user stories into clear delivery buckets:
 
 | ID | Story | Epic | Points | Status |
 |---|---|---|---:|---|
-| D-01 | Create GitHub organization for all tribes | Foundation: Repository & Access Strategy | 3 | Done |
-| D-02 | Configure tribe-based GitHub teams/access structure | Foundation: Repository & Access Strategy | 5 | Done |
-| D-03 | Define/enforce repo governance direction and naming consistency | Repository Governance | 5 | Done |
-| D-04 | Manage tribe permissions and protected access model | Repository Governance | 5 | Done |
-| D-05 | Developer push isolation by repository/tribe model | Repository Governance | 3 | Done |
-| D-06 | Create front-end CI/CD template/caller patterns | Frontend Pipeline | 5 | Done |
-| D-07 | Create mobile CI/CD template/caller patterns | Mobile Pipeline | 5 | Done |
-| D-08 | Include pipeline configs in templates/workflows | Repository Templates | 3 | Done |
-| D-09 | Enforce branch protection on protected branches | Branch Governance & Protection | 3 | Done |
-| D-10 | Mobile repository support for React Native + Kotlin paths | Mobile Dev Environment | 5 | Done |
-| D-11 | Reusable GitHub Actions workflow framework | GitHub Actions Workflow Template | 8 | Done |
-| D-12 | Automatic workflow triggers on PR/push flow | Pipeline Triggers and Automation | 5 | Done |
-| D-13 | Frontend automated tests/lint/coverage gates | Test Automation (UAT, E2E, Load) | 5 | Done |
-| D-14 | Build failures block promotion path | Quality Approval Workflows | 3 | Done |
-| D-15 | Frontend build + deployment reusable flow (Vercel) | Frontend Pipeline | 5 | Done |
-| D-16 | Backend Jest/integration/security/lint workflow foundations | Backend Pipeline | 8 | Done |
-| D-17 | Parallelized job design in orchestrators | Pipeline Performance Optimization | 5 | Done |
-| D-18 | Mobile unit test + Gradle + Detox workflow foundations | Mobile Pipeline | 8 | Done |
-| D-19 | Version-tag-driven release support | Pipeline Triggers and Automation | 5 | Done |
-| D-20 | Backend Docker build pipeline foundations | Docker Build and Registry | 5 | Done |
-| D-21 | Image tagging strategy (SHA/version stream) | Docker Build and Registry | 3 | Done |
-| D-22 | Push images to GHCR | Docker Build and Registry | 3 | Done |
-| D-23 | Container vulnerability scanning integrated | Security Rules and Quality Gates | 5 | Done |
-| D-24 | Frontend Vercel deployment pipeline baseline | Frontend Pipeline | 3 | Done |
-| D-25 | Build logs available in GitHub Actions | Pipeline Reporting | 2 | Done |
-| D-26 | Preview deployment support (where configured) | Frontend Pipeline | 3 | Done |
-| D-27 | Mobile Gradle build automation baseline | Mobile Pipeline | 5 | Done |
-| D-28 | Detox E2E on emulator baseline | Test Automation (UAT, E2E, Load) | 5 | Done |
-| D-29 | Production readiness gate workflow baseline | Production Readiness Gate | 5 | Done |
-| D-30 | Audit log generation baseline | Audit Logging & Compliance | 3 | Done |
-| D-31 | Pipeline notification workflow baseline (Slack/Discord) | Pipeline Notifications | 3 | Done |
-
-## 2) Stories Not Done Yet
-
-| ID | Story | Epic | Points | Status |
-|---|---|---|---:|---|
-| N-01 | Centralized API/middleware discovery across tribes | API Center & Routing | 5 | In Progress |
-| N-02 | Clear developer onboarding for branching/docking/middleware flow | Developer Onboarding | 3 | In Progress |
-| N-03 | Permission sync automation by tribe assignment | Identity & Access Management | 5 | In Progress |
-| N-04 | Create back-end project template standardization | Backend Pipeline | 5 | In Progress |
-| N-05 | Include/standardize folder structures across all tribe repos | Repository Templates | 5 | In Progress |
-| N-06 | One-click project initialization from templates | Repository Templates | 8 | In Progress |
-| N-07 | Enforce PR approval policy (2 approvals) across all repos | Quality Approval Workflows | 3 | In Progress |
-| N-08 | API key security and DB consistency integration baseline | DB Integration and Security | 5 | In Progress |
-| N-09 | Centralized workflow secret management hardening | Security Rules and Quality Gates | 5 | In Progress |
-| N-10 | API contract testing standard | Test Automation (UAT, E2E, Load) | 5 | In Progress |
-| N-11 | iOS artifact/release path completion | Mobile Pipeline | 8 | In Progress |
-| N-12 | Unified automated test reporting across streams | Test Reporting and Analytics | 5 | In Progress |
-| N-13 | Pipeline duration/cost analytics | Pipeline Performance Optimization | 3 | In Progress |
-| N-14 | SonarCloud integration for FE/BE/mobile across all repos | SonarCloud Integration | 8 | In Progress |
-| N-15 | SonarCloud PR comment feedback standard | SonarCloud Integration | 3 | Not Started |
-| N-16 | Quality gate visibility and enforcement consistency | Quality Approval Workflows | 5 | In Progress |
-| N-17 | Security rule/hotspot enforcement consistency | Security Rules and Quality Gates | 5 | In Progress |
-| N-18 | Automated code smell/complexity/duplication reporting adoption | SonarCloud Integration | 5 | In Progress |
-| N-19 | Quality gate approval workflow policy | Quality Approval Workflows | 3 | Not Started |
-| N-20 | Pass/fail threshold standardization across all tribes | Quality Approval Workflows | 5 | In Progress |
-| N-21 | Deployment URL comment consistency per repo | Deployment Dashboards | 3 | In Progress |
-| N-22 | Signed production artifact process | Release Management | 8 | In Progress |
-| N-23 | Flaky-test detection and screenshot/report enrichment | Test Reporting and Analytics | 5 | In Progress |
-| N-24 | Staging environment parity with production | Staging Deployment Standards | 8 | In Progress |
-| N-25 | Auto-deploy policy from protected branches per repo type | Staging Deployment Standards | 5 | In Progress |
-| N-26 | Staging URL documentation consistency | Staging Deployment Standards | 3 | In Progress |
-| N-27 | FE/BE/mobile packaging and distribution standard for pre-prod | Staging Deployment Standards | 5 | In Progress |
-| N-28 | APK upload to GitHub Releases standardization | Mobile Release Publish | 5 | Not Started |
-| N-29 | Automated release notes generation | Release Management | 5 | Not Started |
-| N-30 | Health checks/log access for staging deployments | Staging Deployment Standards | 5 | In Progress |
-| N-31 | UAT + E2E automation in staging | Test Automation (UAT, E2E, Load) | 8 | In Progress |
-| N-32 | Selenium for critical flows full rollout | Test Automation (UAT, E2E, Load) | 5 | In Progress |
-| N-33 | Nightly UAT schedule standard | Test Automation (UAT, E2E, Load) | 3 | Not Started |
-| N-34 | Test reports/screenshots consistency | Test Reporting and Analytics | 3 | In Progress |
-| N-35 | Grafana k6 load testing integration full rollout | Load Testing (Grafana k6) | 5 | In Progress |
-| N-36 | Performance threshold gates before production full calibration | Load Testing (Grafana k6) | 5 | In Progress |
-| N-37 | Consolidated cross-repo QA dashboard/reporting | Test Reporting and Analytics | 8 | Not Started |
-| N-38 | Sign-off documentation/checklist standardization | Production Readiness Gate | 3 | In Progress |
-| N-39 | Immutable approval history design | Audit Logging & Compliance | 5 | Not Started |
-| N-40 | Rollback procedure and one-click rollback maturity | Staging Rollback Procedures | 8 | In Progress |
-| N-41 | Rollback documentation per tribe | Staging Rollback Procedures | 3 | In Progress |
-| N-42 | Rich error-detail and routing per tribe | Pipeline Notifications | 5 | In Progress |
-| N-43 | Approval reminder/notification flows | Pipeline Notifications | 3 | In Progress |
-| N-44 | Deployment dashboard across all tribes/repos | Deployment Dashboards | 8 | Not Started |
-| N-45 | Staging uptime/error monitoring dashboard and alerts | Deployment Dashboards | 8 | Not Started |
-| N-46 | API naming convention standard (tribe-owned/shared) | API Center & Routing | 3 | Not Started |
-| N-47 | Gateway routing policy (tribe, shared, cross-tribe) | API Center & Routing | 5 | Not Started |
-| N-48 | API registry/service catalog | API Center & Routing | 8 | Not Started |
-| N-49 | API registry search/discovery | API Center & Routing | 5 | Not Started |
-| N-50 | CI/CD automation for API registration | API Center & Routing | 5 | Not Started |
-
-## 3) Stories Not Added Before, But Already Done //can be put into Stories Done already
-
-These are items that were finished before being explicitly captured as stories.
-
-| ID | Story | Epic | Points | Status |
-|---|---|---|---:|---|
+| D-01 | As a Platform Admin, I want to create a GitHub organization for all tribes so that collaboration and governance are centralized. | Foundation: Repository & Access Strategy | 3 | Done |
+| D-02 | As a Platform Admin, I want to configure tribe-based GitHub teams and access so that permissions are structured by ownership boundaries. | Foundation: Repository & Access Strategy | 5 | Done |
+| D-03 | As a Platform Admin, I want to define and enforce repository governance and naming standards so that all repos are consistent and easier to manage. | Repository Governance | 5 | Done |
+| D-04 | As a Platform Admin, I want to manage tribe permissions with protected access controls so that sensitive branches and resources stay secure. | Repository Governance | 5 | Done |
+| D-05 | As a Platform Admin, I want developer push isolation by repository and tribe model so that cross-tribe change risk is reduced. | Repository Governance | 3 | Done |
+| D-06 | As a DevOps Engineer, I want front-end CI/CD template and caller patterns so that frontend onboarding is fast and standardized. | Frontend Pipeline | 5 | Done |
+| D-07 | As a Mobile Architect, I want mobile CI/CD template and caller patterns so that mobile teams can onboard with consistent automation. | Mobile Pipeline | 5 | Done |
+| D-08 | As a Platform Engineer, I want pipeline configs included in templates and workflows so that repos start with production-ready CI/CD defaults. | Repository Templates | 3 | Done |
+| D-09 | As a Platform Admin, I want branch protection enforced on protected branches so that direct risky changes are prevented. | Branch Governance & Protection | 3 | Done |
+| D-10 | As a Mobile Architect, I want mobile repository support for React Native and Kotlin paths so that mixed-stack mobile repos are supported. | Mobile Dev Environment | 5 | Done |
+| D-11 | As a DevOps Engineer, I want a reusable GitHub Actions workflow framework so that CI/CD logic is standardized across tribes. | GitHub Actions Workflow Template | 8 | Done |
+| D-12 | As a DevOps Engineer, I want automatic workflow triggers on PR and push events so that validation runs consistently without manual steps. | Pipeline Triggers and Automation | 5 | Done |
+| D-13 | As a QA Lead, I want frontend automated test, lint, and coverage gates so that low-quality changes are blocked early. | Test Automation (UAT, E2E, Load) | 5 | Done |
+| D-14 | As a Release Manager, I want build failures to block promotion so that unstable artifacts cannot move to higher environments. | Quality Approval Workflows | 3 | Done |
+| D-15 | As a Front-End Lead, I want a reusable frontend build and Vercel deploy flow so that deployments are predictable and repeatable. | Frontend Pipeline | 5 | Done |
+| D-16 | As a Back-End Lead, I want backend Jest, integration, security, and lint workflow foundations so that backend quality checks are enforced by default. | Backend Pipeline | 8 | Done |
+| D-17 | As a DevOps Engineer, I want parallelized job design in orchestrators so that pipelines complete faster and scale better. | Pipeline Performance Optimization | 5 | Done |
+| D-18 | As a Mobile Lead, I want mobile unit test, Gradle, and Detox workflow foundations so that mobile quality and build checks are automated. | Mobile Pipeline | 8 | Done |
+| D-19 | As a Release Manager, I want version-tag-driven releases so that artifact lineage is traceable and consistent. | Pipeline Triggers and Automation | 5 | Done |
+| D-20 | As a DevOps Engineer, I want backend Docker build pipeline foundations so that backend services can be containerized consistently. | Docker Build and Registry | 5 | Done |
+| D-21 | As a DevOps Engineer, I want an image tagging strategy using SHA and version streams so that container versions are traceable. | Docker Build and Registry | 3 | Done |
+| D-22 | As a DevOps Engineer, I want images pushed to GHCR so that containers are stored in a centralized registry. | Docker Build and Registry | 3 | Done |
+| D-23 | As a Security Engineer, I want container vulnerability scanning integrated so that insecure images are detected before release. | Security Rules and Quality Gates | 5 | Done |
+| D-24 | As a Front-End Lead, I want a baseline frontend Vercel deployment pipeline so that web apps can be deployed consistently from CI. | Frontend Pipeline | 3 | Done |
+| D-25 | As a Developer, I want build logs available in GitHub Actions so that troubleshooting failed runs is quick and clear. | Pipeline Reporting | 2 | Done |
+| D-26 | As a Front-End Lead, I want preview deployment support where configured so that teams can validate changes before promotion. | Frontend Pipeline | 3 | Done |
+| D-27 | As a Mobile Developer, I want baseline mobile Gradle build automation so that Android artifacts are built consistently in CI. | Mobile Pipeline | 5 | Done |
+| D-28 | As a QA Engineer, I want a Detox E2E emulator baseline so that mobile regression coverage runs automatically. | Test Automation (UAT, E2E, Load) | 5 | Done |
+| D-29 | As a Release Manager, I want a production readiness gate baseline so that only validated releases reach production. | Production Readiness Gate | 5 | Done |
+| D-30 | As a Security and Compliance Officer, I want baseline audit log generation so that release and approval activities are traceable. | Audit Logging & Compliance | 3 | Done |
+| D-31 | As a DevOps Engineer, I want baseline pipeline notifications for Slack and Discord so that teams receive timely status updates. | Pipeline Notifications | 3 | Done |
 | BA-01 | As a DevOps Engineer, I want standardized workflow timeouts so that stuck CI jobs fail fast and do not block runner queues. | Pipeline Performance Optimization | 3 | Done |
 | BA-02 | As a Security Engineer, I want explicit least-privilege workflow permissions so that pipelines only receive access required for execution. | Security Rules and Quality Gates | 5 | Done |
 | BA-03 | As a Front-End Lead, I want a frontend standards check (Next.js + strict TypeScript) so that all tribe web repos follow baseline architecture and quality rules. | Frontend Pipeline | 5 | Done |
 | BA-04 | As a Mobile Developer, I want package-manager-aware installs (npm, yarn, pnpm) so that CI runs reliably across different repository setups. | Mobile Pipeline | 3 | Done |
 | BA-05 | As a Mobile Architect, I want stack-aware orchestration (React Native/Expo vs Kotlin) so that each system follows the correct build and test path automatically. | Mobile Dev Environment | 8 | Done |
 | BA-06 | As a Security and Compliance Officer, I want production-gate audit logs generated in CI so that release approvals are traceable for governance. | Audit Logging & Compliance | 3 | Done |
-| BA-07 | As a Platform Admin, I want reusable FE and mobile caller templates (single and multi mode) so that tribe onboarding to central CI/CD is faster and consistent. | Repository Templates | 8 | Done |
+| BA-07 | As a Platform Admin, I want reusable FE and mobile caller templates (single and multi mode) so that tribe onboarding to central CI/CD is faster and consistent. | Repository Templates | 5 | Done |
 | BA-08 | As a DevOps Engineer, I want notification workflows with channel support so that tribes receive pipeline status updates consistently. | Pipeline Notifications | 3 | Done |
 | BA-09 | As a Release Manager, I want promotion PR automation between protected branches so that environment transitions are controlled and repeatable. | Production Readiness Gate | 5 | Done |
 | BA-10 | As a Platform Admin, I want stream-based version tagging so that release artifacts are traceable by system and stream. | Pipeline Triggers and Automation | 3 | Done |
-
-### 3.1) Additional Done Stories Added Now (Not in Prior Tracker List) //can be added to Stories Done already
-
-These are also completed implementations found in central workflows/templates and added now as explicit stories.
-
-| ID | Story | Epic | Points | Status |
-|---|---|---|---:|---|
-| BA-11 | As a Security Engineer, I want a reusable security scan workflow so that all tribe pipelines can run standardized vulnerability checks. | Security Rules and Quality Gates | 5 | Done | asfjnjanokaf
+| BA-11 | As a Security Engineer, I want a reusable security scan workflow so that all tribe pipelines can run standardized vulnerability checks. | Security Rules and Quality Gates | 5 | Done |
 | BA-12 | As a Quality Lead, I want a reusable SonarCloud scan workflow so that static analysis and quality-gate checks are enforced consistently. | SonarCloud Integration | 5 | Done |
 | BA-13 | As a Platform Engineer, I want reusable lint/style checks so that code quality rules are enforced uniformly across repos. | Quality Approval Workflows | 3 | Done |
 | BA-14 | As a Platform Engineer, I want reusable governance checks for web/mobile repositories so that baseline repo standards are validated early. | Repository Governance | 3 | Done |
@@ -141,12 +72,60 @@ These are also completed implementations found in central workflows/templates an
 | BA-19 | As a Mobile QA Engineer, I want a reusable Detox iOS E2E workflow so that iOS regression coverage is automated in CI. | Test Automation (UAT, E2E, Load) | 5 | Done |
 | BA-20 | As a Platform Engineer, I want a reusable Replit deploy workflow so that applicable projects can deploy with standardized automation. | Deployment Dashboards | 3 | Done |
 
-## 4) Stories Not Yet Added, And Still Not Done //add to Stories not Done yet
-
-These exist in the tracker as missing stories to add, but delivery is pending.
+## 2) Stories Not Done Yet
 
 | ID | Story | Epic | Points | Status |
 |---|---|---|---:|---|
+| N-01 | As a Platform Admin, I want centralized API and middleware discovery across tribes so that teams can find and reuse shared services faster. | API Center & Routing | 5 | In Progress |
+| N-02 | As a New Developer, I want clear onboarding for branching, docking, and middleware flow so that I can contribute safely and quickly. | Developer Onboarding | 3 | In Progress |
+| N-03 | As a Platform Admin, I want permission sync automated by tribe assignment so that access stays accurate without manual effort. | Identity & Access Management | 5 | In Progress |
+| N-04 | As a Back-End Lead, I want standardized backend project templates so that new backend repos start with consistent structure and CI readiness. | Backend Pipeline | 5 | In Progress |
+| N-05 | As a Platform Engineer, I want folder structures standardized across tribe repos so that navigation, tooling, and automation stay consistent. | Repository Templates | 5 | In Progress |
+| N-06 | As a Platform Admin, I want one-click project initialization from templates so that team setup time is reduced. | Repository Templates | 8 | In Progress |
+| N-07 | As a Platform Admin, I want PR approval policy enforcement (2 approvals) across all repos so that merge quality is consistent. | Quality Approval Workflows | 3 | In Progress |
+| N-08 | As a Security Engineer, I want API key security and DB consistency baselines integrated so that backend risks are reduced. | DB Integration and Security | 5 | In Progress |
+| N-09 | As a Security Engineer, I want hardened centralized workflow secret management so that secret exposure risk is minimized. | Security Rules and Quality Gates | 5 | In Progress |
+| N-10 | As a QA Lead, I want an API contract testing standard so that interface regressions are detected early. | Test Automation (UAT, E2E, Load) | 5 | In Progress |
+| N-11 | As a Mobile Release Engineer, I want iOS artifact and release path completion so that iOS delivery is fully automated. | Mobile Pipeline | 8 | In Progress |
+| N-12 | As a QA Lead, I want unified automated test reporting across streams so that quality status is visible in one place. | Test Reporting and Analytics | 5 | In Progress |
+| N-13 | As a DevOps Engineer, I want pipeline duration and cost analytics so that optimization decisions are data-driven. | Pipeline Performance Optimization | 3 | In Progress |
+| N-14 | As a Platform Admin, I want SonarCloud integrated across FE, BE, and mobile repos so that quality checks are consistent. | SonarCloud Integration | 8 | In Progress |
+| N-15 | As a Developer, I want SonarCloud PR comment feedback standardized so that code issues are visible directly during review. | SonarCloud Integration | 3 | Not Started |
+| N-16 | As a Platform Admin, I want quality-gate visibility and enforcement consistency so that merge decisions are reliable. | Quality Approval Workflows | 5 | In Progress |
+| N-17 | As a Security Engineer, I want security rule and hotspot enforcement consistency so that vulnerability handling is predictable. | Security Rules and Quality Gates | 5 | In Progress |
+| N-18 | As a Tech Lead, I want automated reporting for code smell, complexity, and duplication so that refactoring priorities are clear. | SonarCloud Integration | 5 | In Progress |
+| N-19 | As a Platform Admin, I want a quality-gate approval workflow policy so that approvals follow a clear governance model. | Quality Approval Workflows | 3 | Not Started |
+| N-20 | As a Platform Admin, I want pass/fail thresholds standardized across tribes so that quality expectations are uniform. | Quality Approval Workflows | 5 | In Progress |
+| N-21 | As a Release Manager, I want deployment URL comments consistent per repo so that reviewers can validate deploys quickly. | Deployment Dashboards | 3 | In Progress |
+| N-22 | As a Release Manager, I want a signed production artifact process so that release integrity can be verified. | Release Management | 8 | In Progress |
+| N-23 | As a QA Engineer, I want flaky-test detection with screenshot/report enrichment so that unstable tests are triaged faster. | Test Reporting and Analytics | 5 | In Progress |
+| N-24 | As a Platform Admin, I want staging parity with production so that pre-production validation is realistic. | Staging Deployment Standards | 8 | In Progress |
+| N-25 | As a DevOps Engineer, I want auto-deploy policy from protected branches by repo type so that release flow is controlled and repeatable. | Staging Deployment Standards | 5 | In Progress |
+| N-26 | As a Developer, I want staging URL documentation standardized so that environment access is clear for every team. | Staging Deployment Standards | 3 | In Progress |
+| N-27 | As a Release Manager, I want FE, BE, and mobile packaging/distribution standards for pre-prod so that handoffs are consistent. | Staging Deployment Standards | 5 | In Progress |
+| N-28 | As a Mobile Release Engineer, I want APK upload to GitHub Releases standardized so that distribution is centralized and auditable. | Mobile Release Publish | 5 | Not Started |
+| N-29 | As a Release Manager, I want automated release notes generation so that change communication is faster and more accurate. | Release Management | 5 | Not Started |
+| N-30 | As an SRE, I want health checks and log access for staging deployments so that issues are detected and diagnosed quickly. | Staging Deployment Standards | 5 | In Progress |
+| N-31 | As a QA Lead, I want UAT and E2E automation in staging so that regression risk is reduced before production promotion. | Test Automation (UAT, E2E, Load) | 8 | In Progress |
+| N-32 | As a QA Lead, I want Selenium rollout for critical flows so that browser-level regression checks cover high-risk paths. | Test Automation (UAT, E2E, Load) | 5 | In Progress |
+| N-33 | As a QA Lead, I want a nightly UAT schedule standard so that critical journeys are validated continuously. | Test Automation (UAT, E2E, Load) | 3 | Not Started |
+| N-34 | As a QA Engineer, I want test reports and screenshots to follow a consistent format so that failures are easier to analyze. | Test Reporting and Analytics | 3 | In Progress |
+| N-35 | As a Performance Engineer, I want Grafana k6 integration fully rolled out so that load testing becomes standard across teams. | Load Testing (Grafana k6) | 5 | In Progress |
+| N-36 | As a Performance Engineer, I want performance threshold gates calibrated before production so that poor performance does not ship. | Load Testing (Grafana k6) | 5 | In Progress |
+| N-37 | As a QA Lead, I want consolidated cross-repo QA dashboards and reporting so that quality posture is visible across tribes. | Test Reporting and Analytics | 8 | Not Started |
+| N-38 | As a Release Manager, I want sign-off documentation and checklist standards so that release approvals are consistent and auditable. | Production Readiness Gate | 3 | In Progress |
+| N-39 | As a Security and Compliance Officer, I want immutable approval history design so that release governance records cannot be tampered with. | Audit Logging & Compliance | 5 | Not Started |
+| N-40 | As a DevOps Engineer, I want rollback procedure and one-click rollback maturity so that incidents can be mitigated quickly. | Staging Rollback Procedures | 8 | In Progress |
+| N-41 | As a Tribe Lead, I want rollback documentation per tribe so that teams can execute recovery consistently. | Staging Rollback Procedures | 3 | In Progress |
+| N-42 | As a DevOps Engineer, I want rich error details and routing per tribe so that alerts reach the right owners with actionable context. | Pipeline Notifications | 5 | In Progress |
+| N-43 | As a Release Manager, I want approval reminder and notification flows so that release steps are not delayed by missed approvals. | Pipeline Notifications | 3 | In Progress |
+| N-44 | As a Platform Admin, I want a deployment dashboard across all tribes and repos so that release visibility is centralized. | Deployment Dashboards | 8 | Not Started |
+| N-45 | As an SRE, I want staging uptime/error monitoring dashboards and alerts so that reliability issues are surfaced early. | Deployment Dashboards | 8 | Not Started |
+| N-46 | As an API Architect, I want API naming convention standards for tribe-owned and shared services so that APIs are consistent and discoverable. | API Center & Routing | 3 | Not Started |
+| N-47 | As an API Architect, I want gateway routing policy for tribe, shared, and cross-tribe traffic so that service boundaries are enforced correctly. | API Center & Routing | 5 | Not Started |
+| N-48 | As a Platform Admin, I want an API registry and service catalog so that teams can discover owned and shared APIs quickly. | API Center & Routing | 8 | Not Started |
+| N-49 | As a Developer, I want API registry search and discovery so that integration setup time is reduced. | API Center & Routing | 5 | Not Started |
+| N-50 | As a DevOps Engineer, I want CI/CD automation for API registration so that service catalogs stay up to date automatically. | API Center & Routing | 5 | Not Started |
 | M-01 | As a Platform Admin, I want each tribe provisioned as a tenant so that users, roles, and access boundaries are isolated by tribe. | Identity & Access Management | 8 | Not Started |
 | M-02 | As a Tribe Lead, I want tenant-scoped role templates (lead/dev/qa) so that access setup is consistent and fast. | Identity & Access Management | 5 | Not Started |
 | M-03 | As a Security and Compliance Officer, I want MFA enforced for privileged roles so that account compromise risk is reduced. | Security Rules and Quality Gates | 5 | Not Started |
@@ -169,7 +148,15 @@ These exist in the tracker as missing stories to add, but delivery is pending.
 | M-20 | As a Product Manager, I want a consolidated release-readiness report so that go/no-go decisions are faster and evidence-based. | Test Reporting and Analytics | 5 | Not Started |
 | M-21 | As a Platform Admin, I want tribe-level DORA-style metrics dashboards so that delivery and reliability trends are visible. | Deployment Dashboards | 8 | Not Started |
 
-## 5) Refactor / Standardization Stories //add to Stories Done
+## 3) Stories Not Added Before, But Already Done
+
+Agent, put stories not added before but already done here, when i ask you to revise the user stories
+
+## 4) Stories Not Yet Added, And Still Not Done
+
+Agent, put stories not added before and not done here, when i ask you to revise the user stories
+
+## 5) Refactor / Standardization Stories
 
 This section tracks architecture cleanup, standardization, and reusable-pipeline refactors.
 
@@ -191,10 +178,10 @@ This section tracks architecture cleanup, standardization, and reusable-pipeline
 
 ## 6) Totals
 
-- Done stories: 31
-- Not done stories (in-progress + not-started): 50
-- Done-before-added stories: 20
-- Missing-and-not-done stories: 21
+- Done stories: 51
+- Not done stories (in-progress + not-started): 71
+- Done-before-added stories: 0
+- Missing-and-not-done stories: 0
 - Refactor stories tracked: 13
 
 ## 7) Notes
