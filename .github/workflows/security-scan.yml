@@ -93,12 +93,12 @@ jobs:
           echo "╔══════════════════════════════════════════════════════╗"
           echo "║          DEPENDENCY AUDIT SUMMARY                    ║"
           echo "╠══════════════════════════════════════════════════════╣"
-          echo "║ Total vulnerabilities:  ${TOTAL}"
-          echo "║   Critical:            ${CRITICAL}"
-          echo "║   High:                ${HIGH}"
-          echo "║   Moderate:            ${MODERATE}"
-          echo "║   Low:                 ${LOW}"
-          echo "║   Info:                ${INFO}"
+          echo "║ Total vulnerabilities:  ${TOTAL}                     ║"
+          echo "║   Critical:            ${CRITICAL}                   ║"
+          echo "║   High:                ${HIGH}                       ║"
+          echo "║   Moderate:            ${MODERATE}                   ║"
+          echo "║   Low:                 ${LOW}                        ║"
+          echo "║   Info:                ${INFO}                       ║"
           echo "╚══════════════════════════════════════════════════════╝"
 
           if [ "${CRITICAL}" -gt 0 ] || [ "${HIGH}" -gt 0 ]; then
