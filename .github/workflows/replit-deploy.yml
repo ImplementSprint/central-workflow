@@ -38,6 +38,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: replit-deploy-${{ inputs.environment }}-${{ inputs.system-name }}
+  cancel-in-progress: false
+
 jobs:
   replit-deploy:
     name: "Deploy to Replit (${{ inputs.environment }})"
@@ -92,7 +96,7 @@ jobs:
             echo "✅ Replit deploy triggered successfully (HTTP ${HTTP_CODE})"
             DEPLOY_URL=$(echo "${BODY}" | jq -r '.url // empty' 2>/dev/null || true)
             if [ -z "${DEPLOY_URL}" ]; then
-              DEPLOY_URL="${REPLIT_DEPLOY_URL}"
+              DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             fi
           else
             echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"

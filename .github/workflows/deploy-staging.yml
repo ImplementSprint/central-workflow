@@ -51,6 +51,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-${{ inputs.deploy-environment }}-${{ inputs.system-name }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: "Deploy to ${{ inputs.deploy-environment }}"
