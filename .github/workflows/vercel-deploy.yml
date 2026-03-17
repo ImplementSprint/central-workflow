@@ -165,6 +165,21 @@ jobs:
 
           echo "url=$URL" >> $GITHUB_OUTPUT
           echo "🚀 Deployed to: $URL"
+
+          # Fetch deployment ID from Vercel API using the deployment URL
+          HOSTNAME="${URL#https://}"
+          DEP_ID=$(curl -sS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments?url=${HOSTNAME}&projectId=${VERCEL_PROJECT_ID}&limit=1" \
+            | jq -r '.deployments[0].uid // ""' 2>/dev/null || true)
+
+          if [ -n "${DEP_ID}" ]; then
+            echo "id=${DEP_ID}" >> $GITHUB_OUTPUT
+            echo "🆔 Deployment ID: ${DEP_ID}"
+          else
+            echo "⚠️ Could not resolve deployment ID from Vercel API — id output will be empty."
+            echo "id=" >> $GITHUB_OUTPUT
+          fi
         working-directory: ${{ steps.prepare.outputs.deploy_dir }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

@@ -33,7 +33,7 @@ on:
       fail-on-vulnerabilities:
         required: false
         type: boolean
-        default: false
+        default: true
         description: "Fail job when HIGH/CRITICAL vulnerabilities are found"
       build-args:
         required: false

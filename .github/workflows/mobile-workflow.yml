@@ -487,7 +487,8 @@ jobs:
           DEFAULT_CMD='npx detox build --configuration ios.sim.debug'
           if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
             echo "ℹ️ Running custom iOS app build command for Detox."
-            eval "${DETOX_IOS_BUILD_COMMAND}"
+            # Use bash -c with the command passed via env var to avoid direct eval of interpolated input
+            bash -c "${DETOX_IOS_BUILD_COMMAND}"
             exit 0
           fi
 
