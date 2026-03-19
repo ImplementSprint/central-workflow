@@ -422,7 +422,7 @@ jobs:
       enable-detox: true
       detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build --configuration android.emu.debug' }}
       detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test --configuration android.emu.debug --headless' }}
-      enable-detox-ios: ${{ matrix.system.enable_detox_ios != false }}
+      enable-detox-ios: true
       detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build --configuration ios.sim.debug' }}
       detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test --configuration ios.sim.debug --cleanup' }}
     secrets: inherit

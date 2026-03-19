@@ -330,6 +330,25 @@ jobs:
       - name: Build Android app binary
         run: ${{ inputs.detox-build-command }}
 
+      - name: Normalize Android APK path for Detox
+        run: |
+          EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "${EXPECTED_APK}" ]; then
+            echo "✅ Android APK already present at expected path: ${EXPECTED_APK}"
+            exit 0
+          fi
+
+          CANDIDATE_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+          if [ -n "${CANDIDATE_APK}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APK}")"
+            cp "${CANDIDATE_APK}" "${EXPECTED_APK}"
+            echo "✅ Normalized Android APK path: ${CANDIDATE_APK} -> ${EXPECTED_APK}"
+          else
+            echo "❌ No Android APK was produced after build."
+            exit 1
+          fi
+
       - name: Archive Android build outputs
         id: archive-android
         run: |
@@ -505,12 +524,32 @@ jobs:
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
             clean build
 
+      - name: Normalize iOS app bundle path for Detox
+        run: |
+          EXPECTED_APP="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
+
+          if [ -d "${EXPECTED_APP}" ]; then
+            echo "✅ iOS app bundle already present at expected path: ${EXPECTED_APP}"
+            exit 0
+          fi
+
+          CANDIDATE_APP=$(find ios/build -type d -name "*.app" | sort | head -n 1)
+          if [ -z "${CANDIDATE_APP}" ]; then
+            echo "❌ No iOS .app bundle was produced after build."
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "${EXPECTED_APP}")"
+          rm -rf "${EXPECTED_APP}"
+          cp -R "${CANDIDATE_APP}" "${EXPECTED_APP}"
+          echo "✅ Normalized iOS app bundle path: ${CANDIDATE_APP} -> ${EXPECTED_APP}"
+
       - name: Archive iOS build outputs
         id: archive-ios
         run: |
-          # Find the .app produced by the build
-          APP_PATH=$(find . -type d -name "*.app" \( -path "*/Products/*" -o -path "*/build/*" \) 2>/dev/null | head -n 1)
-          if [ -z "${APP_PATH}" ]; then
+          # Archive the normalized iOS Detox app bundle path.
+          APP_PATH="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
+          if [ ! -d "${APP_PATH}" ]; then
             echo "❌ iOS .app bundle not found after the app build step."
             exit 1
           fi
