@@ -169,6 +169,26 @@ jobs:
           rm -f detox-android-build.tar.gz
           echo "✅ Extracted pre-built Android artifact."
 
+      - name: Normalize restored APK path
+        if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
+        run: |
+          EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "${EXPECTED_APK}" ]; then
+            echo "✅ Expected APK exists: ${EXPECTED_APK}"
+            exit 0
+          fi
+
+          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+
+          if [ -n "${CANDIDATE}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APK}")"
+            cp "${CANDIDATE}" "${EXPECTED_APK}"
+            echo "✅ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+          else
+            echo "⚠️ No APK candidate found under android/app/build/outputs/apk"
+          fi
+
       - name: Ensure Android Native Project
         if: ${{ !inputs.skip-build }}
         run: |
@@ -198,6 +218,50 @@ jobs:
       - name: Build Android app binary
         if: ${{ !inputs.skip-build }}
         run: ${{ inputs.detox-build-command }}
+
+      - name: Ensure Android app binary exists
+        run: |
+          EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "${EXPECTED_APK}" ]; then
+            echo "✅ Found APK at expected path: ${EXPECTED_APK}"
+            exit 0
+          fi
+
+          echo "ℹ️ Expected APK missing; searching for any generated APK candidate..."
+          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+
+          if [ -n "${CANDIDATE}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APK}")"
+            cp "${CANDIDATE}" "${EXPECTED_APK}"
+            echo "✅ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+            exit 0
+          fi
+
+          echo "ℹ️ No APK candidate found. Triggering fallback build command once..."
+          ${{ inputs.detox-build-command }}
+
+          if [ -f "${EXPECTED_APK}" ]; then
+            echo "✅ Fallback build produced expected APK: ${EXPECTED_APK}"
+            exit 0
+          fi
+
+          CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+          if [ -n "${CANDIDATE_AFTER}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APK}")"
+            cp "${CANDIDATE_AFTER}" "${EXPECTED_APK}"
+            echo "✅ Normalized APK path after fallback build: ${CANDIDATE_AFTER} -> ${EXPECTED_APK}"
+            exit 0
+          fi
+
+          echo "❌ Unable to find or produce APK for Detox."
+          if [ -d "android/app/build/outputs/apk" ]; then
+            echo "📁 APK output tree:"
+            find android/app/build/outputs/apk -maxdepth 4 -type f | sort
+          else
+            echo "📁 APK output directory does not exist: android/app/build/outputs/apk"
+          fi
+          exit 1
 
       - name: Run Detox tests on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
