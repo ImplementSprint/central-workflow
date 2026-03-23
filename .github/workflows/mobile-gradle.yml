@@ -154,7 +154,10 @@ jobs:
       - name: Normalize React Native New Architecture API
         if: ${{ steps.detect.outputs.stack == 'react-native' }}
         run: |
-          mapfile -t MAIN_APP_FILES < <(find . -type f -path '*/android/app/src/main/java/*/MainApplication.java')
+          MAIN_APP_FILES=()
+          while IFS= read -r -d '' f; do
+            MAIN_APP_FILES+=("$f")
+          done < <(find . -type f -path '*/android/app/src/main/java/*/MainApplication.java' -print0)
 
           if [ "${#MAIN_APP_FILES[@]}" -eq 0 ]; then
             echo "ℹ️ No MainApplication.java files found to normalize."

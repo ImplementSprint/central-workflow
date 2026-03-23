@@ -352,14 +352,13 @@ jobs:
       - name: Archive Android build outputs
         id: archive-android
         run: |
-          BUILD_DIR=$(find android -type d -name "build" -path "*/app/build" | head -n 1)
-          if [ -z "${BUILD_DIR}" ]; then
-            echo "❌ Android build outputs not found after the app build step."
+          EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "${EXPECTED_APK}" ]; then
+            echo "❌ Android APK not found at ${EXPECTED_APK} after build."
             exit 1
           fi
-          tar czf detox-android-build.tar.gz "${BUILD_DIR}"
-          echo "artifact_path=${PWD}/detox-android-build.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "✅ Archived Android build outputs."
+          echo "artifact_path=${PWD}/${EXPECTED_APK}" >> "$GITHUB_OUTPUT"
+          echo "✅ Android APK ready for upload."
 
       - name: Upload Android build artifact
         uses: actions/upload-artifact@v4
@@ -548,18 +547,15 @@ jobs:
       - name: Archive iOS build outputs
         id: archive-ios
         run: |
-          # Archive the normalized iOS Detox app bundle path.
           APP_PATH="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
           if [ ! -d "${APP_PATH}" ]; then
             echo "❌ iOS .app bundle not found after the app build step."
             exit 1
           fi
-
-          # Archive only the simulator .app bundle. Archiving the full build/DerivedData
-          # tree balloons the artifact with intermediates, symbols, indexes, and logs.
-          tar czf detox-ios-build.tar.gz "${APP_PATH}"
-          echo "artifact_path=${PWD}/detox-ios-build.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "✅ Archived iOS build outputs."
+          ZIP_PATH="detox-ios-build.app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+          echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "✅ iOS app bundle zipped for upload."
 
       - name: Upload iOS build artifact
         uses: actions/upload-artifact@v4

@@ -136,30 +136,9 @@ jobs:
             cp "${file_path}" "${OUTPUT_DIR}/${target_name}"
           done < <(find "${SOURCE_DIR}" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.ipa" -o -name "*.zip" \) -print0)
 
-          if [ -f "${SOURCE_DIR}/detox-android-build.tar.gz" ]; then
-            mkdir -p "${TEMP_DIR}/android"
-            tar xzf "${SOURCE_DIR}/detox-android-build.tar.gz" -C "${TEMP_DIR}/android"
-
-            APK_PATH=$(find "${TEMP_DIR}/android" -type f -name "*.apk" | sort | head -n 1)
-            if [ -n "${APK_PATH}" ]; then
-              cp "${APK_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-android.apk"
-            fi
-          fi
-
-          if [ -f "${SOURCE_DIR}/detox-ios-build.tar.gz" ] && [ ! -f "${OUTPUT_DIR}/${SYSTEM_NAME}-ios.app.zip" ]; then
-            mkdir -p "${TEMP_DIR}/ios"
-            tar xzf "${SOURCE_DIR}/detox-ios-build.tar.gz" -C "${TEMP_DIR}/ios"
-
-            APP_PATH=$(find "${TEMP_DIR}/ios" -type d -name "*.app" | head -n 1)
-            if [ -n "${APP_PATH}" ]; then
-              APP_PARENT=$(dirname "${APP_PATH}")
-              APP_NAME=$(basename "${APP_PATH}")
-              (
-                cd "${APP_PARENT}"
-                zip -r "${OUTPUT_ABS}/${SYSTEM_NAME}-ios.app.zip" "${APP_NAME}"
-              )
-            fi
-          fi
+          # tar.gz fallback blocks removed — artifacts are now uploaded as
+          # direct .apk (Android) and .app.zip (iOS) files, which the primary
+          # find loop above already handles via the *.apk and *ios*.zip cases.
 
           FILE_COUNT=$(find "${OUTPUT_DIR}" -maxdepth 1 -type f | wc -l)
           if [ "${FILE_COUNT}" -eq 0 ]; then

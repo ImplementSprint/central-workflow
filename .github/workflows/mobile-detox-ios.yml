@@ -137,9 +137,15 @@ jobs:
             echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
           fi
 
-          mapfile -t DETOX_INIT_FILES < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \))
+          DETOX_INIT_FILES=()
+          while IFS= read -r -d '' f; do
+            DETOX_INIT_FILES+=("$f")
+          done < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \) -print0)
           if [ "${#DETOX_INIT_FILES[@]}" -gt 0 ]; then
-            mapfile -t JASMINE_INIT_FILES < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" || true)
+            JASMINE_INIT_FILES=()
+            while IFS= read -r f; do
+              [ -n "$f" ] && JASMINE_INIT_FILES+=("$f")
+            done < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" 2>/dev/null || true)
             if [ "${#JASMINE_INIT_FILES[@]}" -gt 0 ]; then
               echo "❌ Detected legacy Jasmine-based Detox init setup that is incompatible with the installed Jest/Detox runner."
               printf '   - %s\n' "${JASMINE_INIT_FILES[@]}"
@@ -160,9 +166,15 @@ jobs:
       - name: Extract pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
-          tar xzf detox-ios-build.tar.gz
-          rm -f detox-ios-build.tar.gz
-          echo "✅ Extracted pre-built iOS artifact."
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.app.zip" -type f | head -n 1)
+          if [ -n "${ZIP_FILE}" ]; then
+            unzip -o "${ZIP_FILE}"
+            rm -f "${ZIP_FILE}"
+            echo "✅ Extracted pre-built iOS artifact."
+          else
+            echo "❌ No .app.zip found in downloaded artifact."
+            exit 1
+          fi
 
       - name: Normalize restored iOS app bundle path
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
