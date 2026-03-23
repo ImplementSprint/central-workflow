@@ -51,6 +51,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-${{ inputs.deploy-environment }}-${{ inputs.system-name }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: "Deploy to ${{ inputs.deploy-environment }}"
@@ -87,25 +91,50 @@ jobs:
           echo "╚══════════════════════════════════════════════╝"
 
           ENV="${{ inputs.deploy-environment }}"
+          APP_TYPE="${{ inputs.app-type }}"
 
-          # Route deployment by app type
-          case "${{ inputs.app-type }}" in
-            web)
-              echo "🌐 Deploying web app to ${ENV}..."
-              echo "url=https://${{ inputs.system-name }}-${ENV}.vercel.app" >> $GITHUB_OUTPUT
-              ;;
-            api)
-              echo "⚙️ Deploying backend API to ${ENV}..."
-              echo "url=https://${{ inputs.system-name }}-${ENV}.api.example.com" >> $GITHUB_OUTPUT
-              ;;
-            mobile)
-              echo "📱 Publishing mobile APK to ${ENV}..."
-              echo "url=https://github.com/${{ github.repository }}/releases" >> $GITHUB_OUTPUT
+          # Validate supported app type
+          case "${APP_TYPE}" in
+            web|api|mobile) ;;
+            *)
+              echo "❌ Unsupported app-type '${APP_TYPE}'. Expected: web | api | mobile"
+              exit 1
               ;;
           esac
 
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "✅ Deployment to ${ENV} completed"
+          # ── Deployment routing ─────────────────────────────────────────────
+          # NOTE: This workflow is a deployment scaffold. Each project must wire
+          # in its actual deployment commands via repository-level secrets and
+          # vars. The steps below validate that the necessary configuration is
+          # present before proceeding.
+          #
+          # Required secrets / vars per app-type:
+          #   web    → VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (use vercel-deploy.yml)
+          #   api    → configure via your container registry / cloud provider secrets
+          #   mobile → handled by mobile-release-publish.yml
+          #
+          # If you are seeing this message in a pipeline run, it means this
+          # reusable workflow was invoked without a project-specific deployment
+          # implementation. Replace this step with your actual deploy commands.
+
+          case "${APP_TYPE}" in
+            web)
+              echo "🌐 Web deployments should use the vercel-deploy.yml reusable workflow."
+              echo "❌ No web deployment command configured in deploy-staging.yml."
+              echo "   Invoke .github/workflows/vercel-deploy.yml directly from your pipeline instead."
+              exit 1
+              ;;
+            api)
+              echo "⚙️  Backend API deployment not yet configured."
+              echo "❌ Provide real deployment commands (e.g. kubectl, docker push, cloud CLI) here."
+              exit 1
+              ;;
+            mobile)
+              echo "📱 Mobile deployment not yet configured."
+              echo "❌ Use mobile-release-publish.yml for APK/IPA distribution."
+              exit 1
+              ;;
+          esac
 
       - name: Post-Deploy Health Check
         if: ${{ inputs.enable-health-check && inputs.staging-url != '' }}

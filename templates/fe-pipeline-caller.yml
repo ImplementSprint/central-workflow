@@ -81,7 +81,8 @@ permissions:
 
 jobs:
   call-orchestrator:
-    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@main
+    # Pin to a release tag — update when upgrading central-workflow
+    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@v1
     with:
       pipeline_mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pipeline_mode || 'auto' }}
       enable_selenium: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_selenium || 'true') || true }}

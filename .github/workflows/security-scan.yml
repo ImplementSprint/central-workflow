@@ -54,15 +54,19 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
 
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
       - name: Run npm audit
         id: audit
-        continue-on-error: true
+        env:
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
         run: |
           echo "🔍 Running dependency audit..."
           npm audit --json > audit-report.json 2>&1 || true
           npm audit --audit-level=high 2>&1 || AUDIT_EXIT=$?
 
-          if [ "${AUDIT_EXIT:-0}" -ne 0 ] && [ "${{ inputs.fail-on-high }}" = "true" ]; then
+          if [ "${AUDIT_EXIT:-0}" -ne 0 ] && [ "${FAIL_ON_HIGH}" = "true" ]; then
             echo "❌ HIGH/CRITICAL vulnerabilities found"
             npm audit --audit-level=high 2>&1
             exit 1
@@ -140,4 +144,5 @@ jobs:
         run: |
           npx license-checker --production --onlyAllow \
             "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;0BSD;CC0-1.0;Unlicense;Python-2.0;BlueOak-1.0.0" \
-            --summary || echo "⚠️ Some licenses may need manual review"
+            --summary
+          echo "✅ All licenses are compliant"

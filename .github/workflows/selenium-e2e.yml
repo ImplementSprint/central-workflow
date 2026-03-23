@@ -193,12 +193,14 @@ jobs:
           SELENIUM_BROWSER: ${{ matrix.browser }}
           SELENIUM_PARALLEL_MODE: ${{ inputs.parallel-mode }}
           E2E_BASE_URL: ${{ inputs.e2e-base-url }}
+          E2E_TEST_CMD: ${{ inputs.test-command }}
+          E2E_BROWSER: ${{ matrix.browser }}
         run: |
-          CMD='${{ inputs.test-command }}'
-          CMD="${CMD//\{browser\}/${{ matrix.browser }}}"
-          echo "Running browser: ${{ matrix.browser }}"
+          # Substitute {browser} placeholder using env var — avoids eval on raw input
+          CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
+          echo "Running browser: ${E2E_BROWSER}"
           echo "Using local browser execution"
-          eval "${CMD}"
+          bash -c "${CMD}"
 
       - name: Upload E2E Artifacts
         if: ${{ inputs.upload-artifacts && always() }}

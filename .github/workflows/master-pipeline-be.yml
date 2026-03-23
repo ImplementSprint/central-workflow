@@ -38,10 +38,7 @@ on:
         default: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-  security-events: write
+  contents: read
 
 concurrency:
   group: backend-master-${{ github.ref }}
@@ -322,6 +319,10 @@ jobs:
 
   docker-build-main:
     name: "Backend Docker Build — ${{ matrix.service.name }}"
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
     needs: [active-systems, backend-build, backend-security, backend-sonar]
     if: >
       always() &&
@@ -365,6 +366,8 @@ jobs:
 
   version-test:
     name: "Version TEST — ${{ matrix.service.name }}"
+    permissions:
+      contents: write
     needs: [active-systems, backend-build, backend-sonar]
     if: >
       always() &&
@@ -383,6 +386,8 @@ jobs:
 
   version-uat:
     name: "Version UAT — ${{ matrix.service.name }}"
+    permissions:
+      contents: write
     needs: [active-systems, backend-build, backend-sonar]
     if: >
       always() &&
@@ -401,6 +406,8 @@ jobs:
 
   version-main:
     name: "Version MAIN — ${{ matrix.service.name }}"
+    permissions:
+      contents: write
     needs: [active-systems, backend-build, backend-sonar]
     if: >
       always() &&
@@ -472,6 +479,9 @@ jobs:
 
   pr-to-uat:
     name: "Create PR → UAT"
+    permissions:
+      contents: read
+      pull-requests: write
     needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, prepare-promotion-payload, version-test]
     if: >
       always() &&
@@ -497,6 +507,9 @@ jobs:
 
   pr-to-main:
     name: "Create PR → Main"
+    permissions:
+      contents: read
+      pull-requests: write
     needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, prepare-promotion-payload, version-uat]
     if: >
       always() &&

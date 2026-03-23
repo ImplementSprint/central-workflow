@@ -564,6 +564,26 @@ jobs:
       mode: test
       stream: ${{ matrix.system.version_stream }}
 
+  version-uat:
+    name: "Version Tag — UAT (${{ matrix.system.name }})"
+    needs: [frontend, active-systems, sonarcloud]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/uat' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: uat
+      stream: ${{ matrix.system.version_stream }}
+
   deploy-preview:
     name: "${{ (github.ref_name == 'test' || github.base_ref == 'test') && 'TEST' || 'UAT' }} — ${{ matrix.system.name }}"
     needs: [frontend, active-systems, sonarcloud]
@@ -1048,7 +1068,7 @@ jobs:
 
   create-pr-to-main:
     name: "Create PR → Main"
-    needs: [systems-config, frontend, sonarcloud, selenium-e2e-postdeploy, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6]
+    needs: [systems-config, frontend, sonarcloud, selenium-e2e-postdeploy, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6, version-uat]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -1061,7 +1081,8 @@ jobs:
       (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') &&
       needs.enforce-e2e-k6.result == 'success' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
-      needs.prepare-promotion-payload.result == 'success'
+      needs.prepare-promotion-payload.result == 'success' &&
+      needs.version-uat.result == 'success'
     uses: ./.github/workflows/promotion.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
