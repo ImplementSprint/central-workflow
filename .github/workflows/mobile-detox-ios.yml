@@ -164,6 +164,26 @@ jobs:
           rm -f detox-ios-build.tar.gz
           echo "✅ Extracted pre-built iOS artifact."
 
+      - name: Normalize restored iOS app bundle path
+        if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
+        run: |
+          EXPECTED_APP="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
+
+          if [ -d "${EXPECTED_APP}" ]; then
+            echo "✅ Expected iOS app bundle exists: ${EXPECTED_APP}"
+            exit 0
+          fi
+
+          CANDIDATE_APP=$(find ios/build -type d -name "*.app" | sort | head -n 1)
+          if [ -n "${CANDIDATE_APP}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APP}")"
+            rm -rf "${EXPECTED_APP}"
+            cp -R "${CANDIDATE_APP}" "${EXPECTED_APP}"
+            echo "✅ Normalized iOS app bundle path: ${CANDIDATE_APP} -> ${EXPECTED_APP}"
+          else
+            echo "⚠️ No iOS .app candidate found under ios/build"
+          fi
+
       - name: Ensure iOS Native Project
         if: ${{ !inputs.skip-build }}
         run: |
@@ -250,6 +270,50 @@ jobs:
             GCC_TREAT_WARNINGS_AS_ERRORS=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
             clean build
+
+      - name: Ensure iOS app bundle exists
+        run: |
+          EXPECTED_APP="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
+
+          if [ -d "${EXPECTED_APP}" ]; then
+            echo "✅ Found iOS app bundle at expected path: ${EXPECTED_APP}"
+            exit 0
+          fi
+
+          CANDIDATE_APP=$(find ios/build -type d -name "*.app" | sort | head -n 1)
+          if [ -n "${CANDIDATE_APP}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APP}")"
+            rm -rf "${EXPECTED_APP}"
+            cp -R "${CANDIDATE_APP}" "${EXPECTED_APP}"
+            echo "✅ Normalized iOS app bundle path: ${CANDIDATE_APP} -> ${EXPECTED_APP}"
+            exit 0
+          fi
+
+          echo "ℹ️ No iOS .app candidate found. Triggering fallback iOS build command once..."
+          eval "${{ inputs.detox-build-command }}"
+
+          if [ -d "${EXPECTED_APP}" ]; then
+            echo "✅ Fallback build produced expected iOS app bundle: ${EXPECTED_APP}"
+            exit 0
+          fi
+
+          CANDIDATE_AFTER=$(find ios/build -type d -name "*.app" | sort | head -n 1)
+          if [ -n "${CANDIDATE_AFTER}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APP}")"
+            rm -rf "${EXPECTED_APP}"
+            cp -R "${CANDIDATE_AFTER}" "${EXPECTED_APP}"
+            echo "✅ Normalized iOS app bundle path after fallback build: ${CANDIDATE_AFTER} -> ${EXPECTED_APP}"
+            exit 0
+          fi
+
+          echo "❌ Unable to find or produce iOS .app bundle for Detox."
+          if [ -d "ios/build" ]; then
+            echo "📁 iOS build tree:"
+            find ios/build -maxdepth 6 -type d -name "*.app" | sort
+          else
+            echo "📁 iOS build directory does not exist: ios/build"
+          fi
+          exit 1
 
       - name: Run Detox iOS tests
         run: ${{ inputs.detox-test-command }}
