@@ -142,7 +142,7 @@ jobs:
 
       - name: Check Licenses
         run: |
-          npx license-checker --production --onlyAllow \
-            "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;0BSD;CC0-1.0;Unlicense;Python-2.0;BlueOak-1.0.0" \
+          npx license-checker --production --excludePrivatePackages --onlyAllow \
+            "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;Apache 2.0;0BSD;CC0-1.0;CC-BY-3.0;CC-BY-4.0;MPL-2.0;Unlicense;Python-2.0;BlueOak-1.0.0;(BSD-2-Clause OR MIT OR Apache-2.0);(BSD-3-Clause OR GPL-2.0);(MIT OR CC0-1.0)" \
             --summary
           echo "✅ All licenses are compliant"

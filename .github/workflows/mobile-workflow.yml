@@ -571,7 +571,7 @@ jobs:
     if: |
       always() &&
       inputs.enable-detox &&
-      (needs.android-build.result == 'success' || needs.android-build.result == 'skipped') &&
+      needs.android-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
       !contains(needs.mobile-unit-tests.result, 'failure') &&
       !contains(needs.expo-typescript-standard.result, 'cancelled') &&
@@ -594,7 +594,7 @@ jobs:
     if: |
       always() &&
       inputs.enable-detox-ios &&
-      (needs.ios-build.result == 'success' || needs.ios-build.result == 'skipped') &&
+      needs.ios-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
       !contains(needs.mobile-unit-tests.result, 'failure') &&
       !contains(needs.expo-typescript-standard.result, 'cancelled') &&
