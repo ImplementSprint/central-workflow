@@ -122,13 +122,16 @@ permissions:
   security-events: write
 
 concurrency:
-  group: master-pipeline-mobile-${{ github.ref }}
+  group: master-pipeline-mobile-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   systems-config:
     name: "Resolve Mobile Systems Configuration"
-    if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
+    if: >-
+      github.repository != 'ImplementSprint/central-workflow' &&
+      (github.event_name != 'pull_request' ||
+      !contains(fromJson('["test","uat","main"]'), github.head_ref))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

@@ -51,6 +51,16 @@ Build/deploy: Docker build, staging deploy, production gate.
 - Naming: `{system-name}-{type}` (e.g., `MyApp-android-detox-build`)
 - Retention: 14 days for build artifacts, 30 days for audit reports
 
+### Concurrency & Deduplication
+
+- Concurrency groups use `github.head_ref || github.ref_name` (not `github.ref`)
+  so push and PR events on the same branch share one group.
+- `cancel-in-progress: true` cancels the older run when a new one enters the group.
+- Promotion-branch PR syncs (head_ref = test/uat/main) are skipped via a condition
+  on `systems-config` — the push-triggered run handles CI + promotion, and its
+  status checks automatically appear on the PR.
+- Feature-branch PRs (head_ref ≠ test/uat/main) still trigger the pipeline normally.
+
 ### GitHub Actions Condition Patterns
 
 - Build jobs use `always()` + `!contains(needs.*.result, 'failure')` because

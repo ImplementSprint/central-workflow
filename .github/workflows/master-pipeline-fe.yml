@@ -130,12 +130,15 @@ permissions:
   security-events: write
 
 concurrency:
-  group: master-pipeline-${{ github.ref }}
+  group: master-pipeline-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   systems-config:
     name: "Resolve Systems Configuration"
+    if: >-
+      github.event_name != 'pull_request' ||
+      !contains(fromJson('["test","uat","main"]'), github.head_ref)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
