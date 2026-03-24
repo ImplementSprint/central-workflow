@@ -130,23 +130,35 @@ permissions:
   security-events: write
 
 concurrency:
-  group: master-pipeline-${{ github.head_ref || github.ref_name }}
+  group: master-pipeline-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   systems-config:
     name: "Resolve Systems Configuration"
-    if: >-
-      github.event_name != 'pull_request' ||
-      !contains(fromJson('["test","uat","main"]'), github.head_ref)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      systems_json: ${{ steps.resolve.outputs.systems_json }}
-      systems_label: ${{ steps.resolve.outputs.systems_label }}
-      pipeline_mode: ${{ steps.resolve.outputs.pipeline_mode }}
+      systems_json: ${{ steps.skip-check.outputs.skip == 'true' && '[]' || steps.resolve.outputs.systems_json }}
+      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (promotion PR)' || steps.resolve.outputs.systems_label }}
+      pipeline_mode: ${{ steps.skip-check.outputs.skip == 'true' && 'skip' || steps.resolve.outputs.pipeline_mode }}
     steps:
+      - name: Check for promotion PR skip
+        id: skip-check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            case "${{ github.head_ref }}" in
+              test|uat|main)
+                echo "⏭️ Skipping — promotion-branch PR (head=${{ github.head_ref }}). Push run handles CI."
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Resolve systems JSON
+        if: steps.skip-check.outputs.skip != 'true'
         id: resolve
         env:
           FE_SINGLE_SYSTEMS_JSON_VAR: ${{ vars.FE_SINGLE_SYSTEMS_JSON }}
