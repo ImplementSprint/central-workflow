@@ -375,7 +375,7 @@ jobs:
       always() &&
       inputs.enable-ios-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    runs-on: macos-latest
+    runs-on: macos-14
     timeout-minutes: 60
     defaults:
       run:

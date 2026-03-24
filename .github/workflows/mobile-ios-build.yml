@@ -29,7 +29,7 @@ permissions:
 jobs:
   ios-build:
     name: "iOS Simulator Build"
-    runs-on: macos-latest
+    runs-on: macos-14
     timeout-minutes: 60
     defaults:
       run:
