@@ -100,12 +100,12 @@ jobs:
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
-            yarn install --frozen-lockfile --ignore-scripts
+            yarn install --frozen-lockfile
           elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
             corepack enable
-            pnpm install --frozen-lockfile --ignore-scripts
+            pnpm install --frozen-lockfile
           else
-            npm ci --ignore-scripts
+            npm ci
           fi
 
       - name: Select Xcode 26.2
@@ -160,6 +160,15 @@ jobs:
               echo "This usually means keeping Detox lifecycle hooks (beforeAll/afterAll/etc.) but dropping Jasmine globals entirely."
               exit 1
             fi
+          fi
+
+      - name: Prepare Detox iOS framework cache
+        run: |
+          if npx detox --help 2>/dev/null | grep -q "build-framework-cache"; then
+            npx detox clean-framework-cache || true
+            npx detox build-framework-cache
+          else
+            echo "ℹ️ Installed Detox version does not expose framework-cache commands; continuing."
           fi
 
       - name: Download pre-built iOS artifact
