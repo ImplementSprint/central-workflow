@@ -114,6 +114,17 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           xcodebuild -version
 
+      - name: Install applesimutils
+        run: |
+          if command -v applesimutils >/dev/null 2>&1; then
+            echo "✅ applesimutils already installed: $(applesimutils --version)"
+            exit 0
+          fi
+
+          brew tap wix/brew
+          brew install applesimutils
+          echo "✅ Installed applesimutils: $(applesimutils --version)"
+
       - name: Validate Detox installation
         run: |
           if ! node -e "require.resolve('detox/package.json')" >/dev/null 2>&1; then
