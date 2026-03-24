@@ -606,7 +606,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
-      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped' || needs.mobile-expo.result == 'failure') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
@@ -627,7 +627,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
-      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped' || needs.mobile-expo.result == 'failure') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
@@ -648,7 +648,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
-      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped' || needs.mobile-expo.result == 'failure') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
@@ -671,13 +671,13 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
-      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped' || needs.mobile-expo.result == 'failure') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped') &&
       (github.ref != 'refs/heads/test' || needs.version-test.result == 'success') &&
       (github.ref != 'refs/heads/uat' || needs.version-uat.result == 'success') &&
       (github.ref != 'refs/heads/main' || needs.version-main-release.result == 'success') &&
-      (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || needs.mobile-grafana-k6.result == 'success')
+      (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || needs.mobile-grafana-k6.result == 'success' || needs.mobile-grafana-k6.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
