@@ -171,14 +171,25 @@ jobs:
       - name: Extract pre-built Android artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
-          APK=$(find . -maxdepth 1 -name "*.apk" -type f | head -n 1)
-          if [ -n "${APK}" ]; then
-            EXPECTED="android/app/build/outputs/apk/debug/app-debug.apk"
-            mkdir -p "$(dirname "${EXPECTED}")"
-            cp "${APK}" "${EXPECTED}"
-            echo "✅ Placed APK at ${EXPECTED}."
+          EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Restored Android app APK and test APK from artifact."
+            exit 0
+          fi
+
+          APK=$(find . -type f -name "app-debug.apk" | head -n 1)
+          TEST_APK=$(find . -type f -name "*-androidTest.apk" | head -n 1)
+
+          if [ -n "${APK}" ] && [ -n "${TEST_APK}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
+            cp "${APK}" "${EXPECTED_APK}"
+            cp "${TEST_APK}" "${EXPECTED_TEST_APK}"
+            echo "✅ Placed APKs at ${EXPECTED_APK} and ${EXPECTED_TEST_APK}."
           else
-            echo "❌ No APK found in downloaded artifact."
+            echo "❌ Required APKs were not found in downloaded artifact."
             exit 1
           fi
 
@@ -186,20 +197,24 @@ jobs:
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-          if [ -f "${EXPECTED_APK}" ]; then
-            echo "✅ Expected APK exists: ${EXPECTED_APK}"
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Expected APKs exist: ${EXPECTED_APK} and ${EXPECTED_TEST_APK}"
             exit 0
           fi
 
-          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "app-debug.apk" | sort | head -n 1)
+          TEST_CANDIDATE=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
 
-          if [ -n "${CANDIDATE}" ]; then
+          if [ -n "${CANDIDATE}" ] && [ -n "${TEST_CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
             cp "${CANDIDATE}" "${EXPECTED_APK}"
-            echo "✅ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+            cp "${TEST_CANDIDATE}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized APK paths for Detox."
           else
-            echo "⚠️ No APK candidate found under android/app/build/outputs/apk"
+            echo "⚠️ App APK or test APK candidate was not found under android/app/build/outputs/apk"
           fi
 
       - name: Ensure Android Native Project
@@ -235,39 +250,46 @@ jobs:
       - name: Ensure Android app binary exists
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-          if [ -f "${EXPECTED_APK}" ]; then
-            echo "✅ Found APK at expected path: ${EXPECTED_APK}"
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Found app APK and test APK at expected paths."
             exit 0
           fi
 
-          echo "ℹ️ Expected APK missing; searching for any generated APK candidate..."
-          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+          echo "ℹ️ Expected Detox APKs missing; searching for generated APK candidates..."
+          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "app-debug.apk" | sort | head -n 1)
+          TEST_CANDIDATE=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
 
-          if [ -n "${CANDIDATE}" ]; then
+          if [ -n "${CANDIDATE}" ] && [ -n "${TEST_CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
             cp "${CANDIDATE}" "${EXPECTED_APK}"
-            echo "✅ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+            cp "${TEST_CANDIDATE}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized APK paths for Detox."
             exit 0
           fi
 
-          echo "ℹ️ No APK candidate found. Triggering fallback build command once..."
+          echo "ℹ️ APK candidates missing. Triggering fallback build command once..."
           ${{ inputs.detox-build-command }}
 
-          if [ -f "${EXPECTED_APK}" ]; then
-            echo "✅ Fallback build produced expected APK: ${EXPECTED_APK}"
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Fallback build produced expected Detox APKs."
             exit 0
           fi
 
-          CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
-          if [ -n "${CANDIDATE_AFTER}" ]; then
+          CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f -name "app-debug.apk" | sort | head -n 1)
+          TEST_CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
+          if [ -n "${CANDIDATE_AFTER}" ] && [ -n "${TEST_CANDIDATE_AFTER}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
             cp "${CANDIDATE_AFTER}" "${EXPECTED_APK}"
-            echo "✅ Normalized APK path after fallback build: ${CANDIDATE_AFTER} -> ${EXPECTED_APK}"
+            cp "${TEST_CANDIDATE_AFTER}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized APK paths for Detox after fallback build."
             exit 0
           fi
 
-          echo "❌ Unable to find or produce APK for Detox."
+          echo "❌ Unable to find or produce both app APK and test APK for Detox."
           if [ -d "android/app/build/outputs/apk" ]; then
             echo "📁 APK output tree:"
             find android/app/build/outputs/apk -maxdepth 4 -type f | sort

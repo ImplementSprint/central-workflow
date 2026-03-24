@@ -349,16 +349,47 @@ jobs:
             exit 1
           fi
 
+      - name: Normalize Android test APK path for Detox
+        run: |
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+
+          if [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Android test APK already present at expected path: ${EXPECTED_TEST_APK}"
+            exit 0
+          fi
+
+          CANDIDATE_TEST_APK=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
+          if [ -n "${CANDIDATE_TEST_APK}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
+            cp "${CANDIDATE_TEST_APK}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized Android test APK path: ${CANDIDATE_TEST_APK} -> ${EXPECTED_TEST_APK}"
+          else
+            echo "❌ No Android test APK was produced after build."
+            exit 1
+          fi
+
       - name: Archive Android build outputs
         id: archive-android
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
           if [ ! -f "${EXPECTED_APK}" ]; then
             echo "❌ Android APK not found at ${EXPECTED_APK} after build."
             exit 1
           fi
-          echo "artifact_path=${PWD}/${EXPECTED_APK}" >> "$GITHUB_OUTPUT"
-          echo "✅ Android APK ready for upload."
+          if [ ! -f "${EXPECTED_TEST_APK}" ]; then
+            echo "❌ Android test APK not found at ${EXPECTED_TEST_APK} after build."
+            exit 1
+          fi
+
+          ARTIFACT_DIR="android-detox-build-artifact"
+          mkdir -p "${ARTIFACT_DIR}/android/app/build/outputs/apk/debug"
+          mkdir -p "${ARTIFACT_DIR}/android/app/build/outputs/apk/androidTest/debug"
+          cp "${EXPECTED_APK}" "${ARTIFACT_DIR}/android/app/build/outputs/apk/debug/app-debug.apk"
+          cp "${EXPECTED_TEST_APK}" "${ARTIFACT_DIR}/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+
+          echo "artifact_path=${PWD}/${ARTIFACT_DIR}" >> "$GITHUB_OUTPUT"
+          echo "✅ Android app APK and test APK ready for upload."
 
       - name: Upload Android build artifact
         uses: actions/upload-artifact@v4
