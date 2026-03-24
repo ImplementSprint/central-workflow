@@ -125,6 +125,84 @@ jobs:
           brew install applesimutils
           echo "✅ Installed applesimutils: $(applesimutils --version)"
 
+      - name: Resolve Detox iOS simulator type
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const packageJsonPath = 'package.json';
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          const detoxConfig = packageJson.detox;
+
+          if (!detoxConfig || !detoxConfig.devices || typeof detoxConfig.devices !== 'object') {
+            console.log('ℹ️ No package.json Detox device config found; leaving iOS simulator selection unchanged.');
+            process.exit(0);
+          }
+
+          const simulatorEntry = Object.values(detoxConfig.devices).find(
+            entry => entry && entry.type === 'ios.simulator' && entry.device && typeof entry.device.type === 'string',
+          );
+
+          if (!simulatorEntry) {
+            console.log('ℹ️ No Detox ios.simulator device.type found in package.json; leaving config unchanged.');
+            process.exit(0);
+          }
+
+          const configuredType = simulatorEntry.device.type;
+          const supportedDevicesOutput = execSync('applesimutils --list', {
+            encoding: 'utf8',
+            maxBuffer: 4 * 1024 * 1024,
+          });
+          const supportedDevices = JSON.parse(supportedDevicesOutput);
+          const availableIphoneTypes = [
+            ...new Set(
+              supportedDevices
+                .map(device => device?.deviceType?.name)
+                .filter(deviceType => typeof deviceType === 'string' && deviceType.startsWith('iPhone ')),
+            ),
+          ];
+
+          if (availableIphoneTypes.includes(configuredType)) {
+            console.log(`✅ Detox iOS simulator type available on this runner: ${configuredType}`);
+            process.exit(0);
+          }
+
+          const preferredFallbacks = [
+            'iPhone 16 Pro',
+            'iPhone 16 Pro Max',
+            'iPhone 16',
+            'iPhone 16 Plus',
+            'iPhone 15 Pro',
+            'iPhone 15 Pro Max',
+            'iPhone 15',
+            'iPhone 15 Plus',
+            'iPhone 14 Pro',
+            'iPhone 14',
+            'iPhone 13 Pro',
+            'iPhone 13',
+            'iPhone SE (3rd generation)',
+          ];
+
+          const fallbackType =
+            preferredFallbacks.find(deviceType => availableIphoneTypes.includes(deviceType)) ||
+            availableIphoneTypes[0];
+
+          if (!fallbackType) {
+            console.error('❌ No available iPhone simulator device types were found on this runner.');
+            console.error(supportedDevicesOutput);
+            process.exit(1);
+          }
+
+          simulatorEntry.device.type = fallbackType;
+          fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+          console.log(
+            `⚠️ Detox iOS simulator type "${configuredType}" is unavailable on this runner. Falling back to "${fallbackType}".`,
+          );
+          console.log(`ℹ️ Available iPhone simulator types: ${availableIphoneTypes.join(', ')}`);
+          NODE
+
       - name: Validate Detox installation
         run: |
           if ! node -e "require.resolve('detox/package.json')" >/dev/null 2>&1; then
