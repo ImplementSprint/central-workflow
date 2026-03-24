@@ -71,22 +71,22 @@ on:
       detox-build-command:
         required: false
         type: string
-        default: "npx detox build --configuration android.emu.debug"
+        default: "npx detox build -c android.emu.debug"
         description: "Command used to produce the Android app binary for Detox"
       detox-test-command:
         required: false
         type: string
-        default: "npx detox test --configuration android.emu.debug --headless"
+        default: "npx detox test -c android.emu.debug --headless"
         description: "Detox Android test command"
       detox-ios-build-command:
         required: false
         type: string
-        default: "npx detox build --configuration ios.sim.debug"
+        default: "npx detox build -c ios.sim.debug"
         description: "Command used to produce the iOS app binary for Detox"
       detox-ios-test-command:
         required: false
         type: string
-        default: "npx detox test --configuration ios.sim.debug --cleanup"
+        default: "npx detox test -c ios.sim.debug --cleanup"
         description: "Detox iOS test command"
 
 permissions:
@@ -539,7 +539,7 @@ jobs:
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
           DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-ios-build-command }}
         run: |
-          DEFAULT_CMD='npx detox build --configuration ios.sim.debug'
+          DEFAULT_CMD='npx detox build -c ios.sim.debug'
           if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
             echo "ℹ️ Running custom iOS app build command for Detox."
             # Use bash -c with the command passed via env var to avoid direct eval of interpolated input

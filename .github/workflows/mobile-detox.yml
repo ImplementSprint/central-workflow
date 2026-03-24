@@ -25,12 +25,12 @@ on:
       detox-build-command:
         required: false
         type: string
-        default: "npx detox build --configuration android.emu.debug"
+        default: "npx detox build -c android.emu.debug"
         description: "Command used to produce the Android app binary for Detox"
       detox-test-command:
         required: false
         type: string
-        default: "npx detox test --configuration android.emu.debug --headless"
+        default: "npx detox test -c android.emu.debug --headless"
         description: "Command used to execute Detox tests"
       skip-build:
         required: false
@@ -41,7 +41,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "GitHub artifact name containing pre-built Android Detox output (tar.gz)"
+        description: "GitHub artifact name containing pre-built Android Detox output (direct APK files)"
 
 permissions:
   contents: read

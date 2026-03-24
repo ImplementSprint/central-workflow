@@ -216,7 +216,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 6) Pipeline stage architecture
 
-The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a two-stage design:
+The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a three-stage design:
 
 **Stage 1 — Quality gates (parallel):**
 
@@ -225,13 +225,25 @@ The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a two-stage design:
 - Lint check
 - Security scan (npm audit + license compliance)
 
-**Stage 2 — Build & advanced checks (parallel, starts after all Stage 1 gates pass):**
+**Stage 2 — Build binaries (parallel, starts after all Stage 1 gates pass):**
 
-- Detox E2E (default for Expo systems)
-- Expo Android EAS build (artifact downloaded back to GitHub Actions)
-- Expo iOS EAS build (artifact downloaded back to GitHub Actions)
+- Android debug build for Detox (APK + androidTest APK)
+- iOS simulator build for Detox (`.app`, archived as `.app.zip`)
 
-All Stage 2 jobs run in parallel. A failure in any Stage 1 gate blocks Stage 2 entirely.
+**Stage 3 — Detox E2E:**
+
+- Detox Android runs only if Android build succeeded.
+- Detox iOS runs only if iOS build succeeded.
+
+A failure in any Stage 1 gate blocks Stage 2 and Stage 3.
+
+## 6.1) Artifact format and where to download
+
+- GitHub Actions artifacts are always downloaded as an outer ZIP by GitHub.
+- Android artifact contains direct `.apk` files (no inner tar archive expected).
+- iOS artifact intentionally contains `.app.zip`; when extracted, `.app` is shown as a directory because an iOS app bundle is a folder package by design.
+- For pipeline verification, use Actions artifacts from the same run.
+- For distribution-ready files, use GitHub Releases created by `publish-mobile-release`.
 
 **Monorepo-level analysis:**
 
@@ -239,11 +251,10 @@ All Stage 2 jobs run in parallel. A failure in any Stage 1 gate blocks Stage 2 e
 
 ## 7) Platform coverage note
 
-- Current CI implementation includes Expo EAS builds for Android and iOS, plus direct Gradle builds for Kotlin Android systems.
-- Expo baseline: Jest + strict TypeScript + Detox Android emulator + EAS Android/iOS build artifacts.
+- Current CI implementation includes local Android/iOS build artifacts for Expo systems and direct Gradle builds for Kotlin Android systems.
+- Expo baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Detox Android/iOS E2E.
 - Kotlin baseline: direct Gradle Android build artifacts.
-- For Expo systems, the repository must provide `EXPO_TOKEN` and valid EAS credentials/profile configuration.
-- Expo project linkage may be stored in repo config or injected from CI using `EXPO_PROJECT_ID` (with optional `EXPO_OWNER`).
+- EAS credentials are not required for the default Expo pipeline path in this repository.
 
 ## 8) Build with GitHub labels (Expo PRs)
 
