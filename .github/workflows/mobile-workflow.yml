@@ -233,7 +233,7 @@ jobs:
 
   # ── Stage 2A: Local Android Build ──────────────────────────────────────
   android-build:
-    name: "Android App Build for Detox (Debug APK)"
+    name: "Android App Build (.apk)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
@@ -400,7 +400,7 @@ jobs:
 
   # ── Stage 2B: Local iOS Build ────────────────────────────────────────────
   ios-build:
-    name: "iOS Simulator App Build for Detox (.app)"
+    name: "iOS Simulator App Build (.app)"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
