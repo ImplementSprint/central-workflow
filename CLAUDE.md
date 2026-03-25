@@ -11,12 +11,18 @@ All CI/CD pipelines are defined here and consumed by individual repositories via
 
 Three-stage dependency graph — each stage requires the previous to pass:
 
-```
+```text
 Stage 1 (gates, parallel):
   expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security
 
 Stage 2 (builds, require all Stage 1 to pass):
   android-build, ios-build
+
+Stage 2 optional (release artifacts, opt-in):
+  android-release-build (.aab/.apk), ios-release-build (.xcarchive.zip)
+
+Default behavior:
+  release artifact jobs are enabled unless explicitly disabled per system
 
 Stage 3 (E2E, require respective build to succeed):
   mobile-detox       → requires android-build == success
@@ -48,6 +54,9 @@ Build/deploy: Docker build, staging deploy, production gate.
 
 - Android: upload `.apk` directly (not tarred)
 - iOS: use `ditto -c -k` to create `.app.zip` (not tar.gz)
+- Android release (optional): upload direct `.aab`/`.apk` artifacts
+- Android release default task runs `assembleRelease bundleRelease` to produce installable APK and AAB
+- iOS release-prep (optional): upload `.xcarchive.zip` until signed IPA export is enabled
 - Naming: `{system-name}-{type}` (e.g., `MyApp-android-detox-build`)
 - Retention: 14 days for build artifacts, 30 days for audit reports
 
@@ -77,7 +86,7 @@ Build/deploy: Docker build, staging deploy, production gate.
 
 ## Branch Flow
 
-```
+```text
 test → uat → main
 ```
 
@@ -86,7 +95,7 @@ Linear promotion with automated PR creation via `promotion.yml`.
 ## Reusable Workflows
 
 | Workflow | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `mobile-workflow.yml` | Expo mobile CI/CD orchestrator |
 | `mobile-detox.yml` | Android Detox E2E (reusable) |
 | `mobile-detox-ios.yml` | iOS Detox E2E (reusable) |

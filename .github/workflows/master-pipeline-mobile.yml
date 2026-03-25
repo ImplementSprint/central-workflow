@@ -441,6 +441,10 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
+      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
       enable-detox: true
       detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
       detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
