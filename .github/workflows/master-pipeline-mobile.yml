@@ -441,16 +441,39 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
-      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
-      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
-      ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
       enable-detox: true
       detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
       detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
       enable-detox-ios: true
       detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build -c ios.sim.debug' }}
       detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test -c ios.sim.debug --cleanup' }}
+    secrets: inherit
+
+  mobile-expo-release:
+    name: "Mobile Expo Release Build — ${{ matrix.system.name }}"
+    needs: [classify-systems, mobile-expo]
+    if: >-
+      always() &&
+      fromJson(needs.classify-systems.outputs.expo_count) > 0 &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true)
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.expo_systems_json) }}
+    uses: ./.github/workflows/mobile-release-build.yml
+    with:
+      system-dir: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
     secrets: inherit
 
   kotlin-governance:
@@ -673,7 +696,7 @@ jobs:
 
   publish-mobile-release:
     name: "Publish Mobile Release — ${{ matrix.system.name }}"
-    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
+    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-expo-release, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
     if: >-
       always() &&
       github.repository != 'ImplementSprint/central-workflow' &&
@@ -683,6 +706,7 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped' || needs.mobile-expo.result == 'failure') &&
+      (needs.mobile-expo-release.result == 'success' || needs.mobile-expo-release.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped') &&
       (github.ref != 'refs/heads/test' || needs.version-test.result == 'success') &&

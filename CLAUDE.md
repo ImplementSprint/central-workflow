@@ -9,7 +9,7 @@ All CI/CD pipelines are defined here and consumed by individual repositories via
 
 ### Mobile Pipeline (mobile-workflow.yml)
 
-Four-stage dependency graph — each stage requires the previous to pass:
+Three-stage dependency graph — each stage requires the previous to pass:
 
 ```text
 Stage 1 (gates, parallel):
@@ -22,15 +22,14 @@ Stage 3 (E2E, require respective build to succeed):
   mobile-detox       → requires android-build == success
   mobile-detox-ios   → requires ios-build == success
 
-Stage 4 optional (release artifacts, opt-in):
-  android-release-build (.aab/.apk) → requires android-build == success
-                                       and, when enabled, mobile-detox == success
-  ios-release-build (.xcarchive.zip) → requires ios-build == success
-                                        and, when enabled, mobile-detox-ios == success
+Separate release-build lane (master pipeline, Expo systems):
+  mobile-expo-release (runs after mobile-expo success/skipped)
+    → calls reusable `mobile-release-build.yml`
+    → allowed only on test/uat/main
+    → builds optional Android release artifacts (.aab/.apk) and iOS release-prep (.xcarchive.zip)
 
 Default behavior:
-  release artifact jobs are enabled unless explicitly disabled per system
-  if Detox is intentionally disabled, release artifacts still run after build success
+  release artifacts are built in the separate release lane unless explicitly disabled per system
 ```
 
 Orchestrated by `master-pipeline-mobile.yml` which classifies systems (Expo vs Kotlin)
@@ -80,8 +79,7 @@ Build/deploy: Docker build, staging deploy, production gate.
   GitHub Actions skips dependent jobs by default when upstream is skipped.
 - Detox E2E jobs require `needs.<build>.result == 'success'` (strict — no skipped fallback).
 - The `always()` is still needed on Detox jobs because upstream build jobs use `always()`.
-- Release artifact jobs require corresponding build success and require Detox success when
-  Detox is enabled for that platform.
+- Release build lane is branch-gated to test/uat/main and runs after Expo CI lane success/skipped.
 
 ### Security Scanning (security-scan.yml)
 
@@ -103,6 +101,7 @@ Linear promotion with automated PR creation via `promotion.yml`.
 | Workflow | Purpose |
 | ---------- | --------- |
 | `mobile-workflow.yml` | Expo mobile CI/CD orchestrator |
+| `mobile-release-build.yml` | Expo release artifact builder (reusable) |
 | `mobile-detox.yml` | Android Detox E2E (reusable) |
 | `mobile-detox-ios.yml` | iOS Detox E2E (reusable) |
 | `mobile-gradle.yml` | Android Gradle build (reusable) |

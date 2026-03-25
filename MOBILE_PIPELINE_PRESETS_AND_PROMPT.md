@@ -216,7 +216,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 6) Pipeline stage architecture
 
-The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a four-stage design:
+The Expo mobile CI sub-workflow (`mobile-workflow.yml`) uses a three-stage design:
 
 **Stage 1 — Quality gates (parallel):**
 
@@ -235,16 +235,17 @@ The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a four-stage design:
 - Detox Android runs only if Android build succeeded.
 - Detox iOS runs only if iOS build succeeded.
 
-**Stage 4 — Optional release artifacts:**
+A failure in any Stage 1 gate blocks Stage 2 and Stage 3.
 
-- Android release build (`.aab` / `.apk`) runs only if Android build succeeded.
-- iOS release-prep build (`.xcarchive.zip`) runs only if iOS build succeeded.
-- If Detox is enabled for a platform, the corresponding release job also requires Detox success.
-- If Detox is intentionally disabled for a platform, the corresponding release job still runs.
+## 6.1) Separate release-build lane
 
-A failure in any Stage 1 gate blocks Stage 2, Stage 3, and Stage 4.
+Release artifact builds run in a separate reusable workflow (`mobile-release-build.yml`) orchestrated from `master-pipeline-mobile.yml`.
 
-## 6.1) Artifact format and where to download
+- This release lane runs only on `test`, `uat`, and `main`.
+- It runs after the Expo CI lane (`mobile-expo`) has succeeded (or been skipped).
+- It builds optional Android release artifacts (`.aab` / `.apk`) and iOS release-prep archives (`.xcarchive.zip`).
+
+## 6.2) Artifact format and where to download
 
 - GitHub Actions artifacts are always downloaded as an outer ZIP by GitHub.
 - Android artifact contains direct `.apk` files (no inner tar archive expected).
