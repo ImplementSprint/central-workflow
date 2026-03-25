@@ -1,8 +1,9 @@
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ║
-# ║  Stage 1 (gates): test → typescript → lint → security         ║
+# ║  Stage 1 (gates): test → typescript → lint → security          ║
 # ║  Stage 2 (build): local Android build · local iOS build        ║
 # ║  Stage 3 (test):  Detox Android E2E  · Detox iOS E2E           ║
+# ║  Stage 4 (release): optional Android/iOS release artifacts     ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Expo Mobile CI/CD Pipeline"
 
@@ -621,14 +622,19 @@ jobs:
           path: ${{ steps.archive-ios.outputs.artifact_path }}
           retention-days: 14
 
-  # ── Stage 2C: Optional Android Release Build ────────────────────────────
+  # ── Stage 4A: Optional Android Release Build (Detox-gated when enabled) ─
   android-release-build:
     name: "Android Release Build (.aab/.apk)"
-    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build, mobile-detox]
     if: |
       always() &&
       inputs.enable-android-release-build &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+      needs.android-build.result == 'success' &&
+      ( !inputs.enable-detox || needs.mobile-detox.result == 'success' ) &&
+      !contains(needs.expo-typescript-standard.result, 'failure') &&
+      !contains(needs.mobile-unit-tests.result, 'failure') &&
+      !contains(needs.expo-typescript-standard.result, 'cancelled') &&
+      !contains(needs.mobile-unit-tests.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -755,14 +761,19 @@ jobs:
             ${{ inputs.system-dir }}/**/app/build/outputs/**/*.aab
           retention-days: 14
 
-  # ── Stage 2D: Optional iOS Release Prep Build ───────────────────────────
+  # ── Stage 4B: Optional iOS Release Prep Build (Detox-gated when enabled) ─
   ios-release-build:
     name: "iOS Release Prep Build (.xcarchive)"
-    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build, mobile-detox-ios]
     if: |
       always() &&
       inputs.enable-ios-release-build &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+      needs.ios-build.result == 'success' &&
+      ( !inputs.enable-detox-ios || needs.mobile-detox-ios.result == 'success' ) &&
+      !contains(needs.expo-typescript-standard.result, 'failure') &&
+      !contains(needs.mobile-unit-tests.result, 'failure') &&
+      !contains(needs.expo-typescript-standard.result, 'cancelled') &&
+      !contains(needs.mobile-unit-tests.result, 'cancelled')
     runs-on: macos-15
     timeout-minutes: 60
     defaults:

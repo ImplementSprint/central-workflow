@@ -216,7 +216,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 6) Pipeline stage architecture
 
-The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a three-stage design:
+The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a four-stage design:
 
 **Stage 1 — Quality gates (parallel):**
 
@@ -235,7 +235,14 @@ The Expo mobile sub-workflow (`mobile-workflow.yml`) uses a three-stage design:
 - Detox Android runs only if Android build succeeded.
 - Detox iOS runs only if iOS build succeeded.
 
-A failure in any Stage 1 gate blocks Stage 2 and Stage 3.
+**Stage 4 — Optional release artifacts:**
+
+- Android release build (`.aab` / `.apk`) runs only if Android build succeeded.
+- iOS release-prep build (`.xcarchive.zip`) runs only if iOS build succeeded.
+- If Detox is enabled for a platform, the corresponding release job also requires Detox success.
+- If Detox is intentionally disabled for a platform, the corresponding release job still runs.
+
+A failure in any Stage 1 gate blocks Stage 2, Stage 3, and Stage 4.
 
 ## 6.1) Artifact format and where to download
 

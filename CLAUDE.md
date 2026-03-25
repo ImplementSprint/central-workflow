@@ -9,7 +9,7 @@ All CI/CD pipelines are defined here and consumed by individual repositories via
 
 ### Mobile Pipeline (mobile-workflow.yml)
 
-Three-stage dependency graph — each stage requires the previous to pass:
+Four-stage dependency graph — each stage requires the previous to pass:
 
 ```text
 Stage 1 (gates, parallel):
@@ -18,15 +18,19 @@ Stage 1 (gates, parallel):
 Stage 2 (builds, require all Stage 1 to pass):
   android-build, ios-build
 
-Stage 2 optional (release artifacts, opt-in):
-  android-release-build (.aab/.apk), ios-release-build (.xcarchive.zip)
-
-Default behavior:
-  release artifact jobs are enabled unless explicitly disabled per system
-
 Stage 3 (E2E, require respective build to succeed):
   mobile-detox       → requires android-build == success
   mobile-detox-ios   → requires ios-build == success
+
+Stage 4 optional (release artifacts, opt-in):
+  android-release-build (.aab/.apk) → requires android-build == success
+                                       and, when enabled, mobile-detox == success
+  ios-release-build (.xcarchive.zip) → requires ios-build == success
+                                        and, when enabled, mobile-detox-ios == success
+
+Default behavior:
+  release artifact jobs are enabled unless explicitly disabled per system
+  if Detox is intentionally disabled, release artifacts still run after build success
 ```
 
 Orchestrated by `master-pipeline-mobile.yml` which classifies systems (Expo vs Kotlin)
@@ -76,6 +80,8 @@ Build/deploy: Docker build, staging deploy, production gate.
   GitHub Actions skips dependent jobs by default when upstream is skipped.
 - Detox E2E jobs require `needs.<build>.result == 'success'` (strict — no skipped fallback).
 - The `always()` is still needed on Detox jobs because upstream build jobs use `always()`.
+- Release artifact jobs require corresponding build success and require Detox success when
+  Detox is enabled for that platform.
 
 ### Security Scanning (security-scan.yml)
 
