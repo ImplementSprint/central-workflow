@@ -19,7 +19,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       install-command:
         required: false
@@ -157,10 +157,10 @@ jobs:
       result: ${{ steps.run-e2e.outcome }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ inputs.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"

@@ -172,7 +172,7 @@ jobs:
       active_label: ${{ steps.select.outputs.active_label }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -240,7 +240,7 @@ jobs:
     runs-on: ubuntu-latest
     if: fromJson(needs.active-systems.outputs.active_count) > 0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           echo '${{ needs.active-systems.outputs.active_systems_json }}' |
           jq -r '.[].dir' | while read DIR; do
@@ -291,7 +291,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

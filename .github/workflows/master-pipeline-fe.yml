@@ -368,7 +368,7 @@ jobs:
       active_label: ${{ steps.select.outputs.active_label }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -449,7 +449,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate configured system directories exist
         env:
@@ -524,7 +524,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -757,7 +757,7 @@ jobs:
       tags_json: ${{ steps.resolve.outputs.tags_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -824,7 +824,7 @@ jobs:
       versions_json: ${{ steps.build.outputs.versions_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -1228,7 +1228,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ github.token }}

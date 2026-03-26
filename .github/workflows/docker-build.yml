@@ -83,7 +83,7 @@ jobs:
       image-repo: ${{ steps.coords.outputs.image_repo }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

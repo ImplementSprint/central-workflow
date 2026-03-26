@@ -104,7 +104,7 @@ jobs:
       result: ${{ steps.run-k6.outcome }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1

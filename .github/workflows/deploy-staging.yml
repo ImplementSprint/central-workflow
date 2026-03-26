@@ -68,10 +68,10 @@ jobs:
       status: ${{ steps.deploy.outputs.status }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ inputs.artifact-name }}
           path: ./build

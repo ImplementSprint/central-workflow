@@ -20,7 +20,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       coverage-threshold:
         required: false

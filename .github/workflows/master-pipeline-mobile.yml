@@ -297,7 +297,7 @@ jobs:
       active_label: ${{ steps.select.outputs.active_label }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -372,7 +372,7 @@ jobs:
       kotlin_count: ${{ steps.classify.outputs.kotlin_count }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Classify systems by stack
         id: classify
@@ -529,7 +529,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -743,7 +743,7 @@ jobs:
       quality_gates_json: ${{ steps.build.outputs.quality_gates_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -1052,7 +1052,7 @@ jobs:
       quality_gates_json: ${{ steps.build.outputs.quality_gates_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -1238,7 +1238,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ github.token }}

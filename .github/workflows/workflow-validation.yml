@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run actionlint
         uses: docker://rhysd/actionlint:latest
@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Assert mobile caller template contract
         shell: bash

@@ -15,7 +15,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       java-version:
         required: false
@@ -66,7 +66,7 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect project toolchain
         id: detect
@@ -104,7 +104,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect.outputs.stack == 'react-native' && steps.detect.outputs.package_manager == 'npm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
@@ -113,7 +113,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect.outputs.stack == 'react-native' && steps.detect.outputs.package_manager == 'yarn' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "yarn"
@@ -122,7 +122,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
         if: ${{ steps.detect.outputs.stack == 'react-native' && steps.detect.outputs.package_manager == 'pnpm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "pnpm"
@@ -207,7 +207,7 @@ jobs:
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: ${{ inputs.java-version }}
