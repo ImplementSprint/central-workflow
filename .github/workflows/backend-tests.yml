@@ -19,7 +19,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 24
+        default: 22
         description: "Node.js version"
       test-command:
         required: false
