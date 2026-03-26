@@ -85,7 +85,7 @@ Build/deploy: Docker build, staging deploy, production gate.
 
 - `fail-on-high` is relaxed on the `test` branch; enforced on `uat` and `main`.
 - License allowlist covers: MIT, ISC, BSD-2/3-Clause, Apache-2.0, CC-BY-3.0/4.0,
-  MPL-2.0, BlueOak-1.0.0, and common SPDX compound expressions.
+  MPL-2.0, BlueOak-1.0.0, LGPL-3.0-or-later, and common SPDX compound expressions.
 - `--excludePrivatePackages` is used to skip the repo's own UNLICENSED package.
 
 ## Branch Flow
