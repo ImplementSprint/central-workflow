@@ -263,6 +263,46 @@ jobs:
           fi
           exit 1
 
+      - name: Ensure Detox Android testBinaryPath
+        run: |
+          if [ ! -f "package.json" ]; then
+            echo "ℹ️ package.json not found in working directory; skipping Detox config normalization."
+            exit 0
+          fi
+
+          node - <<'NODE'
+          const fs = require('node:fs');
+
+          const pkgPath = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          const detoxConfig = pkg && pkg.detox;
+
+          if (!detoxConfig || typeof detoxConfig !== 'object') {
+            console.log('[detox-config] No detox config found; skipping.');
+            process.exit(0);
+          }
+
+          const configurations = detoxConfig.configurations || {};
+          const apps = detoxConfig.apps || {};
+          const configuration = configurations['android.emu.debug'] || {};
+          const appKey = configuration.app || 'android.debug';
+          const appConfig = apps[appKey];
+
+          if (!appConfig || appConfig.type !== 'android.apk') {
+            console.log(`[detox-config] Android app config "${appKey}" not found; skipping.`);
+            process.exit(0);
+          }
+
+          if (appConfig.testBinaryPath) {
+            console.log(`[detox-config] testBinaryPath already set for "${appKey}".`);
+            process.exit(0);
+          }
+
+          appConfig.testBinaryPath = 'android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk';
+          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
+          console.log(`[detox-config] Added missing testBinaryPath to detox.apps.${appKey}.`);
+          NODE
+
       - name: Run Detox tests on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
