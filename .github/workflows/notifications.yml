@@ -250,6 +250,7 @@ jobs:
 
       - name: Notify Slack
         if: env.HAS_SLACK == 'true'
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
@@ -330,6 +331,7 @@ jobs:
 
       - name: Notify Discord
         if: env.HAS_DISCORD == 'true'
+        continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |

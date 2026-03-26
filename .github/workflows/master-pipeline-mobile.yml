@@ -369,7 +369,7 @@ jobs:
 
             TARGET=""
             case "${STACK_DECLARED}" in
-              expo)
+              expo|react-native|reactnative|rn)
                 TARGET="expo"
                 ;;
               kotlin|android-kotlin|native-kotlin)

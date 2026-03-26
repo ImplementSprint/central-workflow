@@ -349,6 +349,13 @@ jobs:
             exit 1
           fi
 
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-android-apk
+          path: ${{ inputs.system-dir }}/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
       - name: Archive Android build outputs
         id: archive-android
         run: |
@@ -543,6 +550,13 @@ jobs:
           rm -rf "${EXPECTED_APP}"
           cp -R "${CANDIDATE_APP}" "${EXPECTED_APP}"
           echo "✅ Normalized iOS app bundle path: ${CANDIDATE_APP} -> ${EXPECTED_APP}"
+
+      - name: Upload iOS .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-ios-app
+          path: ${{ inputs.system-dir }}/ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app
+          retention-days: 14
 
       - name: Archive iOS build outputs
         id: archive-ios
