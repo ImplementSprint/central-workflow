@@ -309,13 +309,43 @@ jobs:
           script: |
             cd ${{ inputs.working-directory }}
 
-            echo "⏳ Waiting for Android PackageManager service..."
+            echo "⏳ Waiting for Android emulator boot completion..."
             adb wait-for-device
-            bash -lc 'RETRIES=0; MAX_RETRIES=60; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not become available after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
+            bash -lc 'RETRIES=0; MAX_RETRIES=120; until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ Emulator did not report sys.boot_completed=1 after ${MAX_RETRIES}s"; adb shell getprop | head -40 || true; exit 1; fi; sleep 1; done'
+            echo "✅ Emulator boot completed"
+
+            echo "⏳ Waiting for Android PackageManager service..."
+            bash -lc 'RETRIES=0; MAX_RETRIES=120; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not become available after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
             echo "✅ PackageManager service is ready"
+
+            echo "⏳ Validating PackageManager command path..."
+            bash -lc 'RETRIES=0; MAX_RETRIES=60; until adb shell cmd package list packages >/dev/null 2>&1; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ cmd package still unavailable after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
+            echo "✅ cmd package is operational"
 
             adb shell settings put global window_animation_scale 0
             adb shell settings put global transition_animation_scale 0
             adb shell settings put global animator_duration_scale 0
 
-            ${{ inputs.detox-test-command }}
+            echo "▶️ Running Detox tests (attempt 1)..."
+            set +e
+            bash -lc "${{ inputs.detox-test-command }}" > detox-run.log 2>&1
+            DETOX_STATUS=$?
+            set -e
+            cat detox-run.log
+
+            if [ "${DETOX_STATUS}" -eq 0 ]; then
+              exit 0
+            fi
+
+            if grep -q "Can't find service: package" detox-run.log; then
+              echo "⚠️ Detox failed due to transient PackageManager service outage. Retrying once..."
+              adb wait-for-device
+              bash -lc 'RETRIES=0; MAX_RETRIES=90; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not recover after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
+              bash -lc 'adb shell cmd package list packages >/dev/null 2>&1 || true'
+
+              echo "▶️ Running Detox tests (attempt 2)..."
+              bash -lc "${{ inputs.detox-test-command }}"
+              exit $?
+            fi
+
+            exit "${DETOX_STATUS}"
