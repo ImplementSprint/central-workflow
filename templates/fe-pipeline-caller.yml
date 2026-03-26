@@ -24,20 +24,20 @@ on:
         type: choice
         options: [auto, single, multi]
         default: auto
-      enable_selenium:
-        description: "Run Selenium E2E checks"
+      enable_playwright:
+        description: "Run Playwright E2E checks"
         type: boolean
         default: true
-      selenium_browsers:
-        description: "Selenium browser list (JSON array or CSV)"
+      playwright_browsers:
+        description: "Playwright browser list (JSON array or CSV)"
         type: string
-        default: '["chrome"]'
+        default: '["chromium"]'
       e2e_base_url:
-        description: "Optional base URL for Selenium E2E"
+        description: "Optional base URL for Playwright E2E"
         type: string
         default: ""
-      selenium_run_only_on_branch:
-        description: "Branch allowed for Selenium execution"
+      playwright_run_only_on_branch:
+        description: "Branch allowed for Playwright execution"
         type: string
         default: "test,uat"
       enable_grafana_k6:
@@ -85,10 +85,10 @@ jobs:
     uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@v1
     with:
       pipeline_mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pipeline_mode || 'auto' }}
-      enable_selenium: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_selenium || 'true') || true }}
-      selenium_browsers: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.selenium_browsers || '["chrome"]' }}
+      enable_playwright: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_playwright || 'true') || true }}
+      playwright_browsers: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.playwright_browsers || '["chromium"]' }}
       e2e_base_url: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.e2e_base_url || '' }}
-      selenium_run_only_on_branch: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.selenium_run_only_on_branch || 'test,uat' }}
+      playwright_run_only_on_branch: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.playwright_run_only_on_branch || 'test,uat' }}
       enable_grafana_k6: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_grafana_k6 || 'true') || true }}
       k6_script_path: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.k6_script_path || 'tests/performance' }}
       k6_base_url: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.k6_base_url || '' }}

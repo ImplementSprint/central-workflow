@@ -85,11 +85,11 @@ on:
         type: string
         default: ""
         description: "SonarCloud job result"
-      selenium-status:
+      playwright-status:
         required: false
         type: string
         default: ""
-        description: "Selenium E2E job result"
+        description: "Playwright E2E job result"
       grafana-status:
         required: false
         type: string
@@ -377,7 +377,7 @@ jobs:
               --arg lintStatus '${{ inputs['lint-status'] }}' \
               --arg securityStatus '${{ inputs['security-status'] }}' \
               --arg sonarStatus '${{ inputs['sonar-status'] }}' \
-              --arg seleniumStatus '${{ inputs['selenium-status'] }}' \
+              --arg playwrightStatus '${{ inputs['playwright-status'] }}' \
               --arg grafanaStatus '${{ inputs['grafana-status'] }}' \
               --arg enforceStatus '${{ inputs['enforce-gate-status'] }}' \
               --arg versionsJson '${{ inputs['versions-json'] }}' \
@@ -405,7 +405,7 @@ jobs:
                 ($lintStatus | icon) + " Lint · " +
                 ($securityStatus | icon) + " Security\n" +
                 ($sonarStatus | icon) + " SonarCloud · " +
-                ($seleniumStatus | icon) + " Selenium E2E · " +
+                ($playwrightStatus | icon) + " Playwright E2E · " +
                 ($grafanaStatus | icon) + " Grafana k6" +
                 (if ($enforceStatus | length) > 0 then
                   "\n🔒 Enforcement Gate: " + ($enforceStatus | icon) + " `" + $enforceStatus + "`"

@@ -446,7 +446,7 @@ Each environment requires its own set of secrets configured in GitHub:
 Per-environment secrets:
 ├── VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID
 ├── SONAR_TOKEN / SONAR_PROJECT_KEY / SONAR_ORG
-├── E2E_BASE_URL (optional, when Selenium targets non-local URL)
+├── E2E_BASE_URL (optional, when Playwright targets non-local URL)
 ├── K6_CLOUD_TOKEN / K6_CLOUD_PROJECT_ID (when Grafana k6 is enabled)
 ├── DESCOPE_PROJECT_ID / DESCOPE_BASE_URL / DESCOPE_ISSUER
 ├── DESCOPE_M2M_CLIENT_ID / DESCOPE_M2M_CLIENT_SECRET
@@ -468,7 +468,7 @@ Per-environment secrets:
 | Audit log generation | No | No | Yes (365-day retention) |
 | Auto-revert on failure | No | Yes | Yes |
 | Detox E2E (mobile) | No | Yes | No |
-| Selenium E2E (web) | Yes (enforced) | Yes (enforced) | Optional |
+| Playwright E2E (web) | Yes (enforced) | Yes (enforced) | Optional |
 | Grafana k6 (cloud) | Yes (enforced) | Yes (enforced) | Optional |
 | Notification escalation (`@here`) | No | Yes | Yes |
 
@@ -502,7 +502,7 @@ Every push or PR to `test`, `uat`, or `main` triggers the full pipeline:
 │     └→ Code quality + security analysis                     │
 │                                                             │
 │  5. Optional QA Extensions                                  │
-│     ├→ Selenium E2E (multi-browser, local browser mode)    │
+│     ├→ Playwright E2E (multi-browser, local browser mode)    │
 │     └→ Grafana k6 load tests (cloud)                        │
 │                                                             │
 │  6. Branch-Specific Actions                                 │
@@ -589,7 +589,7 @@ Every PR must pass these gates before merge:
 | **Security Audit** | `npm audit` | No HIGH/CRITICAL | Yes |
 | **License Check** | Custom script | Allowlist only | Yes |
 | **SonarCloud** | SonarQube Scanner | Quality gate pass | Yes (when enabled) |
-| **Selenium E2E** | Selenium WebDriver | Browser suite must pass | Yes (mandatory on `test`,`uat`) |
+| **Playwright E2E** | Playwright | Browser suite must pass | Yes (mandatory on `test`,`uat`) |
 | **Grafana k6 Load** | k6 + Grafana Cloud | Load profile must pass | Yes (mandatory on `test`,`uat`) |
 | **Frontend Standards** | Custom check | Next.js + strict TS conventions | Yes (FE repos) |
 | **Governance** | Reusable workflow | Coverage thresholds met | Yes |

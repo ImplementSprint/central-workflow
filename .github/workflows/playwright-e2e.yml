@@ -1,8 +1,8 @@
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║  REUSABLE: Selenium E2E Tests                                  ║
-# ║  Runs Selenium-based browser tests for web systems             ║
+# ║  REUSABLE: Playwright E2E Tests                                ║
+# ║  Runs Playwright-based browser tests for web systems           ║
 # ╚══════════════════════════════════════════════════════════════════╝
-name: "Reusable: Selenium E2E"
+name: "Reusable: Playwright E2E"
 
 on:
   workflow_call:
@@ -30,7 +30,7 @@ on:
         required: false
         type: string
         default: "npm run test:e2e"
-        description: "Selenium E2E command"
+        description: "Playwright E2E command"
       e2e-tests-directory:
         required: false
         type: string
@@ -50,12 +50,12 @@ on:
         required: false
         type: string
         default: "test"
-        description: "Branch name allowed to run Selenium (default: test)"
+        description: "Branch name allowed to run Playwright (default: test)"
       browser-list:
         required: false
         type: string
-        default: '["chrome"]'
-        description: "Browser list as JSON array or CSV (e.g. [\"chrome\",\"firefox\"] or chrome,firefox)"
+        default: '["chromium"]'
+        description: "Browser list as JSON array or CSV (e.g. [\"chromium\",\"firefox\"] or chromium,firefox)"
       parallel-mode:
         required: false
         type: string
@@ -81,7 +81,7 @@ permissions:
 
 jobs:
   prepare:
-    name: "Prepare Selenium Browser Matrix"
+    name: "Prepare Playwright Browser Matrix"
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
@@ -118,7 +118,7 @@ jobs:
 
           RAW="${BROWSER_LIST_INPUT}"
           if [ -z "${RAW}" ]; then
-            RAW='["chrome"]'
+            RAW='["chromium"]'
           fi
 
           if echo "${RAW}" | jq -e . >/dev/null 2>&1; then
@@ -128,19 +128,19 @@ jobs:
           fi
 
           if [ "$(echo "${BROWSERS_JSON}" | jq 'length')" -eq 0 ]; then
-            BROWSERS_JSON='["chrome"]'
+            BROWSERS_JSON='["chromium"]'
           fi
 
-          BROWSERS_JSON=$(echo "${BROWSERS_JSON}" | jq -c 'map(select(. == "chrome" or . == "chromium" or . == "firefox"))')
+          BROWSERS_JSON=$(echo "${BROWSERS_JSON}" | jq -c 'map(select(. == "chromium" or . == "firefox" or . == "webkit"))')
           if [ "$(echo "${BROWSERS_JSON}" | jq 'length')" -eq 0 ]; then
-            BROWSERS_JSON='["chrome"]'
+            BROWSERS_JSON='["chromium"]'
           fi
 
           echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
           echo "browsers_json=${BROWSERS_JSON}" >> "$GITHUB_OUTPUT"
 
-  selenium-e2e:
-    name: "Selenium E2E — ${{ inputs.system-name }}"
+  playwright-e2e:
+    name: "Playwright E2E — ${{ inputs.system-name }}"
     needs: [prepare]
     if: ${{ needs.prepare.outputs.should_run == 'true' }}
     runs-on: ubuntu-latest
@@ -181,17 +181,15 @@ jobs:
           fi
           echo "✅ E2E tests folder found: ${E2E_TESTS_DIRECTORY}"
 
-      - name: Verify browser tools
+      - name: Install Playwright browsers
         run: |
-          echo "Google Chrome path: $(command -v google-chrome || true)"
-          echo "Chromium path: $(command -v chromium-browser || command -v chromium || true)"
-          echo "ChromeDriver path: $(command -v chromedriver || true)"
+          npx playwright install --with-deps chromium firefox webkit
 
-      - name: Run Selenium E2E
+      - name: Run Playwright E2E
         id: run-e2e
         env:
-          SELENIUM_BROWSER: ${{ matrix.browser }}
-          SELENIUM_PARALLEL_MODE: ${{ inputs.parallel-mode }}
+          PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+          PLAYWRIGHT_PARALLEL_MODE: ${{ inputs.parallel-mode }}
           E2E_BASE_URL: ${{ inputs.e2e-base-url }}
           E2E_TEST_CMD: ${{ inputs.test-command }}
           E2E_BROWSER: ${{ matrix.browser }}
@@ -199,14 +197,14 @@ jobs:
           # Substitute {browser} placeholder using env var — avoids eval on raw input
           CMD="${E2E_TEST_CMD//\{browser\}/${E2E_BROWSER}}"
           echo "Running browser: ${E2E_BROWSER}"
-          echo "Using local browser execution"
+          echo "Using Playwright local browser execution"
           bash -c "${CMD}"
 
       - name: Upload E2E Artifacts
         if: ${{ inputs.upload-artifacts && always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.system-name }}-selenium-e2e-${{ matrix.browser }}-artifacts
+          name: ${{ inputs.system-name }}-playwright-e2e-${{ matrix.browser }}-artifacts
           path: |
             ${{ inputs.working-directory }}/${{ inputs.e2e-tests-directory }}/**
             ${{ inputs.working-directory }}/test-results/**
@@ -215,8 +213,8 @@ jobs:
           retention-days: 7
 
   finalize:
-    name: "Finalize Selenium Result"
-    needs: [prepare, selenium-e2e]
+    name: "Finalize Playwright Result"
+    needs: [prepare, playwright-e2e]
     if: always()
     runs-on: ubuntu-latest
     outputs:
@@ -226,7 +224,7 @@ jobs:
         id: finalize
         env:
           SHOULD_RUN: ${{ needs.prepare.outputs.should_run }}
-          MATRIX_RESULT: ${{ needs.selenium-e2e.result }}
+          MATRIX_RESULT: ${{ needs.playwright-e2e.result }}
         run: |
           if [ "${SHOULD_RUN}" != "true" ]; then
             RESULT="skipped"
