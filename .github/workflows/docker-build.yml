@@ -154,7 +154,7 @@ jobs:
       - name: Local Vulnerability Scan
         id: local-scan
         if: ${{ !inputs.push-image && inputs.scan-vulnerabilities }}
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: "image"
           image-ref: "${{ steps.coords.outputs.image_repo }}:${{ github.ref_name }}"
@@ -207,7 +207,7 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ steps.image-ref.outputs.image_ref }}
           format: "sarif"
