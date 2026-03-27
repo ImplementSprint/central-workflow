@@ -470,7 +470,7 @@ jobs:
 
   prepare-promotion-payload:
     name: "Prepare Promotion Payload"
-    needs: [active-systems, deploy-preview, version-test, version-uat]
+    needs: [active-systems, deploy-preview, replit-deploy, version-test, version-uat]
     if: >-
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
@@ -590,13 +590,14 @@ jobs:
 
   notify:
     name: "Notify Backend Pipeline"
-    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, replit-deploy]
+    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, replit-deploy, prepare-promotion-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
       status: ${{ needs.pipeline-summary.result == 'success' && 'success' || needs.pipeline-summary.result == 'cancelled' && 'cancelled' || 'failure' }}
       system-dir: ${{ needs.active-systems.outputs.active_label }}
       pipeline-type: "Backend CI/CD"
+      deployment-urls-json: ${{ needs.prepare-promotion-payload.outputs.deployment_urls_json }}
       tests-status: ${{ needs.backend-build.result }}
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
