@@ -44,7 +44,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci --ignore-scripts
 
-      - name: Validate Next.js + React + Strict TypeScript Standard
+      - name: Validate React + Strict TypeScript Standard (Next.js or Vite)
         run: |
           if [ ! -f "tsconfig.json" ]; then
             echo "❌ tsconfig.json is required for frontend projects."
@@ -59,11 +59,12 @@ jobs:
             const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 
             const hasNext = Boolean(deps.next);
+            const hasVite = Boolean(deps.vite);
             const hasReact = Boolean(deps.react);
             const hasReactDom = Boolean(deps['react-dom']);
             const hasTypeScript = Boolean(deps.typescript);
 
-            if (!hasNext) throw new Error('Frontend standard requires Next.js (dependency \"next\" missing).');
+            if (!hasNext && !hasVite) throw new Error('Frontend standard requires either Next.js (\"next\") or Vite (\"vite\") as the framework.');
             if (!hasReact || !hasReactDom) throw new Error('Frontend standard requires React + ReactDOM (dependencies \"react\" and \"react-dom\").');
             if (!hasTypeScript) throw new Error('Frontend standard requires TypeScript (dependency \"typescript\" missing).');
 
