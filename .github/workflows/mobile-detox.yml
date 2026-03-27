@@ -326,26 +326,5 @@ jobs:
             adb shell settings put global transition_animation_scale 0
             adb shell settings put global animator_duration_scale 0
 
-            echo "▶️ Running Detox tests (attempt 1)..."
-            set +e
-            bash -lc "${{ inputs.detox-test-command }}" > detox-run.log 2>&1
-            DETOX_STATUS=$?
-            set -e
-            cat detox-run.log
-
-            if [ "${DETOX_STATUS}" -eq 0 ]; then
-              exit 0
-            fi
-
-            if grep -q "Can't find service: package" detox-run.log; then
-              echo "⚠️ Detox failed due to transient PackageManager service outage. Retrying once..."
-              adb wait-for-device
-              bash -lc 'RETRIES=0; MAX_RETRIES=90; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not recover after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
-              bash -lc 'adb shell cmd package list packages >/dev/null 2>&1 || true'
-
-              echo "▶️ Running Detox tests (attempt 2)..."
-              bash -lc "${{ inputs.detox-test-command }}"
-              exit $?
-            fi
-
-            exit "${DETOX_STATUS}"
+            echo "▶️ Running Detox tests..."
+            DETOX_CMD="${{ inputs.detox-test-command }}" bash -lc 'set +e; bash -lc "$DETOX_CMD" > detox-run.log 2>&1; DETOX_STATUS=$?; set -e; cat detox-run.log; if [ "$DETOX_STATUS" -eq 0 ]; then exit 0; fi; if grep -q "Can'\''t find service: package" detox-run.log; then echo "⚠️ Detox failed due to transient PackageManager service outage. Retrying once..."; adb wait-for-device; RETRIES=0; MAX_RETRIES=90; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not recover after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done; adb shell cmd package list packages >/dev/null 2>&1 || true; echo "▶️ Running Detox tests (attempt 2)..."; bash -lc "$DETOX_CMD"; exit $?; fi; exit "$DETOX_STATUS"'
