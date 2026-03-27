@@ -3,7 +3,7 @@
 # Copy this file into the target repo at:
 #   .github/workflows/master-pipeline-mobile.yml
 #
-# Works for Expo + TypeScript, Kotlin/Android, and mixed repos.
+# Works for Expo + TypeScript, React Native, Kotlin/Android, and mixed repos.
 # Also used by MB (micro-backend) repositories.
 # The pipeline_mode input controls which SYSTEMS_JSON variable
 # is read (auto = picks multi if available, else single).
@@ -15,6 +15,7 @@
 # Minimal config (all other fields have sensible defaults):
 #
 # { "name": "MyApp-Mobile", "dir": ".", "mobile_stack": "expo" }
+# mobile_stack supported values: expo | react-native | kotlin
 #
 # Optional overrides (showing defaults):
 #   enable_android_build: true   — Local Android app build for Detox (debug APK)
@@ -29,7 +30,7 @@
 # Builds are local (xcodebuild / Gradle) — no EAS or EXPO_TOKEN needed.
 # Detox E2E tests consume build artifacts from the build stage.
 # SonarCloud runs once at the master mobile pipeline level, and Detox
-# runs by default for Expo systems.
+# runs by default for Expo and React Native systems.
 # ──────────────────────────────────────────────────────────────
 name: "Master Pipeline — Mobile"
 

@@ -21,6 +21,7 @@ Allowed values for `mobile_stack`:
 
 - `expo`
 - `kotlin`
+- `react-native`
 
 Minimal single-system example:
 
@@ -105,7 +106,33 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
 }
 ```
 
-### C. Mixed multi (Expo + Kotlin)
+### C. React Native-only single
+
+Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
+
+```json
+{
+  "name": "mobile-react-native",
+  "dir": ".",
+  "mobile_stack": "react-native",
+  "enable_grafana_k6": false,
+  "k6_script_path": "tests/performance",
+  "k6_base_url": "",
+  "k6_run_only_on_branch": "test,uat,main",
+  "node_version": 20,
+  "java_version": "17",
+  "coverage_threshold": 80,
+  "enable_lint": true,
+  "enable_security_scan": true,
+  "enable_governance": true,
+  "enable_android_build": true,
+  "enable_ios_build": true,
+  "enable_detox_ios": true,
+  "version_stream": "mobile-react-native"
+}
+```
+
+### D. Mixed multi (Expo + Kotlin + React Native)
 
 Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
 
@@ -142,6 +169,25 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "enable_gradle": true,
     "gradle_task": "assembleDebug",
     "version_stream": "mobile-kotlin"
+  },
+  {
+    "name": "mobile-react-native",
+    "dir": "apps/mobile-rn",
+    "mobile_stack": "react-native",
+    "enable_grafana_k6": false,
+    "k6_script_path": "tests/performance",
+    "k6_base_url": "",
+    "k6_run_only_on_branch": "test,uat,main",
+    "node_version": 20,
+    "java_version": "17",
+    "coverage_threshold": 80,
+    "enable_lint": true,
+    "enable_security_scan": true,
+    "enable_governance": true,
+    "enable_android_build": true,
+    "enable_ios_build": true,
+    "enable_detox_ios": true,
+    "version_stream": "mobile-react-native"
   }
 ]
 ```
@@ -156,10 +202,11 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 >
 > Inputs:
 >
-> - Scenario: `<expo-single | kotlin-single | mixed-multi>`
+> - Scenario: `<expo-single | kotlin-single | react-native-single | mixed-multi>`
 > - Base folder: `<repo-root or subfolder>`
 > - Expo app folder (if used): `<path>`
 > - Kotlin app folder (if used): `<path>`
+> - React Native app folder (if used): `<path>`
 >
 > Requirements:
 >
@@ -181,8 +228,16 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 >
 > - Gradle wrapper exists (`gradlew` + wrapper files)
 > - Android/Kotlin app structure is valid for `assembleDebug`
+
+> For `react-native-single`, ensure:
+
+> - `package.json` and `tsconfig.json` exist in the RN app folder
+> - `android/` and `ios/` native folders exist
+> - Detox configuration exists (`.detoxrc.js` or `detox` config in `package.json`) with `android.emu.debug` and `ios.sim.debug` configurations
+> - `detox` is installed as a local devDependency and the repo's Jest E2E config is compatible with the installed Detox version
+> - basic test/lint scripts exist in `package.json`
 >
-> For `mixed-multi`, ensure both structures exist in separate folders and are independently buildable.
+> For `mixed-multi`, ensure all configured structures exist in separate folders and are independently buildable.
 >
 > Also create/update `.github/workflows` to include exactly one caller file:
 >
@@ -216,12 +271,12 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 ## 6) Pipeline stage architecture
 
-The Expo mobile CI sub-workflow (`mobile-workflow.yml`) uses a three-stage design:
+The Expo and React Native CI sub-workflows (`mobile-workflow.yml`, `mobile-react-native.yml`) use a three-stage design:
 
 **Stage 1 — Quality gates (parallel):**
 
 - Jest unit tests (+ coverage threshold check)
-- Expo + strict TypeScript standard validation
+- Expo or React Native strict TypeScript standard validation
 - Lint check
 - Security scan (npm audit + license compliance)
 
@@ -242,7 +297,7 @@ A failure in any Stage 1 gate blocks Stage 2 and Stage 3.
 Release artifact builds run in a separate reusable workflow (`mobile-release-build.yml`) orchestrated from `master-pipeline-mobile.yml`.
 
 - This release lane runs only on `test`, `uat`, and `main`.
-- It runs after the Expo CI lane (`mobile-expo`) has succeeded (or been skipped).
+- It runs after the Expo CI lane (`mobile-expo`) and/or React Native CI lane (`mobile-react-native`) has succeeded (or been skipped).
 - It builds optional Android release artifacts (`.aab` / `.apk`) and iOS release-prep archives (`.xcarchive.zip`).
 
 ## 6.2) Artifact format and where to download
@@ -259,8 +314,9 @@ Release artifact builds run in a separate reusable workflow (`mobile-release-bui
 
 ## 7) Platform coverage note
 
-- Current CI implementation includes local Android/iOS build artifacts for Expo systems and direct Gradle builds for Kotlin Android systems.
+- Current CI implementation includes local Android/iOS build artifacts for Expo and React Native systems, plus direct Gradle builds for Kotlin Android systems.
 - Expo baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Detox Android/iOS E2E.
+- React Native baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Detox Android/iOS E2E.
 - Kotlin baseline: direct Gradle Android build artifacts.
 - EAS credentials are not required for the default Expo pipeline path in this repository.
 

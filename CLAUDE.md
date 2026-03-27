@@ -7,13 +7,14 @@ All CI/CD pipelines are defined here and consumed by individual repositories via
 
 ## Pipeline Architecture
 
-### Mobile Pipeline (mobile-workflow.yml)
+### Mobile Pipeline (mobile-workflow.yml + mobile-react-native.yml)
 
 Three-stage dependency graph — each stage requires the previous to pass:
 
 ```text
 Stage 1 (gates, parallel):
-  expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security
+  expo-typescript-standard OR rn-typescript-standard,
+  mobile-unit-tests, mobile-lint, mobile-security
 
 Stage 2 (builds, require all Stage 1 to pass):
   android-build, ios-build
@@ -22,8 +23,13 @@ Stage 3 (E2E, require respective build to succeed):
   mobile-detox       → requires android-build == success
   mobile-detox-ios   → requires ios-build == success
 
-Separate release-build lane (master pipeline, Expo systems):
+Separate release-build lanes (master pipeline):
   mobile-expo-release (runs after mobile-expo success/skipped)
+    → calls reusable `mobile-release-build.yml`
+    → allowed only on test/uat/main
+    → builds optional Android release artifacts (.aab/.apk) and iOS release-prep (.xcarchive.zip)
+
+  mobile-react-native-release (runs after mobile-react-native success/skipped)
     → calls reusable `mobile-release-build.yml`
     → allowed only on test/uat/main
     → builds optional Android release artifacts (.aab/.apk) and iOS release-prep (.xcarchive.zip)
@@ -32,8 +38,8 @@ Default behavior:
   release artifacts are built in the separate release lane unless explicitly disabled per system
 ```
 
-Orchestrated by `master-pipeline-mobile.yml` which classifies systems (Expo vs Kotlin)
-and routes to `mobile-workflow.yml` or `mobile-gradle.yml` accordingly.
+Orchestrated by `master-pipeline-mobile.yml` which classifies systems (Expo vs Kotlin vs React Native)
+and routes to `mobile-workflow.yml`, `mobile-react-native.yml`, or `mobile-gradle.yml` accordingly.
 
 ### Frontend Pipeline (front-end-workflow.yml)
 
@@ -79,7 +85,7 @@ Build/deploy: Docker build, staging deploy, production gate.
   GitHub Actions skips dependent jobs by default when upstream is skipped.
 - Detox E2E jobs require `needs.<build>.result == 'success'` (strict — no skipped fallback).
 - The `always()` is still needed on Detox jobs because upstream build jobs use `always()`.
-- Release build lane is branch-gated to test/uat/main and runs after Expo CI lane success/skipped.
+- Release build lanes are branch-gated to test/uat/main and run after Expo/RN CI lane success/skipped.
 
 ### Security Scanning (security-scan.yml)
 
@@ -101,11 +107,13 @@ Linear promotion with automated PR creation via `promotion.yml`.
 | Workflow | Purpose |
 | ---------- | --------- |
 | `mobile-workflow.yml` | Expo mobile CI/CD orchestrator |
+| `mobile-react-native.yml` | React Native mobile CI/CD orchestrator |
 | `mobile-release-build.yml` | Expo release artifact builder (reusable) |
 | `mobile-detox.yml` | Android Detox E2E (reusable) |
 | `mobile-detox-ios.yml` | iOS Detox E2E (reusable) |
 | `mobile-gradle.yml` | Android Gradle build (reusable) |
 | `mobile-ios-build.yml` | iOS xcodebuild (reusable) |
+| `mobile-rn-ios-build.yml` | React Native iOS xcodebuild (reusable) |
 | `security-scan.yml` | Dependency audit + license check |
 | `front-end-workflow.yml` | Frontend CI/CD orchestrator |
 | `backend-workflow.yml` | Backend CI/CD orchestrator |

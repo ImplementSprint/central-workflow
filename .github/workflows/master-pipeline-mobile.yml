@@ -534,18 +534,51 @@ jobs:
       fail-fast: false
       matrix:
         system: ${{ fromJson(needs.classify-systems.outputs.react_native_systems_json) }}
-    uses: ./.github/workflows/mobile-gradle.yml
+    uses: ./.github/workflows/mobile-react-native.yml
     with:
-      working-directory: ${{ matrix.system.dir }}
+      system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
       node-version: ${{ matrix.system.node_version || 20 }}
       java-version: ${{ matrix.system.java_version || '17' }}
-      project-type: react-native
-      gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
-      enable-docker-build: ${{ matrix.system.enable_docker_build == true }}
-      docker-image-name: ${{ matrix.system.docker_image || '' }}
-      dockerfile-path: ${{ matrix.system.dockerfile_path || 'Dockerfile' }}
-      upload-artifact: true
+      coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
+      enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
+      enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
+      enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
+      enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
+      enable-detox: true
+      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
+      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
+      enable-detox-ios: ${{ matrix.system.enable_detox_ios == true || matrix.system.enable_detox_ios == null }}
+      detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build -c ios.sim.debug' }}
+      detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test -c ios.sim.debug --cleanup' }}
+
+  mobile-react-native-release:
+    name: "Mobile React Native Release Build — ${{ matrix.system.name }}"
+    needs: [classify-systems, mobile-react-native]
+    if: >-
+      always() &&
+      fromJson(needs.classify-systems.outputs.react_native_count) > 0 &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true)
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.react_native_systems_json) }}
+    uses: ./.github/workflows/mobile-release-build.yml
+    with:
+      system-dir: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
+    secrets: inherit
 
   sonarcloud-mobile:
     name: "SonarCloud — Mobile Monorepo Analysis"
@@ -732,7 +765,7 @@ jobs:
 
   publish-mobile-release:
     name: "Publish Mobile Release — ${{ matrix.system.name }}"
-    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-expo-release, mobile-kotlin, mobile-react-native, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
+    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-expo-release, mobile-kotlin, mobile-react-native, mobile-react-native-release, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
     if: >-
       always() &&
       github.repository != 'ImplementSprint/central-workflow' &&
@@ -745,6 +778,7 @@ jobs:
       (needs.mobile-expo-release.result == 'success' || needs.mobile-expo-release.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-react-native-release.result == 'success' || needs.mobile-react-native-release.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped') &&
       (github.ref != 'refs/heads/test' || needs.version-test.result == 'success') &&
       (github.ref != 'refs/heads/uat' || needs.version-uat.result == 'success') &&
@@ -1273,6 +1307,7 @@ jobs:
         kotlin-governance,
         mobile-kotlin,
         mobile-react-native,
+        mobile-react-native-release,
         k6-systems,
         mobile-grafana-k6,
         sonarcloud-mobile,

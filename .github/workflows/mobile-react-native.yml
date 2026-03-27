@@ -1,0 +1,300 @@
+name: "React Native Mobile CI/CD Pipeline"
+
+on:
+  workflow_call:
+    inputs:
+      system-dir:
+        required: false
+        type: string
+        default: "."
+        description: "React Native project directory (e.g. app folder, or '.' for root)"
+      system-name:
+        required: true
+        type: string
+        description: "System name for artifacts/display"
+      node-version:
+        required: false
+        type: number
+        default: 24
+        description: "Node.js version"
+      java-version:
+        required: false
+        type: string
+        default: "17"
+        description: "JDK version for Android builds"
+      coverage-threshold:
+        required: false
+        type: number
+        default: 80
+        description: "Minimum code coverage percentage"
+      enable-lint:
+        required: false
+        type: boolean
+        default: true
+        description: "Run lint checks"
+      enable-security-scan:
+        required: false
+        type: boolean
+        default: true
+        description: "Run security scanning"
+      enable-governance:
+        required: false
+        type: boolean
+        default: true
+        description: "Reserved for compatibility"
+      enable-android-build:
+        required: false
+        type: boolean
+        default: true
+        description: "Run Android app build"
+      enable-ios-build:
+        required: false
+        type: boolean
+        default: true
+        description: "Run iOS simulator app build"
+      enable-detox:
+        required: false
+        type: boolean
+        default: true
+        description: "Run Detox Android E2E tests"
+      enable-detox-ios:
+        required: false
+        type: boolean
+        default: true
+        description: "Run Detox iOS E2E tests"
+      detox-build-command:
+        required: false
+        type: string
+        default: "npx detox build -c android.emu.debug"
+        description: "Detox Android build command (used when skip-build is false)"
+      detox-test-command:
+        required: false
+        type: string
+        default: "npx detox test -c android.emu.debug --headless"
+        description: "Detox Android test command"
+      detox-ios-build-command:
+        required: false
+        type: string
+        default: "npx detox build -c ios.sim.debug"
+        description: "Detox iOS build command (used when skip-build is false)"
+      detox-ios-test-command:
+        required: false
+        type: string
+        default: "npx detox test -c ios.sim.debug --cleanup"
+        description: "Detox iOS test command"
+
+permissions:
+  contents: read
+
+jobs:
+  rn-typescript-standard:
+    name: "React Native — TypeScript Standard"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./${{ inputs.system-dir }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Validate React Native + TypeScript standard
+        run: |
+          if [ ! -f "package.json" ]; then
+            echo "❌ package.json is required for React Native systems."
+            exit 1
+          fi
+
+          if [ ! -f "tsconfig.json" ]; then
+            echo "❌ tsconfig.json is required for React Native systems."
+            exit 1
+          fi
+
+          if [ ! -d "android" ]; then
+            echo "❌ android/ directory is required for React Native systems."
+            exit 1
+          fi
+
+          if [ ! -d "ios" ]; then
+            echo "❌ ios/ directory is required for React Native systems."
+            exit 1
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const deps = {
+            ...(pkg.dependencies || {}),
+            ...(pkg.devDependencies || {}),
+            ...(pkg.peerDependencies || {}),
+          };
+
+          if (!deps['react-native']) {
+            throw new Error('React Native standard requires dependency "react-native".');
+          }
+
+          if (!deps.typescript) {
+            throw new Error('React Native standard requires dependency "typescript".');
+          }
+
+          const tsconfig = JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));
+          if (!(tsconfig.compilerOptions && tsconfig.compilerOptions.strict === true)) {
+            throw new Error('React Native standard requires tsconfig.compilerOptions.strict=true.');
+          }
+
+          const ignoreDirs = new Set(['node_modules', 'android', 'ios', '.git', 'dist', 'build', 'coverage']);
+          const sourceDirs = ['app', 'src', 'components', 'screens', 'features', 'hooks', 'utils'];
+          const jsLike = [];
+          let hasTsSource = false;
+
+          function walk(target) {
+            const entries = fs.readdirSync(target, { withFileTypes: true });
+            for (const entry of entries) {
+              if (entry.name.startsWith('.')) {
+                continue;
+              }
+
+              const fullPath = path.join(target, entry.name);
+              if (entry.isDirectory()) {
+                if (!ignoreDirs.has(entry.name)) {
+                  walk(fullPath);
+                }
+                continue;
+              }
+
+              if (/\.(ts|tsx)$/i.test(entry.name)) {
+                hasTsSource = true;
+              }
+
+              if (/\.(js|jsx)$/i.test(entry.name)) {
+                jsLike.push(fullPath.replace(/\\/g, '/'));
+              }
+            }
+          }
+
+          for (const sourceDir of sourceDirs) {
+            if (fs.existsSync(sourceDir) && fs.statSync(sourceDir).isDirectory()) {
+              walk(sourceDir);
+            }
+          }
+
+          for (const rootFile of ['App.ts', 'App.tsx']) {
+            if (fs.existsSync(rootFile)) {
+              hasTsSource = true;
+            }
+          }
+
+          for (const rootFile of ['App.js', 'App.jsx']) {
+            if (fs.existsSync(rootFile)) {
+              jsLike.push(rootFile);
+            }
+          }
+
+          if (!hasTsSource) {
+            throw new Error('React Native standard requires TypeScript application source files (.ts/.tsx).');
+          }
+
+          if (jsLike.length > 0) {
+            throw new Error('React Native standard forbids JS/JSX application source files. Found:\n' + jsLike.slice(0, 20).join('\n'));
+          }
+          NODE
+
+  mobile-unit-tests:
+    name: "Mobile — Jest Unit Tests"
+    uses: ./.github/workflows/mobile-tests.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      test-command: "npx jest --coverage --verbose --ci --forceExit --runInBand"
+      coverage-threshold: ${{ inputs.coverage-threshold }}
+
+  mobile-lint:
+    name: "Mobile — Lint Check"
+    if: ${{ inputs.enable-lint }}
+    uses: ./.github/workflows/lint-check.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+
+  mobile-security:
+    name: "Mobile — Security Scan"
+    if: ${{ inputs.enable-security-scan }}
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
+
+  android-build:
+    name: "Android App Build (.apk)"
+    needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    if: |
+      always() &&
+      inputs.enable-android-build &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-gradle.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      java-version: ${{ inputs.java-version }}
+      project-type: react-native
+      gradle-task: "assembleDebug assembleAndroidTest"
+      enable-docker-build: false
+      upload-artifact: true
+
+  ios-build:
+    name: "iOS Simulator App Build (.app)"
+    needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
+    if: |
+      always() &&
+      inputs.enable-ios-build &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-rn-ios-build.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      upload-artifact: true
+
+  mobile-detox:
+    name: "Detox Android E2E"
+    needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
+    if: |
+      always() &&
+      inputs.enable-detox &&
+      needs.android-build.result == 'success' &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-detox.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      java-version: ${{ inputs.java-version }}
+      detox-build-command: ${{ inputs.detox-build-command }}
+      detox-test-command: ${{ inputs.detox-test-command }}
+      skip-build: true
+      build-artifact-name: ${{ format('{0}-android-build', inputs.system-name) }}
+
+  mobile-detox-ios:
+    name: "Detox iOS E2E"
+    needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
+    if: |
+      always() &&
+      inputs.enable-detox-ios &&
+      needs.ios-build.result == 'success' &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/mobile-detox-ios.yml
+    with:
+      working-directory: ${{ inputs.system-dir }}
+      system-name: ${{ inputs.system-name }}
+      node-version: ${{ inputs.node-version }}
+      detox-build-command: ${{ inputs.detox-ios-build-command }}
+      detox-test-command: ${{ inputs.detox-ios-test-command }}
+      skip-build: true
+      build-artifact-name: ${{ format('{0}-ios-simulator-build', inputs.system-name) }}
