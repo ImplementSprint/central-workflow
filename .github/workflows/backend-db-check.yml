@@ -20,7 +20,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 22
+        default: 24
         description: "Node.js version"
       migration-command:
         required: false
