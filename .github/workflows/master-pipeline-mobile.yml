@@ -534,6 +534,10 @@ jobs:
       fail-fast: false
       matrix:
         system: ${{ fromJson(needs.classify-systems.outputs.react_native_systems_json) }}
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
     uses: ./.github/workflows/mobile-react-native.yml
     with:
       system-dir: ${{ matrix.system.dir }}

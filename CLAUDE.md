@@ -86,6 +86,9 @@ Build/deploy: Docker build, staging deploy, production gate.
 - Detox E2E jobs require `needs.<build>.result == 'success'` (strict — no skipped fallback).
 - The `always()` is still needed on Detox jobs because upstream build jobs use `always()`.
 - Release build lanes are branch-gated to test/uat/main and run after Expo/RN CI lane success/skipped.
+- For nested reusable workflows, caller jobs must explicitly grant any permissions
+  requested by nested jobs (for example `packages: write` and `security-events: write`
+  for docker build + SARIF upload paths), or GitHub will reject the workflow at parse time.
 
 ### Security Scanning (security-scan.yml)
 
