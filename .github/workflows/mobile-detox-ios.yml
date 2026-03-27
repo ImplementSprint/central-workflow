@@ -270,13 +270,18 @@ jobs:
       - name: Extract pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
-          ZIP_FILE=$(find . -maxdepth 1 -name "*.app.zip" -type f | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 2 -type f \( -name "*.app.zip" -o -name "*-ios-simulator-app.zip" \) | head -n 1)
+
+          if [ -z "${ZIP_FILE}" ]; then
+            ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+          fi
+
           if [ -n "${ZIP_FILE}" ]; then
             unzip -o "${ZIP_FILE}"
             rm -f "${ZIP_FILE}"
-            echo "✅ Extracted pre-built iOS artifact."
+            echo "✅ Extracted pre-built iOS artifact: ${ZIP_FILE}"
           else
-            echo "❌ No .app.zip found in downloaded artifact."
+            echo "❌ No iOS zip artifact found in downloaded artifact payload."
             exit 1
           fi
 

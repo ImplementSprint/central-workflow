@@ -304,8 +304,9 @@ jobs:
           api-level: 30
           arch: x86_64
           profile: pixel_5
+          emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: true
+          disable-animations: false
           script: |
             cd ${{ inputs.working-directory }}
 
