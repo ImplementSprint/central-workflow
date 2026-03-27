@@ -157,7 +157,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: "image"
-          image-ref: "${{ steps.coords.outputs.image_repo }}:${{ github.ref_name }}"
+          image-ref: "${{ steps.coords.outputs.image_repo }}:sha-${{ github.sha }}"
           format: "table"
           severity: "CRITICAL,HIGH"
           scanners: "vuln"
