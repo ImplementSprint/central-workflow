@@ -342,7 +342,22 @@ jobs:
             exit 0
           fi
 
-          CANDIDATE_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+          CANDIDATE_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" \
+            | awk '
+              function score(path, s, lower) {
+                s = 0
+                lower = tolower(path)
+                if (lower ~ /\/app\/build\/outputs\/apk\/debug\/app-debug\.apk$/) s += 10000
+                if (lower ~ /\/debug\//) s += 1000
+                if (lower ~ /x86_64/) s += 500
+                if (lower ~ /universal/) s += 300
+                if (lower ~ /androidtest/) s -= 5000
+                if (lower ~ /release/) s -= 2000
+                if (lower ~ /unsigned/) s -= 500
+                return s
+              }
+              { print score($0) "\t" $0 }
+            ' | sort -nr | head -n 1 | cut -f2-)
           if [ -n "${CANDIDATE_APK}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE_APK}" "${EXPECTED_APK}"
