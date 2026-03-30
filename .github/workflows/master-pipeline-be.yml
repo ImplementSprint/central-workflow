@@ -365,12 +365,15 @@ jobs:
     secrets: inherit
 
   deploy-preview:
-    name: "${{ github.ref_name == 'test' && 'TEST' || 'UAT' }} Deploy — ${{ matrix.service.name }}"
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'UAT' }} Deploy — ${{ matrix.service.name }}"
     needs: [active-systems, docker-build-main, backend-db-migration]
     if: >
       always() &&
       inputs.run_deploy == true &&
-      (github.ref_name == 'test' || github.ref_name == 'uat') &&
+      (
+        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat')) ||
+        (github.ref_name == 'test' || github.ref_name == 'uat')
+      ) &&
       (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped') &&
       (needs.backend-db-migration.result == 'success' || needs.backend-db-migration.result == 'skipped')
     strategy:
@@ -383,16 +386,19 @@ jobs:
       system-name: ${{ matrix.service.name }}
       app-type: api
       artifact-name: ${{ matrix.service.name }}-unit-test-results
-      deploy-environment: ${{ github.ref_name == 'test' && 'test' || 'uat' }}
+      deploy-environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || 'uat' }}
     secrets: inherit
 
   replit-deploy:
-    name: "${{ github.ref_name == 'test' && 'TEST' || github.ref_name == 'uat' && 'UAT' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'UAT' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
     needs: [active-systems, docker-build-main, backend-db-migration]
     if: >
       always() &&
       inputs.run_deploy == true &&
-      (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main') &&
+      (
+        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat' || github.base_ref == 'main')) ||
+        (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main')
+      ) &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped') &&
@@ -404,8 +410,8 @@ jobs:
     uses: ./.github/workflows/replit-deploy.yml
     with:
       system-name: ${{ matrix.service.name }}
-      environment: ${{ github.ref_name == 'test' && 'test' || github.ref_name == 'uat' && 'uat' || 'production' }}
-      branch: ${{ github.ref_name }}
+      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'uat' || 'production' }}
+      branch: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
     secrets: inherit
 
   version-test:
