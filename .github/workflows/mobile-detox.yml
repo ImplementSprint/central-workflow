@@ -15,7 +15,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       java-version:
         required: false
@@ -25,12 +25,12 @@ on:
       detox-build-command:
         required: false
         type: string
-        default: "npx detox build --configuration android.emu.debug"
+        default: "npx detox build -c android.emu.debug"
         description: "Command used to produce the Android app binary for Detox"
       detox-test-command:
         required: false
         type: string
-        default: "npx detox test --configuration android.emu.debug --headless"
+        default: "npx detox test -c android.emu.debug --headless"
         description: "Command used to execute Detox tests"
       skip-build:
         required: false
@@ -41,7 +41,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "GitHub artifact name containing pre-built Android Detox output (tar.gz)"
+        description: "GitHub artifact name containing pre-built Android Detox output (direct APK files)"
 
 permissions:
   contents: read
@@ -56,7 +56,7 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect package manager
         id: detect-pm
@@ -74,7 +74,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
@@ -83,7 +83,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "yarn"
@@ -92,7 +92,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
         if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "pnpm"
@@ -105,16 +105,13 @@ jobs:
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
-            yarn install --frozen-lockfile --ignore-scripts
+            yarn install --frozen-lockfile
           elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
             corepack enable
-            pnpm install --frozen-lockfile --ignore-scripts
+            pnpm install --frozen-lockfile
           else
-            npm ci --ignore-scripts
+            npm ci
           fi
-
-      - name: Run postinstall hooks
-        run: npm run postinstall --if-present
 
       - name: Validate Detox installation
         run: |
@@ -145,9 +142,15 @@ jobs:
             echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
           fi
 
-          mapfile -t DETOX_INIT_FILES < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \))
+          DETOX_INIT_FILES=()
+          while IFS= read -r -d '' f; do
+            DETOX_INIT_FILES+=("$f")
+          done < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \) -print0)
           if [ "${#DETOX_INIT_FILES[@]}" -gt 0 ]; then
-            mapfile -t JASMINE_INIT_FILES < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" || true)
+            JASMINE_INIT_FILES=()
+            while IFS= read -r f; do
+              [ -n "$f" ] && JASMINE_INIT_FILES+=("$f")
+            done < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" 2>/dev/null || true)
             if [ "${#JASMINE_INIT_FILES[@]}" -gt 0 ]; then
               echo "❌ Detected legacy Jasmine-based Detox init setup that is incompatible with the installed Jest/Detox runner."
               printf '   - %s\n' "${JASMINE_INIT_FILES[@]}"
@@ -158,9 +161,86 @@ jobs:
             fi
           fi
 
+      - name: Normalize Detox Jest globalSetup import
+        run: |
+          if [ ! -f "package.json" ]; then
+            echo "ℹ️ package.json not found; skipping Detox globalSetup normalization."
+            exit 0
+          fi
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const candidates = [
+            'detox/runners/jest/globalSetup',
+            'detox/runners/jest-circus/globalSetup',
+            'detox/runners/jest/globalSetup.js',
+          ];
+
+          const targetSpecifier = candidates.find((specifier) => {
+            try {
+              require.resolve(specifier);
+              return true;
+            } catch {
+              return false;
+            }
+          });
+
+          if (!targetSpecifier) {
+            console.log('[detox-global-setup] No resolvable Detox globalSetup entrypoint found; skipping.');
+            process.exit(0);
+          }
+
+          const root = process.cwd();
+          const queue = [root];
+          const targets = [];
+          const blockedDirs = new Set(['node_modules', '.git', 'android', 'ios', 'build', 'dist', 'coverage']);
+
+          while (queue.length > 0) {
+            const current = queue.pop();
+            if (!current) continue;
+
+            for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+              const full = path.join(current, entry.name);
+              if (entry.isDirectory()) {
+                if (!blockedDirs.has(entry.name)) queue.push(full);
+                continue;
+              }
+              if (!entry.isFile()) continue;
+              if (/globalSetup\.(ts|js|cjs|mjs)$/i.test(entry.name) && /(^|[\\/])(tests[\\/]e2e|e2e)([\\/]|$)/i.test(full)) {
+                targets.push(full);
+              }
+            }
+          }
+
+          if (targets.length === 0) {
+            console.log('[detox-global-setup] No e2e globalSetup files found; skipping.');
+            process.exit(0);
+          }
+
+          let patched = 0;
+          for (const filePath of targets) {
+            const before = fs.readFileSync(filePath, 'utf8');
+            const after = before
+              .replace(/detox\/runners\/jest\/globalSetup(?:\.js)?/g, targetSpecifier)
+              .replace(/detox\/runners\/jest-circus\/globalSetup(?:\.js)?/g, targetSpecifier);
+
+            if (after !== before) {
+              fs.writeFileSync(filePath, after, 'utf8');
+              patched += 1;
+              console.log(`[detox-global-setup] patched ${path.relative(root, filePath)} -> ${targetSpecifier}`);
+            }
+          }
+
+          if (patched === 0) {
+            console.log(`[detox-global-setup] No import rewrite needed. Resolved entrypoint: ${targetSpecifier}`);
+          }
+          NODE
+
       - name: Download pre-built Android artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ inputs.build-artifact-name }}
           path: ${{ inputs.working-directory != '.' && format('{0}/{1}', github.workspace, inputs.working-directory) || github.workspace }}
@@ -168,43 +248,50 @@ jobs:
       - name: Extract pre-built Android artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
-          tar xzf detox-android-build.tar.gz
-          rm -f detox-android-build.tar.gz
-          echo "✅ Extracted pre-built Android artifact."
+          EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Restored Android app APK and test APK from artifact."
+            exit 0
+          fi
+
+          APK=$(find . -type f -name "app-debug.apk" | head -n 1)
+          TEST_APK=$(find . -type f -name "*-androidTest.apk" | head -n 1)
+
+          if [ -n "${APK}" ] && [ -n "${TEST_APK}" ]; then
+            mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
+            cp "${APK}" "${EXPECTED_APK}"
+            cp "${TEST_APK}" "${EXPECTED_TEST_APK}"
+            echo "✅ Placed APKs at ${EXPECTED_APK} and ${EXPECTED_TEST_APK}."
+          else
+            echo "❌ Required APKs were not found in downloaded artifact."
+            exit 1
+          fi
 
       - name: Normalize restored APK path
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-          if [ -f "${EXPECTED_APK}" ]; then
-            echo "✅ Expected APK exists: ${EXPECTED_APK}"
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Expected APKs exist: ${EXPECTED_APK} and ${EXPECTED_TEST_APK}"
             exit 0
           fi
 
-          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" \
-            | awk '
-              function score(path, s, lower) {
-                s = 0
-                lower = tolower(path)
-                if (lower ~ /\/app\/build\/outputs\/apk\/debug\/app-debug\.apk$/) s += 10000
-                if (lower ~ /\/debug\//) s += 1000
-                if (lower ~ /x86_64/) s += 500
-                if (lower ~ /universal/) s += 300
-                if (lower ~ /androidtest/) s -= 5000
-                if (lower ~ /release/) s -= 2000
-                if (lower ~ /unsigned/) s -= 500
-                return s
-              }
-              { print score($0) "\t" $0 }
-            ' | sort -nr | head -n 1 | cut -f2-)
+          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "app-debug.apk" | sort | head -n 1)
+          TEST_CANDIDATE=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
 
-          if [ -n "${CANDIDATE}" ]; then
+          if [ -n "${CANDIDATE}" ] && [ -n "${TEST_CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
             cp "${CANDIDATE}" "${EXPECTED_APK}"
-            echo "✅ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+            cp "${TEST_CANDIDATE}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized APK paths for Detox."
           else
-            echo "⚠️ No APK candidate found under android/app/build/outputs/apk"
+            echo "⚠️ App APK or test APK candidate was not found under android/app/build/outputs/apk"
           fi
 
       - name: Ensure Android Native Project
@@ -228,7 +315,7 @@ jobs:
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: ${{ inputs.java-version }}
@@ -240,69 +327,46 @@ jobs:
       - name: Ensure Android app binary exists
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
-          if [ -f "${EXPECTED_APK}" ]; then
-            echo "✅ Found APK at expected path: ${EXPECTED_APK}"
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Found app APK and test APK at expected paths."
             exit 0
           fi
 
-          echo "ℹ️ Expected APK missing; searching for any generated APK candidate..."
-          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" \
-            | awk '
-              function score(path, s, lower) {
-                s = 0
-                lower = tolower(path)
-                if (lower ~ /\/app\/build\/outputs\/apk\/debug\/app-debug\.apk$/) s += 10000
-                if (lower ~ /\/debug\//) s += 1000
-                if (lower ~ /x86_64/) s += 500
-                if (lower ~ /universal/) s += 300
-                if (lower ~ /androidtest/) s -= 5000
-                if (lower ~ /release/) s -= 2000
-                if (lower ~ /unsigned/) s -= 500
-                return s
-              }
-              { print score($0) "\t" $0 }
-            ' | sort -nr | head -n 1 | cut -f2-)
+          echo "ℹ️ Expected Detox APKs missing; searching for generated APK candidates..."
+          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "app-debug.apk" | sort | head -n 1)
+          TEST_CANDIDATE=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
 
-          if [ -n "${CANDIDATE}" ]; then
+          if [ -n "${CANDIDATE}" ] && [ -n "${TEST_CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
             cp "${CANDIDATE}" "${EXPECTED_APK}"
-            echo "✅ Normalized APK path: ${CANDIDATE} -> ${EXPECTED_APK}"
+            cp "${TEST_CANDIDATE}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized APK paths for Detox."
             exit 0
           fi
 
-          echo "ℹ️ No APK candidate found. Triggering fallback build command once..."
+          echo "ℹ️ APK candidates missing. Triggering fallback build command once..."
           ${{ inputs.detox-build-command }}
 
-          if [ -f "${EXPECTED_APK}" ]; then
-            echo "✅ Fallback build produced expected APK: ${EXPECTED_APK}"
+          if [ -f "${EXPECTED_APK}" ] && [ -f "${EXPECTED_TEST_APK}" ]; then
+            echo "✅ Fallback build produced expected Detox APKs."
             exit 0
           fi
 
-          CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f -name "*.apk" \
-            | awk '
-              function score(path, s, lower) {
-                s = 0
-                lower = tolower(path)
-                if (lower ~ /\/app\/build\/outputs\/apk\/debug\/app-debug\.apk$/) s += 10000
-                if (lower ~ /\/debug\//) s += 1000
-                if (lower ~ /x86_64/) s += 500
-                if (lower ~ /universal/) s += 300
-                if (lower ~ /androidtest/) s -= 5000
-                if (lower ~ /release/) s -= 2000
-                if (lower ~ /unsigned/) s -= 500
-                return s
-              }
-              { print score($0) "\t" $0 }
-            ' | sort -nr | head -n 1 | cut -f2-)
-          if [ -n "${CANDIDATE_AFTER}" ]; then
+          CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f -name "app-debug.apk" | sort | head -n 1)
+          TEST_CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
+          if [ -n "${CANDIDATE_AFTER}" ] && [ -n "${TEST_CANDIDATE_AFTER}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
+            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
             cp "${CANDIDATE_AFTER}" "${EXPECTED_APK}"
-            echo "✅ Normalized APK path after fallback build: ${CANDIDATE_AFTER} -> ${EXPECTED_APK}"
+            cp "${TEST_CANDIDATE_AFTER}" "${EXPECTED_TEST_APK}"
+            echo "✅ Normalized APK paths for Detox after fallback build."
             exit 0
           fi
 
-          echo "❌ Unable to find or produce APK for Detox."
+          echo "❌ Unable to find or produce both app APK and test APK for Detox."
           if [ -d "android/app/build/outputs/apk" ]; then
             echo "📁 APK output tree:"
             find android/app/build/outputs/apk -maxdepth 4 -type f | sort
@@ -311,54 +375,34 @@ jobs:
           fi
           exit 1
 
-      - name: Ensure Detox Android testBinaryPath
-        run: |
-          if [ ! -f "package.json" ]; then
-            echo "ℹ️ package.json not found in working directory; skipping Detox config normalization."
-            exit 0
-          fi
-
-          node - <<'NODE'
-          const fs = require('node:fs');
-
-          const pkgPath = 'package.json';
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-          const detoxConfig = pkg && pkg.detox;
-
-          if (!detoxConfig || typeof detoxConfig !== 'object') {
-            console.log('[detox-config] No detox config found; skipping.');
-            process.exit(0);
-          }
-
-          const configurations = detoxConfig.configurations || {};
-          const apps = detoxConfig.apps || {};
-          const configuration = configurations['android.emu.debug'] || {};
-          const appKey = configuration.app || 'android.debug';
-          const appConfig = apps[appKey];
-
-          if (!appConfig || appConfig.type !== 'android.apk') {
-            console.log(`[detox-config] Android app config "${appKey}" not found; skipping.`);
-            process.exit(0);
-          }
-
-          if (appConfig.testBinaryPath) {
-            console.log(`[detox-config] testBinaryPath already set for "${appKey}".`);
-            process.exit(0);
-          }
-
-          appConfig.testBinaryPath = 'android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk';
-          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
-          console.log(`[detox-config] Added missing testBinaryPath to detox.apps.${appKey}.`);
-          NODE
-
       - name: Run Detox tests on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
           arch: x86_64
           profile: pixel_5
+          emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          disable-animations: true
+          disable-animations: false
           script: |
             cd ${{ inputs.working-directory }}
-            ${{ inputs.detox-test-command }}
+
+            echo "⏳ Waiting for Android emulator boot completion..."
+            adb wait-for-device
+            bash -lc 'RETRIES=0; MAX_RETRIES=120; until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ Emulator did not report sys.boot_completed=1 after ${MAX_RETRIES}s"; adb shell getprop | head -40 || true; exit 1; fi; sleep 1; done'
+            echo "✅ Emulator boot completed"
+
+            echo "⏳ Waiting for Android PackageManager service..."
+            bash -lc 'RETRIES=0; MAX_RETRIES=120; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not become available after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
+            echo "✅ PackageManager service is ready"
+
+            echo "⏳ Validating PackageManager command path..."
+            bash -lc 'RETRIES=0; MAX_RETRIES=60; until adb shell cmd package list packages >/dev/null 2>&1; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ cmd package still unavailable after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done'
+            echo "✅ cmd package is operational"
+
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+
+            echo "▶️ Running Detox tests..."
+            DETOX_CMD="${{ inputs.detox-test-command }}" bash -lc 'set +e; bash -lc "$DETOX_CMD" > detox-run.log 2>&1; DETOX_STATUS=$?; set -e; cat detox-run.log; if [ "$DETOX_STATUS" -eq 0 ]; then exit 0; fi; if grep -q "Can'\''t find service: package" detox-run.log; then echo "⚠️ Detox failed due to transient PackageManager service outage. Retrying once..."; adb wait-for-device; RETRIES=0; MAX_RETRIES=90; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not recover after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done; adb shell cmd package list packages >/dev/null 2>&1 || true; echo "▶️ Running Detox tests (attempt 2)..."; bash -lc "$DETOX_CMD"; exit $?; fi; exit "$DETOX_STATUS"'

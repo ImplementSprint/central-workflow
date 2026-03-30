@@ -15,17 +15,17 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       detox-build-command:
         required: false
         type: string
-        default: "npx detox build --configuration ios.sim.debug"
+        default: "npx detox build -c ios.sim.debug"
         description: "Command used to produce the iOS app binary for Detox"
       detox-test-command:
         required: false
         type: string
-        default: "npx detox test --configuration ios.sim.debug --cleanup"
+        default: "npx detox test -c ios.sim.debug --cleanup"
         description: "Command used to execute Detox iOS tests"
       skip-build:
         required: false
@@ -36,7 +36,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "GitHub artifact name containing pre-built iOS Detox output (tar.gz)"
+        description: "GitHub artifact name containing pre-built iOS Detox output (.app.zip)"
 
 permissions:
   contents: read
@@ -51,7 +51,7 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect package manager
         id: detect-pm
@@ -69,7 +69,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
@@ -78,7 +78,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "yarn"
@@ -87,7 +87,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
         if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "pnpm"
@@ -100,16 +100,107 @@ jobs:
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
-            yarn install --frozen-lockfile --ignore-scripts
+            yarn install --frozen-lockfile
           elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
             corepack enable
-            pnpm install --frozen-lockfile --ignore-scripts
+            pnpm install --frozen-lockfile
           else
-            npm ci --ignore-scripts
+            npm ci
           fi
 
-      - name: Run postinstall hooks
-        run: npm run postinstall --if-present
+      - name: Log macOS/Xcode toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+
+      - name: Install applesimutils
+        run: |
+          if command -v applesimutils >/dev/null 2>&1; then
+            echo "✅ applesimutils already installed: $(applesimutils --version)"
+            exit 0
+          fi
+
+          brew tap wix/brew
+          brew install applesimutils
+          echo "✅ Installed applesimutils: $(applesimutils --version)"
+
+      - name: Resolve Detox iOS simulator type
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const packageJsonPath = 'package.json';
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          const detoxConfig = packageJson.detox;
+
+          if (!detoxConfig || !detoxConfig.devices || typeof detoxConfig.devices !== 'object') {
+            console.log('ℹ️ No package.json Detox device config found; leaving iOS simulator selection unchanged.');
+            process.exit(0);
+          }
+
+          const simulatorEntry = Object.values(detoxConfig.devices).find(
+            entry => entry && entry.type === 'ios.simulator' && entry.device && typeof entry.device.type === 'string',
+          );
+
+          if (!simulatorEntry) {
+            console.log('ℹ️ No Detox ios.simulator device.type found in package.json; leaving config unchanged.');
+            process.exit(0);
+          }
+
+          const configuredType = simulatorEntry.device.type;
+          const supportedDevicesOutput = execSync('applesimutils --list', {
+            encoding: 'utf8',
+            maxBuffer: 4 * 1024 * 1024,
+          });
+          const supportedDevices = JSON.parse(supportedDevicesOutput);
+          const availableIphoneTypes = [
+            ...new Set(
+              supportedDevices
+                .map(device => device?.deviceType?.name)
+                .filter(deviceType => typeof deviceType === 'string' && deviceType.startsWith('iPhone ')),
+            ),
+          ];
+
+          if (availableIphoneTypes.includes(configuredType)) {
+            console.log(`✅ Detox iOS simulator type available on this runner: ${configuredType}`);
+            process.exit(0);
+          }
+
+          const preferredFallbacks = [
+            'iPhone 16 Pro',
+            'iPhone 16 Pro Max',
+            'iPhone 16',
+            'iPhone 16 Plus',
+            'iPhone 15 Pro',
+            'iPhone 15 Pro Max',
+            'iPhone 15',
+            'iPhone 15 Plus',
+            'iPhone 14 Pro',
+            'iPhone 14',
+            'iPhone 13 Pro',
+            'iPhone 13',
+            'iPhone SE (3rd generation)',
+          ];
+
+          const fallbackType =
+            preferredFallbacks.find(deviceType => availableIphoneTypes.includes(deviceType)) ||
+            availableIphoneTypes[0];
+
+          if (!fallbackType) {
+            console.error('❌ No available iPhone simulator device types were found on this runner.');
+            console.error(supportedDevicesOutput);
+            process.exit(1);
+          }
+
+          simulatorEntry.device.type = fallbackType;
+          fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+          console.log(
+            `⚠️ Detox iOS simulator type "${configuredType}" is unavailable on this runner. Falling back to "${fallbackType}".`,
+          );
+          console.log(`ℹ️ Available iPhone simulator types: ${availableIphoneTypes.join(', ')}`);
+          NODE
 
       - name: Validate Detox installation
         run: |
@@ -140,9 +231,15 @@ jobs:
             echo "✅ Resolved Detox Jest entrypoint: ${DETOX_JEST_ENTRYPOINT}"
           fi
 
-          mapfile -t DETOX_INIT_FILES < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \))
+          DETOX_INIT_FILES=()
+          while IFS= read -r -d '' f; do
+            DETOX_INIT_FILES+=("$f")
+          done < <(find . -type f \( -path '*/e2e/init.js' -o -path '*/e2e/init.ts' -o -path '*/tests/e2e/init.js' -o -path '*/tests/e2e/init.ts' \) -print0)
           if [ "${#DETOX_INIT_FILES[@]}" -gt 0 ]; then
-            mapfile -t JASMINE_INIT_FILES < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" || true)
+            JASMINE_INIT_FILES=()
+            while IFS= read -r f; do
+              [ -n "$f" ] && JASMINE_INIT_FILES+=("$f")
+            done < <(grep -l 'jasmine\.getEnv()\|jasmine\.getEnv(' "${DETOX_INIT_FILES[@]}" 2>/dev/null || true)
             if [ "${#JASMINE_INIT_FILES[@]}" -gt 0 ]; then
               echo "❌ Detected legacy Jasmine-based Detox init setup that is incompatible with the installed Jest/Detox runner."
               printf '   - %s\n' "${JASMINE_INIT_FILES[@]}"
@@ -153,9 +250,95 @@ jobs:
             fi
           fi
 
+      - name: Normalize Detox Jest globalSetup import
+        run: |
+          if [ ! -f "package.json" ]; then
+            echo "ℹ️ package.json not found; skipping Detox globalSetup normalization."
+            exit 0
+          fi
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const candidates = [
+            'detox/runners/jest/globalSetup',
+            'detox/runners/jest-circus/globalSetup',
+            'detox/runners/jest/globalSetup.js',
+          ];
+
+          const targetSpecifier = candidates.find((specifier) => {
+            try {
+              require.resolve(specifier);
+              return true;
+            } catch {
+              return false;
+            }
+          });
+
+          if (!targetSpecifier) {
+            console.log('[detox-global-setup] No resolvable Detox globalSetup entrypoint found; skipping.');
+            process.exit(0);
+          }
+
+          const root = process.cwd();
+          const queue = [root];
+          const targets = [];
+          const blockedDirs = new Set(['node_modules', '.git', 'android', 'ios', 'build', 'dist', 'coverage']);
+
+          while (queue.length > 0) {
+            const current = queue.pop();
+            if (!current) continue;
+
+            for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+              const full = path.join(current, entry.name);
+              if (entry.isDirectory()) {
+                if (!blockedDirs.has(entry.name)) queue.push(full);
+                continue;
+              }
+              if (!entry.isFile()) continue;
+              if (/globalSetup\.(ts|js|cjs|mjs)$/i.test(entry.name) && /(^|[\\/])(tests[\\/]e2e|e2e)([\\/]|$)/i.test(full)) {
+                targets.push(full);
+              }
+            }
+          }
+
+          if (targets.length === 0) {
+            console.log('[detox-global-setup] No e2e globalSetup files found; skipping.');
+            process.exit(0);
+          }
+
+          let patched = 0;
+          for (const filePath of targets) {
+            const before = fs.readFileSync(filePath, 'utf8');
+            const after = before
+              .replace(/detox\/runners\/jest\/globalSetup(?:\.js)?/g, targetSpecifier)
+              .replace(/detox\/runners\/jest-circus\/globalSetup(?:\.js)?/g, targetSpecifier);
+
+            if (after !== before) {
+              fs.writeFileSync(filePath, after, 'utf8');
+              patched += 1;
+              console.log(`[detox-global-setup] patched ${path.relative(root, filePath)} -> ${targetSpecifier}`);
+            }
+          }
+
+          if (patched === 0) {
+            console.log(`[detox-global-setup] No import rewrite needed. Resolved entrypoint: ${targetSpecifier}`);
+          }
+          NODE
+
+      - name: Prepare Detox iOS framework cache
+        run: |
+          if npx detox --help 2>/dev/null | grep -q "build-framework-cache"; then
+            npx detox clean-framework-cache || true
+            npx detox build-framework-cache
+          else
+            echo "ℹ️ Installed Detox version does not expose framework-cache commands; continuing."
+          fi
+
       - name: Download pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ inputs.build-artifact-name }}
           path: ${{ inputs.working-directory != '.' && format('{0}/{1}', github.workspace, inputs.working-directory) || github.workspace }}
@@ -163,9 +346,20 @@ jobs:
       - name: Extract pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
-          tar xzf detox-ios-build.tar.gz
-          rm -f detox-ios-build.tar.gz
-          echo "✅ Extracted pre-built iOS artifact."
+          ZIP_FILE=$(find . -maxdepth 2 -type f \( -name "*.app.zip" -o -name "*-ios-simulator-app.zip" \) | head -n 1)
+
+          if [ -z "${ZIP_FILE}" ]; then
+            ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+          fi
+
+          if [ -n "${ZIP_FILE}" ]; then
+            unzip -o "${ZIP_FILE}"
+            rm -f "${ZIP_FILE}"
+            echo "✅ Extracted pre-built iOS artifact: ${ZIP_FILE}"
+          else
+            echo "❌ No iOS zip artifact found in downloaded artifact payload."
+            exit 1
+          fi
 
       - name: Normalize restored iOS app bundle path
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
@@ -253,7 +447,7 @@ jobs:
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
           DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-build-command }}
         run: |
-          DEFAULT_CMD='npx detox build --configuration ios.sim.debug'
+          DEFAULT_CMD='npx detox build -c ios.sim.debug'
           if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
             echo "ℹ️ Running custom iOS app build command for Detox."
             eval "${DETOX_IOS_BUILD_COMMAND}"
