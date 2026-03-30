@@ -538,15 +538,19 @@ jobs:
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
           DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-ios-build-command }}
         run: |
-          DEFAULT_CMD='npx detox build -c ios.sim.debug'
-          if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
-            echo "ℹ️ Running custom iOS app build command for Detox."
-            # Use bash -c with the command passed via env var to avoid direct eval of interpolated input
-            bash -c "${DETOX_IOS_BUILD_COMMAND}"
+          echo "ℹ️ Attempt 1/2: run repository Detox iOS build command."
+          set +e
+          bash -c "${DETOX_IOS_BUILD_COMMAND}"
+          BUILD_STATUS=$?
+          set -e
+
+          if [ "${BUILD_STATUS}" -eq 0 ]; then
+            echo "✅ Repository Detox iOS build command completed."
             exit 0
           fi
 
-          echo "ℹ️ Running explicit xcodebuild for the default Detox iOS simulator configuration."
+          echo "⚠️ Repository Detox iOS build command failed with exit code ${BUILD_STATUS}."
+          echo "ℹ️ Attempt 2/2: fallback explicit xcodebuild for default simulator output path."
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
             -scheme "${SCHEME}" \
