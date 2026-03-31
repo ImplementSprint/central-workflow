@@ -370,6 +370,7 @@ jobs:
     if: >
       always() &&
       inputs.run_deploy == true &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (
         (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat')) ||
         (github.ref_name == 'test' || github.ref_name == 'uat')
