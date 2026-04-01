@@ -321,6 +321,29 @@ jobs:
 
           echo "✅ SonarCloud preflight passed."
 
+      - name: Download Coverage Artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-coverage"
+          merge-multiple: false
+          path: .coverage-artifacts
+
+      - name: Stage coverage to service directories
+        continue-on-error: true
+        run: |
+          SYSTEMS='${{ needs.active-systems.outputs.active_systems_json }}'
+          for artifact_dir in .coverage-artifacts/*-coverage; do
+            [ -d "${artifact_dir}" ] || continue
+            ARTIFACT_NAME=$(basename "${artifact_dir}")
+            SERVICE_NAME="${ARTIFACT_NAME%-coverage}"
+            DIR=$(echo "${SYSTEMS}" | jq -r --arg n "${SERVICE_NAME}"               '.[] | select(.name == $n) | .dir' | sed 's|^\./||; s|^\.$||')
+            DEST="${DIR:+${DIR}/}coverage"
+            mkdir -p "${DEST}"
+            cp -r "${artifact_dir}/." "${DEST}/"
+            echo "Staged ${SERVICE_NAME} coverage → ${DEST}/"
+          done
+
       - name: Run SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
