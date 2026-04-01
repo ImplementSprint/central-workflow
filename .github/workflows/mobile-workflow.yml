@@ -551,6 +551,10 @@ jobs:
 
           echo "⚠️ Repository Detox iOS build command failed with exit code ${BUILD_STATUS}."
           echo "ℹ️ Attempt 2/2: fallback explicit xcodebuild for default simulator output path."
+          XCODEBUILD_LOG="ios/build/xcodebuild-fallback.log"
+          mkdir -p "$(dirname "${XCODEBUILD_LOG}")"
+
+          set +e
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
             -scheme "${SCHEME}" \
@@ -562,7 +566,18 @@ jobs:
             CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
             GCC_TREAT_WARNINGS_AS_ERRORS=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
-            clean build
+            clean build 2>&1 | tee "${XCODEBUILD_LOG}"
+          XCODEBUILD_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "${XCODEBUILD_STATUS}" -ne 0 ]; then
+            echo "❌ Fallback xcodebuild failed with exit code ${XCODEBUILD_STATUS}."
+            echo "📌 Showing first 80 compiler/linker error lines from fallback log:"
+            grep -n "error:" "${XCODEBUILD_LOG}" | head -n 80 || true
+            echo "📌 Last 120 lines of fallback build log:"
+            tail -n 120 "${XCODEBUILD_LOG}" || true
+            exit "${XCODEBUILD_STATUS}"
+          fi
 
       - name: Normalize iOS app bundle path for Detox
         run: |
