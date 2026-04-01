@@ -38,6 +38,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: replit-deploy-${{ inputs.environment }}-${{ inputs.system-name }}
+  cancel-in-progress: false
+
 jobs:
   replit-deploy:
     name: "Deploy to Replit (${{ inputs.environment }})"
@@ -47,29 +51,36 @@ jobs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Deploy to Replit (${{ inputs.environment }})
         id: deploy
         env:
           REPLIT_DEPLOY_URL: ${{ secrets.REPLIT_DEPLOY_URL }}
           REPLIT_API_KEY: ${{ secrets.REPLIT_API_KEY }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           ENV_UPPER=$(echo "${{ inputs.environment }}" | tr '[:lower:]' '[:upper:]')
 
           echo "╔══════════════════════════════════════════════╗"
-          echo "║   REPLIT DEPLOYMENT — ${ENV_UPPER}"
+          echo "║   REPLIT DEPLOYMENT — ${ENV_UPPER}           ║"
           echo "╠══════════════════════════════════════════════╣"
-          echo "║ System:      ${{ inputs.system-name }}"
-          echo "║ Environment: ${{ inputs.environment }}"
-          echo "║ Branch:      ${{ inputs.branch }}"
-          echo "║ Commit:      ${{ github.sha }}"
-          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "║ System:      ${{ inputs.system-name }}       ║"
+          echo "║ Environment: ${{ inputs.environment }}       ║"
+          echo "║ Branch:      ${{ inputs.branch }}            ║"
+          echo "║ Commit:      ${{ github.sha }}               ║"
+          echo "║ Timestamp:   $(date -u +%Y-%m-%dT%H:%M:%SZ)  ║"
           echo "╚══════════════════════════════════════════════╝"
 
           if [ -z "${REPLIT_DEPLOY_URL}" ]; then
             echo "⚠️ REPLIT_DEPLOY_URL secret not set. Skipping Replit deploy."
-            echo "deployment_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+            DEPLOY_URL="${RUN_URL}"
+            echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+            echo "## Replit Deployment" >> "$GITHUB_STEP_SUMMARY"
+            echo "- System: ${{ inputs.system-name }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Environment: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Status: Skipped (missing REPLIT_DEPLOY_URL secret)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Deployment URL: [${DEPLOY_URL}](${DEPLOY_URL})" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -92,7 +103,7 @@ jobs:
             echo "✅ Replit deploy triggered successfully (HTTP ${HTTP_CODE})"
             DEPLOY_URL=$(echo "${BODY}" | jq -r '.url // empty' 2>/dev/null || true)
             if [ -z "${DEPLOY_URL}" ]; then
-              DEPLOY_URL="${REPLIT_DEPLOY_URL}"
+              DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             fi
           else
             echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"
@@ -102,3 +113,15 @@ jobs:
 
           echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
           echo "📍 Deployment URL: ${DEPLOY_URL}"
+
+          if [ "${DEPLOY_URL}" = "${RUN_URL}" ]; then
+            SUMMARY_STATUS="Triggered (fallback URL)"
+          else
+            SUMMARY_STATUS="Triggered"
+          fi
+
+          echo "## Replit Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- System: ${{ inputs.system-name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: ${SUMMARY_STATUS}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deployment URL: [${DEPLOY_URL}](${DEPLOY_URL})" >> "$GITHUB_STEP_SUMMARY"

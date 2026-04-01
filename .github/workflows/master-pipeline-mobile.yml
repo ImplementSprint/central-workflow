@@ -122,7 +122,7 @@ permissions:
   security-events: write
 
 concurrency:
-  group: master-pipeline-mobile-${{ github.ref }}
+  group: master-pipeline-mobile-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -132,11 +132,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      systems_json: ${{ steps.resolve.outputs.systems_json }}
-      systems_label: ${{ steps.resolve.outputs.systems_label }}
-      pipeline_mode: ${{ steps.resolve.outputs.pipeline_mode }}
+      systems_json: ${{ steps.skip-check.outputs.skip == 'true' && '[]' || steps.resolve.outputs.systems_json }}
+      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (push superseded by open PR)' || steps.resolve.outputs.systems_label }}
+      pipeline_mode: ${{ steps.skip-check.outputs.skip == 'true' && 'skip' || steps.resolve.outputs.pipeline_mode }}
     steps:
+      - name: Prefer PR run when PR exists
+        id: skip-check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            API_URL="${{ github.api_url }}/repos/${{ github.repository }}/pulls?state=open&head=${{ github.repository_owner }}:${{ github.ref_name }}&per_page=1"
+            OPEN_PR_COUNT=$(curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${API_URL}" | jq 'length')
+
+            if [ "${OPEN_PR_COUNT}" -gt 0 ]; then
+              echo "⏭️ Skipping push run for branch '${{ github.ref_name }}' because an open PR already exists."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Resolve systems JSON
+        if: steps.skip-check.outputs.skip != 'true'
         id: resolve
         env:
           MOBILE_SINGLE_SYSTEMS_JSON_VAR: ${{ vars.MOBILE_SINGLE_SYSTEMS_JSON }}
@@ -275,7 +297,7 @@ jobs:
       active_label: ${{ steps.select.outputs.active_label }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -348,9 +370,11 @@ jobs:
       expo_count: ${{ steps.classify.outputs.expo_count }}
       kotlin_systems_json: ${{ steps.classify.outputs.kotlin_systems_json }}
       kotlin_count: ${{ steps.classify.outputs.kotlin_count }}
+      react_native_systems_json: ${{ steps.classify.outputs.react_native_systems_json }}
+      react_native_count: ${{ steps.classify.outputs.react_native_count }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Classify systems by stack
         id: classify
@@ -359,6 +383,7 @@ jobs:
         run: |
           EXPO_SYSTEMS='[]'
           KOTLIN_SYSTEMS='[]'
+          REACT_NATIVE_SYSTEMS='[]'
 
           while IFS= read -r system; do
             [ -z "${system}" ] && continue
@@ -375,12 +400,15 @@ jobs:
               kotlin|android-kotlin|native-kotlin)
                 TARGET="kotlin"
                 ;;
+              react-native|rn)
+                TARGET="react-native"
+                ;;
               "")
-                echo "❌ mobile_stack is required for system ${SYSTEM_NAME}. Allowed values: expo, kotlin."
+                echo "❌ mobile_stack is required for system ${SYSTEM_NAME}. Allowed values: expo, kotlin, react-native."
                 exit 1
                 ;;
               *)
-                echo "❌ Unsupported mobile_stack '${STACK_DECLARED}' for system ${SYSTEM_NAME}. Allowed values: expo, kotlin."
+                echo "❌ Unsupported mobile_stack '${STACK_DECLARED}' for system ${SYSTEM_NAME}. Allowed values: expo, kotlin, react-native."
                 exit 1
                 ;;
             esac
@@ -389,6 +417,8 @@ jobs:
 
             if [ "${TARGET}" = "kotlin" ]; then
               KOTLIN_SYSTEMS=$(echo "${KOTLIN_SYSTEMS}" | jq -c --argjson item "${SYSTEM_WITH_TARGET}" '. + [$item]')
+            elif [ "${TARGET}" = "react-native" ]; then
+              REACT_NATIVE_SYSTEMS=$(echo "${REACT_NATIVE_SYSTEMS}" | jq -c --argjson item "${SYSTEM_WITH_TARGET}" '. + [$item]')
             else
               EXPO_SYSTEMS=$(echo "${EXPO_SYSTEMS}" | jq -c --argjson item "${SYSTEM_WITH_TARGET}" '. + [$item]')
             fi
@@ -398,6 +428,8 @@ jobs:
           echo "expo_count=$(echo "${EXPO_SYSTEMS}" | jq 'length')" >> "$GITHUB_OUTPUT"
           echo "kotlin_systems_json=${KOTLIN_SYSTEMS}" >> "$GITHUB_OUTPUT"
           echo "kotlin_count=$(echo "${KOTLIN_SYSTEMS}" | jq 'length')" >> "$GITHUB_OUTPUT"
+          echo "react_native_systems_json=${REACT_NATIVE_SYSTEMS}" >> "$GITHUB_OUTPUT"
+          echo "react_native_count=$(echo "${REACT_NATIVE_SYSTEMS}" | jq 'length')" >> "$GITHUB_OUTPUT"
 
   mobile-expo:
     name: "Mobile Expo — ${{ matrix.system.name }}"
@@ -420,11 +452,38 @@ jobs:
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
       enable-detox: true
-      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build --configuration android.emu.debug' }}
-      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test --configuration android.emu.debug --headless' }}
+      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
+      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
       enable-detox-ios: true
-      detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build --configuration ios.sim.debug' }}
-      detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test --configuration ios.sim.debug --cleanup' }}
+      detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build -c ios.sim.debug' }}
+      detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test -c ios.sim.debug --cleanup' }}
+    secrets: inherit
+
+  mobile-expo-release:
+    name: "Mobile Expo Release Build — ${{ matrix.system.name }}"
+    needs: [classify-systems, mobile-expo]
+    if: >-
+      always() &&
+      fromJson(needs.classify-systems.outputs.expo_count) > 0 &&
+      (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true)
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.expo_systems_json) }}
+    uses: ./.github/workflows/mobile-release-build.yml
+    with:
+      system-dir: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
     secrets: inherit
 
   kotlin-governance:
@@ -467,20 +526,79 @@ jobs:
       dockerfile-path: ${{ matrix.system.dockerfile_path || 'Dockerfile' }}
       upload-artifact: true
 
+  mobile-react-native:
+    name: "Mobile React Native — ${{ matrix.system.name }}"
+    needs: [classify-systems]
+    if: fromJson(needs.classify-systems.outputs.react_native_count) > 0
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.react_native_systems_json) }}
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    uses: ./.github/workflows/mobile-react-native.yml
+    with:
+      system-dir: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
+      enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
+      enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
+      enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
+      enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
+      enable-detox: true
+      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
+      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
+      enable-detox-ios: ${{ matrix.system.enable_detox_ios == true || matrix.system.enable_detox_ios == null }}
+      detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build -c ios.sim.debug' }}
+      detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test -c ios.sim.debug --cleanup' }}
+
+  mobile-react-native-release:
+    name: "Mobile React Native Release Build — ${{ matrix.system.name }}"
+    needs: [classify-systems, mobile-react-native]
+    if: >-
+      always() &&
+      fromJson(needs.classify-systems.outputs.react_native_count) > 0 &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.run_deploy == true) &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true)
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.classify-systems.outputs.react_native_systems_json) }}
+    uses: ./.github/workflows/mobile-release-build.yml
+    with:
+      system-dir: ${{ matrix.system.dir }}
+      system-name: ${{ matrix.system.name }}
+      node-version: ${{ matrix.system.node_version || 20 }}
+      java-version: ${{ matrix.system.java_version || '17' }}
+      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
+    secrets: inherit
+
   sonarcloud-mobile:
     name: "SonarCloud — Mobile Monorepo Analysis"
-    needs: [active-systems, classify-systems, mobile-expo, mobile-kotlin]
+    needs: [active-systems, classify-systems, mobile-expo, mobile-kotlin, mobile-react-native]
     if: >-
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       inputs.enable_sonar != false &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
-      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -559,13 +677,14 @@ jobs:
 
   mobile-grafana-k6:
     name: "Mobile Grafana k6 — ${{ matrix.system.name }}"
-    needs: [qa-controls, k6-systems, classify-systems, mobile-expo, mobile-kotlin]
+    needs: [qa-controls, k6-systems, classify-systems, mobile-expo, mobile-kotlin, mobile-react-native]
     if: >-
       always() &&
       needs.qa-controls.outputs.enable_grafana_k6 == 'true' &&
       fromJson(needs.k6-systems.outputs.k6_count) > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
-      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped')
+      (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -584,7 +703,7 @@ jobs:
 
   version-test:
     name: "Version Tag — TEST (${{ matrix.system.name }})"
-    needs: [mobile-expo, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
+    needs: [mobile-expo, mobile-kotlin, mobile-react-native, active-systems, classify-systems, sonarcloud-mobile]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -593,6 +712,7 @@ jobs:
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
       fail-fast: false
@@ -605,7 +725,7 @@ jobs:
 
   version-uat:
     name: "Version Tag — UAT (${{ matrix.system.name }})"
-    needs: [mobile-expo, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
+    needs: [mobile-expo, mobile-kotlin, mobile-react-native, active-systems, classify-systems, sonarcloud-mobile]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -614,6 +734,7 @@ jobs:
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
       fail-fast: false
@@ -626,7 +747,7 @@ jobs:
 
   version-main-release:
     name: "Version Tag — MAIN Release (${{ matrix.system.name }})"
-    needs: [mobile-expo, mobile-kotlin, active-systems, classify-systems, sonarcloud-mobile]
+    needs: [mobile-expo, mobile-kotlin, mobile-react-native, active-systems, classify-systems, sonarcloud-mobile]
     if: >-
       always() &&
       github.ref == 'refs/heads/main' &&
@@ -635,6 +756,7 @@ jobs:
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped')
     strategy:
       fail-fast: false
@@ -647,7 +769,7 @@ jobs:
 
   publish-mobile-release:
     name: "Publish Mobile Release — ${{ matrix.system.name }}"
-    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
+    needs: [active-systems, qa-controls, k6-systems, mobile-expo, mobile-expo-release, mobile-kotlin, mobile-react-native, mobile-react-native-release, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release]
     if: >-
       always() &&
       github.repository != 'ImplementSprint/central-workflow' &&
@@ -657,12 +779,15 @@ jobs:
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
+      (needs.mobile-expo-release.result == 'success' || needs.mobile-expo-release.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
+      (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
+      (needs.mobile-react-native-release.result == 'success' || needs.mobile-react-native-release.result == 'skipped') &&
       (needs.sonarcloud-mobile.result == 'success' || needs.sonarcloud-mobile.result == 'skipped') &&
       (github.ref != 'refs/heads/test' || needs.version-test.result == 'success') &&
       (github.ref != 'refs/heads/uat' || needs.version-uat.result == 'success') &&
       (github.ref != 'refs/heads/main' || needs.version-main-release.result == 'success') &&
-      (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || needs.mobile-grafana-k6.result == 'success')
+      (needs.qa-controls.outputs.enable_grafana_k6 != 'true' || fromJson(needs.k6-systems.outputs.k6_count) == 0 || needs.mobile-grafana-k6.result == 'success' || needs.mobile-grafana-k6.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -675,7 +800,7 @@ jobs:
 
   prepare-promotion-payload:
     name: "Prepare Promotion Payload"
-    needs: [active-systems, classify-systems, qa-controls, k6-systems, aggregate-mobile-status, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, publish-mobile-release]
+    needs: [active-systems, classify-systems, qa-controls, k6-systems, aggregate-mobile-status, mobile-expo, mobile-kotlin, mobile-react-native, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, publish-mobile-release]
     if: >-
       always() &&
       (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat') &&
@@ -693,7 +818,7 @@ jobs:
       quality_gates_json: ${{ steps.build.outputs.quality_gates_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -706,9 +831,11 @@ jobs:
           OVERALL_RESULT: ${{ needs.aggregate-mobile-status.outputs.overall_result }}
           EXPO_COUNT_RAW: ${{ needs.classify-systems.outputs.expo_count }}
           KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          REACT_NATIVE_COUNT_RAW: ${{ needs.classify-systems.outputs.react_native_count }}
           K6_COUNT_RAW: ${{ needs.k6-systems.outputs.k6_count }}
           EXPO_RESULT: ${{ needs.mobile-expo.result }}
           KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+          REACT_NATIVE_RESULT: ${{ needs.mobile-react-native.result }}
           SONAR_RESULT: ${{ needs.sonarcloud-mobile.result }}
           K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
           ENABLE_SONAR_INPUT: ${{ inputs.enable_sonar }}
@@ -801,6 +928,7 @@ jobs:
 
           EXPO_GATE=$(normalize_gate true "${EXPO_COUNT_RAW:-0}" "${EXPO_RESULT}")
           KOTLIN_GATE=$(normalize_gate true "${KOTLIN_COUNT_RAW:-0}" "${KOTLIN_RESULT}")
+          REACT_NATIVE_GATE=$(normalize_gate true "${REACT_NATIVE_COUNT_RAW:-0}" "${REACT_NATIVE_RESULT}")
           SONAR_ENABLED="${ENABLE_SONAR_INPUT}"
           if [ -z "${SONAR_ENABLED}" ]; then
             SONAR_ENABLED="true"
@@ -811,6 +939,7 @@ jobs:
           QUALITY_GATES_JSON=$(jq -nc \
             --arg expo "${EXPO_GATE}" \
             --arg kotlin "${KOTLIN_GATE}" \
+            --arg reactNative "${REACT_NATIVE_GATE}" \
             --arg sonar "${SONAR_GATE}" \
             --arg grafana "${K6_GATE}" \
             --arg version "${VERSION_GATE_RESULT}" \
@@ -818,6 +947,7 @@ jobs:
             '{
               "Mobile Expo": $expo,
               "Mobile Kotlin": $kotlin,
+              "Mobile React Native": $reactNative,
               "SonarCloud": $sonar,
               "Grafana k6": $grafana,
               "Version Tagging": $version,
@@ -889,7 +1019,7 @@ jobs:
 
   aggregate-mobile-status:
     name: "Aggregate Mobile Status"
-    needs: [qa-controls, active-systems, classify-systems, mobile-expo, mobile-kotlin, k6-systems, mobile-grafana-k6, sonarcloud-mobile]
+    needs: [qa-controls, active-systems, classify-systems, mobile-expo, mobile-kotlin, mobile-react-native, k6-systems, mobile-grafana-k6, sonarcloud-mobile]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -905,15 +1035,18 @@ jobs:
           ACTIVE_COUNT_RAW: ${{ needs.active-systems.outputs.active_count }}
           EXPO_COUNT_RAW: ${{ needs.classify-systems.outputs.expo_count }}
           KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          REACT_NATIVE_COUNT_RAW: ${{ needs.classify-systems.outputs.react_native_count }}
           K6_COUNT_RAW: ${{ needs.k6-systems.outputs.k6_count }}
           EXPO_RESULT: ${{ needs.mobile-expo.result }}
           KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+          REACT_NATIVE_RESULT: ${{ needs.mobile-react-native.result }}
           K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
           SONAR_RESULT: ${{ needs.sonarcloud-mobile.result }}
         run: |
           ACTIVE_COUNT="${ACTIVE_COUNT_RAW:-0}"
           EXPO_COUNT="${EXPO_COUNT_RAW:-0}"
           KOTLIN_COUNT="${KOTLIN_COUNT_RAW:-0}"
+          REACT_NATIVE_COUNT="${REACT_NATIVE_COUNT_RAW:-0}"
           K6_COUNT="${K6_COUNT_RAW:-0}"
           ENABLE_SONAR="${ENABLE_SONAR_INPUT}"
 
@@ -928,6 +1061,7 @@ jobs:
           if ! [[ "${ACTIVE_COUNT}" =~ ^[0-9]+$ ]]; then ACTIVE_COUNT=0; fi
           if ! [[ "${EXPO_COUNT}" =~ ^[0-9]+$ ]]; then EXPO_COUNT=0; fi
           if ! [[ "${KOTLIN_COUNT}" =~ ^[0-9]+$ ]]; then KOTLIN_COUNT=0; fi
+          if ! [[ "${REACT_NATIVE_COUNT}" =~ ^[0-9]+$ ]]; then REACT_NATIVE_COUNT=0; fi
           if ! [[ "${K6_COUNT}" =~ ^[0-9]+$ ]]; then K6_COUNT=0; fi
 
           OVERALL="success"
@@ -956,6 +1090,14 @@ jobs:
               esac
             fi
 
+            if [ "${REACT_NATIVE_COUNT}" -gt 0 ]; then
+              case "${REACT_NATIVE_RESULT}" in
+                success|skipped) ;;
+                cancelled) CANCELLED=true ;;
+                *) FAILED=true ;;
+              esac
+            fi
+
             if [ "${ENABLE_GRAFANA_K6}" = "true" ] && [ "${K6_COUNT}" -gt 0 ]; then
               case "${K6_RESULT}" in
                 success|skipped) ;;
@@ -972,7 +1114,7 @@ jobs:
               esac
             fi
 
-            if [ "${EXPO_COUNT}" -eq 0 ] && [ "${KOTLIN_COUNT}" -eq 0 ]; then
+            if [ "${EXPO_COUNT}" -eq 0 ] && [ "${KOTLIN_COUNT}" -eq 0 ] && [ "${REACT_NATIVE_COUNT}" -eq 0 ]; then
               OVERALL="skipped"
               DETAILS="No applicable mobile execution targets were detected."
             elif [ "${FAILED}" = "true" ]; then
@@ -989,7 +1131,7 @@ jobs:
 
   prepare-notify-payload:
     name: "Prepare Notify Payload"
-    needs: [active-systems, classify-systems, qa-controls, k6-systems, aggregate-mobile-status, mobile-expo, mobile-kotlin, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release, publish-mobile-release]
+    needs: [active-systems, classify-systems, qa-controls, k6-systems, aggregate-mobile-status, mobile-expo, mobile-kotlin, mobile-react-native, mobile-grafana-k6, sonarcloud-mobile, version-test, version-uat, version-main-release, publish-mobile-release]
     if: >-
       always() &&
       (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
@@ -1002,7 +1144,7 @@ jobs:
       quality_gates_json: ${{ steps.build.outputs.quality_gates_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -1014,9 +1156,11 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           EXPO_COUNT_RAW: ${{ needs.classify-systems.outputs.expo_count }}
           KOTLIN_COUNT_RAW: ${{ needs.classify-systems.outputs.kotlin_count }}
+          REACT_NATIVE_COUNT_RAW: ${{ needs.classify-systems.outputs.react_native_count }}
           K6_COUNT_RAW: ${{ needs.k6-systems.outputs.k6_count }}
           EXPO_RESULT: ${{ needs.mobile-expo.result }}
           KOTLIN_RESULT: ${{ needs.mobile-kotlin.result }}
+          REACT_NATIVE_RESULT: ${{ needs.mobile-react-native.result }}
           SONAR_RESULT: ${{ needs.sonarcloud-mobile.result }}
           K6_RESULT: ${{ needs.mobile-grafana-k6.result }}
           ENABLE_SONAR_INPUT: ${{ inputs.enable_sonar }}
@@ -1112,6 +1256,7 @@ jobs:
 
           EXPO_GATE=$(normalize_gate true "${EXPO_COUNT_RAW:-0}" "${EXPO_RESULT}")
           KOTLIN_GATE=$(normalize_gate true "${KOTLIN_COUNT_RAW:-0}" "${KOTLIN_RESULT}")
+          REACT_NATIVE_GATE=$(normalize_gate true "${REACT_NATIVE_COUNT_RAW:-0}" "${REACT_NATIVE_RESULT}")
           SONAR_ENABLED="${ENABLE_SONAR_INPUT}"
           if [ -z "${SONAR_ENABLED}" ]; then
             SONAR_ENABLED="true"
@@ -1122,6 +1267,7 @@ jobs:
           QUALITY_GATES_JSON=$(jq -nc \
             --arg expo "${EXPO_GATE}" \
             --arg kotlin "${KOTLIN_GATE}" \
+            --arg reactNative "${REACT_NATIVE_GATE}" \
             --arg sonar "${SONAR_GATE}" \
             --arg grafana "${K6_GATE}" \
             --arg version "${VERSION_GATE_RESULT}" \
@@ -1129,6 +1275,7 @@ jobs:
             '{
               "Mobile Expo": $expo,
               "Mobile Kotlin": $kotlin,
+              "Mobile React Native": $reactNative,
               "SonarCloud": $sonar,
               "Grafana k6": $grafana,
               "Version Tagging": $version,
@@ -1163,6 +1310,8 @@ jobs:
         mobile-expo,
         kotlin-governance,
         mobile-kotlin,
+        mobile-react-native,
+        mobile-react-native-release,
         k6-systems,
         mobile-grafana-k6,
         sonarcloud-mobile,
@@ -1188,7 +1337,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ github.token }}

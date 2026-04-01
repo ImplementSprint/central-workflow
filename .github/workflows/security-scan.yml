@@ -19,7 +19,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       fail-on-high:
         required: false
@@ -47,22 +47,26 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ inputs.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
 
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
       - name: Run npm audit
         id: audit
-        continue-on-error: true
+        env:
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
         run: |
           echo "🔍 Running dependency audit..."
           npm audit --json > audit-report.json 2>&1 || true
           npm audit --audit-level=high 2>&1 || AUDIT_EXIT=$?
 
-          if [ "${AUDIT_EXIT:-0}" -ne 0 ] && [ "${{ inputs.fail-on-high }}" = "true" ]; then
+          if [ "${AUDIT_EXIT:-0}" -ne 0 ] && [ "${FAIL_ON_HIGH}" = "true" ]; then
             echo "❌ HIGH/CRITICAL vulnerabilities found"
             npm audit --audit-level=high 2>&1
             exit 1
@@ -126,10 +130,10 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ inputs.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
 
@@ -138,6 +142,7 @@ jobs:
 
       - name: Check Licenses
         run: |
-          npx license-checker --production --onlyAllow \
-            "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;0BSD;CC0-1.0;Unlicense;Python-2.0;BlueOak-1.0.0" \
-            --summary || echo "⚠️ Some licenses may need manual review"
+          npx license-checker --production --excludePrivatePackages --onlyAllow \
+            "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;Apache 2.0;0BSD;CC0-1.0;CC-BY-3.0;CC-BY-4.0;MPL-2.0;Unlicense;Python-2.0;BlueOak-1.0.0;LGPL-3.0-or-later;(Apache-2.0 AND LGPL-3.0-or-later);(BSD-2-Clause OR MIT OR Apache-2.0);(BSD-3-Clause OR GPL-2.0);(MIT OR CC0-1.0)" \
+            --summary
+          echo "✅ All licenses are compliant"

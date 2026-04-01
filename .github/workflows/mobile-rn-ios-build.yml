@@ -1,4 +1,4 @@
-name: "Reusable: Mobile iOS Build"
+name: "Reusable: Mobile React Native iOS Build"
 
 on:
   workflow_call:
@@ -93,17 +93,18 @@ jobs:
             npm ci --ignore-scripts
           fi
 
+      - name: Verify iOS native project exists
+        run: |
+          if [ ! -d "ios" ]; then
+            echo "❌ React Native iOS build requires ios/ directory in the project."
+            exit 1
+          fi
+
       - name: Select Xcode 26.2
         run: |
           sw_vers
           sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           xcodebuild -version
-
-      - name: Ensure iOS Native Project
-        run: |
-          if [ ! -d "ios" ]; then
-            CI=1 npx expo prebuild --platform ios
-          fi
 
       - name: Install CocoaPods Dependencies
         if: ${{ hashFiles(format('{0}/ios/Podfile', inputs.working-directory)) != '' }}
@@ -119,8 +120,6 @@ jobs:
       - name: Resolve iOS scheme
         id: scheme
         run: |
-          # Prefer top-level app workspaces (for CocoaPods) and avoid the internal
-          # xcodeproj workspace at *.xcodeproj/project.xcworkspace.
           WORKSPACE_PATH=$(find ios -maxdepth 2 -type d -name "*.xcworkspace" ! -path "*/*.xcodeproj/*" | head -n 1)
           if [ -z "${WORKSPACE_PATH}" ]; then
             WORKSPACE_PATH=$(find ios -maxdepth 3 -type d -name "*.xcworkspace" ! -path "*/*.xcodeproj/*" | head -n 1)
@@ -142,10 +141,10 @@ jobs:
 
           AVAILABLE_SCHEMES=$(LIST_JSON="${LIST_JSON}" python3 -c "import json, os; data = json.loads(os.environ['LIST_JSON']); schemes = (data.get('workspace', {}).get('schemes') or []) + (data.get('project', {}).get('schemes') or []); seen = []; [seen.append(scheme) for scheme in schemes if scheme not in seen]; print('\\n'.join(seen))")
 
-            echo "ℹ️ Available schemes:"
-            printf '%s\n' "${AVAILABLE_SCHEMES}"
+          echo "ℹ️ Available schemes:"
+          printf '%s\n' "${AVAILABLE_SCHEMES}"
 
-          SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re, sys; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; preferred_names = [container_name]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and scheme.lower() == preferred.lower()), None); contains = next((scheme for preferred in preferred_names for scheme in schemes if not excluded.match(scheme) and preferred and preferred.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
+          SCHEME=$(CONTAINER_PATH="${CONTAINER_PATH}" AVAILABLE_SCHEMES="${AVAILABLE_SCHEMES}" python3 -c "import os, re; container_path = os.environ.get('CONTAINER_PATH', ''); schemes = [line.strip() for line in os.environ.get('AVAILABLE_SCHEMES', '').splitlines() if line.strip()]; container_name = os.path.splitext(os.path.basename(container_path))[0]; excluded = re.compile(r'^(Pods($|-)|.*Tests?$|.*UITests?$|.*UnitTests?$|.*IntegrationTests?$|.*SnapshotTests?$|.*tvOS.*|.*macOS.*)$', re.I); exact = next((scheme for scheme in schemes if not excluded.match(scheme) and scheme.lower() == container_name.lower()), None); contains = next((scheme for scheme in schemes if not excluded.match(scheme) and container_name and container_name.lower() in scheme.lower()), None); fallback = next((scheme for scheme in schemes if not excluded.match(scheme)), schemes[0] if schemes else ''); print(exact or contains or fallback)")
 
           if [ -z "${SCHEME}" ]; then
             echo "❌ Could not resolve an iOS scheme for build."
@@ -185,7 +184,6 @@ jobs:
 
           ZIP_PATH="build/${{ inputs.system-name }}-ios-simulator-app.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
-          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
           echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
 
       - name: Upload iOS Build Artifact

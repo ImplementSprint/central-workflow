@@ -29,7 +29,7 @@ jobs:
       version_tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ github.token }}
@@ -155,12 +155,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
-            echo "tag=${TAG}" >> $GITHUB_OUTPUT
-            echo "ℹ️ Tag already exists: ${TAG}"
-            exit 0
-          fi
-
           if [ "${MODE}" = "test" ]; then
             git tag -a "${TAG}" -m "TEST version ${TAG}"
           elif [ "${MODE}" = "uat" ]; then
@@ -169,5 +163,13 @@ jobs:
             git tag -a "${TAG}" -m "MAIN release ${TAG}"
           fi
 
-          git push origin "${TAG}"
+          # Atomic push — if tag already exists on remote, push fails and we
+          # read the existing tag instead of silently skipping.
+          if git push origin "${TAG}" 2>/dev/null; then
+            echo "✅ Created and pushed tag: ${TAG}"
+          else
+            echo "ℹ️ Tag already exists on remote: ${TAG} — using existing tag."
+            git tag -d "${TAG}" 2>/dev/null || true
+          fi
+
           echo "tag=${TAG}" >> $GITHUB_OUTPUT

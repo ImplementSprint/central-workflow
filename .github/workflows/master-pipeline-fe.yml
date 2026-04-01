@@ -12,20 +12,20 @@ on:
         type: choice
         options: [auto, single, multi]
         default: auto
-      enable_selenium:
-        description: "Run Selenium E2E checks"
+      enable_playwright:
+        description: "Run Playwright E2E checks"
         type: boolean
         default: true
-      selenium_browsers:
-        description: "Selenium browser list (JSON array or CSV)"
+      playwright_browsers:
+        description: "Playwright browser list (JSON array or CSV)"
         type: string
-        default: '["chrome"]'
+        default: '["chromium"]'
       e2e_base_url:
-        description: "Optional base URL for Selenium E2E"
+        description: "Optional base URL for Playwright E2E"
         type: string
         default: ""
-      selenium_run_only_on_branch:
-        description: "Branch allowed for Selenium execution"
+      playwright_run_only_on_branch:
+        description: "Branch allowed for Playwright execution"
         type: string
         default: "test,uat"
       enable_grafana_k6:
@@ -45,11 +45,11 @@ on:
         type: string
         default: "test,uat"
       enforce_e2e_k6:
-        description: "Enforce Selenium + k6 checks before promotion"
+        description: "Enforce Playwright + k6 checks before promotion"
         type: boolean
         default: true
       enforce_e2e_k6_on_branches:
-        description: "Branches where Selenium + k6 are mandatory"
+        description: "Branches where Playwright + k6 are mandatory"
         type: string
         default: "test,uat"
       run_deploy:
@@ -70,20 +70,20 @@ on:
         description: "Pipeline mode (auto|single|multi)"
         type: string
         default: auto
-      enable_selenium:
-        description: "Run Selenium E2E checks"
+      enable_playwright:
+        description: "Run Playwright E2E checks"
         type: boolean
         default: true
-      selenium_browsers:
-        description: "Selenium browser list (JSON array or CSV)"
+      playwright_browsers:
+        description: "Playwright browser list (JSON array or CSV)"
         type: string
-        default: '["chrome"]'
+        default: '["chromium"]'
       e2e_base_url:
-        description: "Optional base URL for Selenium E2E"
+        description: "Optional base URL for Playwright E2E"
         type: string
         default: ""
-      selenium_run_only_on_branch:
-        description: "Branch allowed for Selenium execution"
+      playwright_run_only_on_branch:
+        description: "Branch allowed for Playwright execution"
         type: string
         default: "test,uat"
       enable_grafana_k6:
@@ -103,11 +103,11 @@ on:
         type: string
         default: "test,uat"
       enforce_e2e_k6:
-        description: "Enforce Selenium + k6 checks before promotion"
+        description: "Enforce Playwright + k6 checks before promotion"
         type: boolean
         default: true
       enforce_e2e_k6_on_branches:
-        description: "Branches where Selenium + k6 are mandatory"
+        description: "Branches where Playwright + k6 are mandatory"
         type: string
         default: "test,uat"
       run_deploy:
@@ -130,7 +130,7 @@ permissions:
   security-events: write
 
 concurrency:
-  group: master-pipeline-${{ github.ref }}
+  group: master-pipeline-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -139,11 +139,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      systems_json: ${{ steps.resolve.outputs.systems_json }}
-      systems_label: ${{ steps.resolve.outputs.systems_label }}
-      pipeline_mode: ${{ steps.resolve.outputs.pipeline_mode }}
+      systems_json: ${{ steps.skip-check.outputs.skip == 'true' && '[]' || steps.resolve.outputs.systems_json }}
+      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (push superseded by open PR)' || steps.resolve.outputs.systems_label }}
+      pipeline_mode: ${{ steps.skip-check.outputs.skip == 'true' && 'skip' || steps.resolve.outputs.pipeline_mode }}
     steps:
+      - name: Prefer PR run when PR exists
+        id: skip-check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            API_URL="${{ github.api_url }}/repos/${{ github.repository }}/pulls?state=open&head=${{ github.repository_owner }}:${{ github.ref_name }}&per_page=1"
+            OPEN_PR_COUNT=$(curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${API_URL}" | jq 'length')
+
+            if [ "${OPEN_PR_COUNT}" -gt 0 ]; then
+              echo "⏭️ Skipping push run for branch '${{ github.ref_name }}' because an open PR already exists."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Resolve systems JSON
+        if: steps.skip-check.outputs.skip != 'true'
         id: resolve
         env:
           FE_SINGLE_SYSTEMS_JSON_VAR: ${{ vars.FE_SINGLE_SYSTEMS_JSON }}
@@ -222,10 +243,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
-      enable_selenium: ${{ steps.resolve.outputs.enable_selenium }}
-      selenium_browsers: ${{ steps.resolve.outputs.selenium_browsers }}
+      enable_playwright: ${{ steps.resolve.outputs.enable_playwright }}
+      playwright_browsers: ${{ steps.resolve.outputs.playwright_browsers }}
       e2e_base_url: ${{ steps.resolve.outputs.e2e_base_url }}
-      selenium_run_only_on_branch: ${{ steps.resolve.outputs.selenium_run_only_on_branch }}
+      playwright_run_only_on_branch: ${{ steps.resolve.outputs.playwright_run_only_on_branch }}
       enable_grafana_k6: ${{ steps.resolve.outputs.enable_grafana_k6 }}
       k6_script_path: ${{ steps.resolve.outputs.k6_script_path }}
       k6_base_url: ${{ steps.resolve.outputs.k6_base_url }}
@@ -240,10 +261,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           IN_REF_NAME: ${{ github.ref_name }}
           IN_BASE_REF: ${{ github.base_ref }}
-          IN_ENABLE_SELENIUM: ${{ inputs.enable_selenium }}
-          IN_SELENIUM_BROWSERS: ${{ inputs.selenium_browsers }}
+          IN_ENABLE_PLAYWRIGHT: ${{ inputs.enable_playwright }}
+          IN_PLAYWRIGHT_BROWSERS: ${{ inputs.playwright_browsers }}
           IN_E2E_BASE_URL: ${{ inputs.e2e_base_url }}
-          IN_SELENIUM_RUN_ONLY_ON_BRANCH: ${{ inputs.selenium_run_only_on_branch }}
+          IN_PLAYWRIGHT_RUN_ONLY_ON_BRANCH: ${{ inputs.playwright_run_only_on_branch }}
           IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
           IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
           IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
@@ -251,20 +272,20 @@ jobs:
           IN_ENFORCE_E2E_K6: ${{ inputs.enforce_e2e_k6 }}
           IN_ENFORCE_E2E_K6_ON_BRANCHES: ${{ inputs.enforce_e2e_k6_on_branches }}
         run: |
-          ENABLE_SELENIUM="${IN_ENABLE_SELENIUM}"
+          ENABLE_PLAYWRIGHT="${IN_ENABLE_PLAYWRIGHT}"
           ENABLE_GRAFANA_K6="${IN_ENABLE_GRAFANA_K6}"
           ENFORCE_E2E_K6="${IN_ENFORCE_E2E_K6}"
 
-          if [ -z "${ENABLE_SELENIUM}" ]; then
-            ENABLE_SELENIUM="true"
+          if [ -z "${ENABLE_PLAYWRIGHT}" ]; then
+            ENABLE_PLAYWRIGHT="true"
           fi
 
           if [ -z "${ENABLE_GRAFANA_K6}" ]; then
             ENABLE_GRAFANA_K6="true"
           fi
 
-          if [ "${ENABLE_SELENIUM}" != "true" ] && [ "${ENABLE_SELENIUM}" != "false" ]; then
-            ENABLE_SELENIUM="true"
+          if [ "${ENABLE_PLAYWRIGHT}" != "true" ] && [ "${ENABLE_PLAYWRIGHT}" != "false" ]; then
+            ENABLE_PLAYWRIGHT="true"
           fi
 
           if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
@@ -279,14 +300,14 @@ jobs:
             ENFORCE_E2E_K6="true"
           fi
 
-          SELENIUM_BROWSERS='["chrome"]'
-          if [ -n "${IN_SELENIUM_BROWSERS}" ]; then
-            SELENIUM_BROWSERS="${IN_SELENIUM_BROWSERS}"
+          PLAYWRIGHT_BROWSERS='["chromium"]'
+          if [ -n "${IN_PLAYWRIGHT_BROWSERS}" ]; then
+            PLAYWRIGHT_BROWSERS="${IN_PLAYWRIGHT_BROWSERS}"
           fi
 
-          SELENIUM_RUN_ONLY_ON_BRANCH="test,uat"
-          if [ -n "${IN_SELENIUM_RUN_ONLY_ON_BRANCH}" ]; then
-            SELENIUM_RUN_ONLY_ON_BRANCH="${IN_SELENIUM_RUN_ONLY_ON_BRANCH}"
+          PLAYWRIGHT_RUN_ONLY_ON_BRANCH="test,uat"
+          if [ -n "${IN_PLAYWRIGHT_RUN_ONLY_ON_BRANCH}" ]; then
+            PLAYWRIGHT_RUN_ONLY_ON_BRANCH="${IN_PLAYWRIGHT_RUN_ONLY_ON_BRANCH}"
           fi
 
           K6_SCRIPT_PATH="tests/performance"
@@ -324,10 +345,10 @@ jobs:
             REQUIRE_E2E_K6="true"
           fi
 
-          echo "enable_selenium=${ENABLE_SELENIUM}" >> "$GITHUB_OUTPUT"
-          echo "selenium_browsers=${SELENIUM_BROWSERS}" >> "$GITHUB_OUTPUT"
+          echo "enable_playwright=${ENABLE_PLAYWRIGHT}" >> "$GITHUB_OUTPUT"
+          echo "playwright_browsers=${PLAYWRIGHT_BROWSERS}" >> "$GITHUB_OUTPUT"
           echo "e2e_base_url=${IN_E2E_BASE_URL}" >> "$GITHUB_OUTPUT"
-          echo "selenium_run_only_on_branch=${SELENIUM_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "playwright_run_only_on_branch=${PLAYWRIGHT_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "enable_grafana_k6=${ENABLE_GRAFANA_K6}" >> "$GITHUB_OUTPUT"
           echo "k6_script_path=${K6_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
           echo "k6_base_url=${IN_K6_BASE_URL}" >> "$GITHUB_OUTPUT"
@@ -347,7 +368,7 @@ jobs:
       active_label: ${{ steps.select.outputs.active_label }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -428,7 +449,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate configured system directories exist
         env:
@@ -470,25 +491,25 @@ jobs:
       enable-security-scan: true
     secrets: inherit
 
-  selenium-e2e:
-    name: "Selenium E2E — ${{ matrix.system.name }}"
+  playwright-e2e:
+    name: "Playwright E2E — ${{ matrix.system.name }}"
     needs: [active-systems, frontend, qa-controls]
     if: >-
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
-      needs.qa-controls.outputs.enable_selenium == 'true'
+      needs.qa-controls.outputs.enable_playwright == 'true'
     strategy:
       fail-fast: false
       matrix:
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
-    uses: ./.github/workflows/selenium-e2e.yml
+    uses: ./.github/workflows/playwright-e2e.yml
     with:
       working-directory: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      browser-list: ${{ needs.qa-controls.outputs.selenium_browsers }}
+      browser-list: ${{ needs.qa-controls.outputs.playwright_browsers }}
       e2e-base-url: ${{ needs.qa-controls.outputs.e2e_base_url }}
-      run-only-on-branch: ${{ needs.qa-controls.outputs.selenium_run_only_on_branch }}
+      run-only-on-branch: ${{ needs.qa-controls.outputs.playwright_run_only_on_branch }}
       parallel-mode: matrix
       max-parallel: 3
       fail-fast: false
@@ -503,7 +524,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -562,6 +583,26 @@ jobs:
     uses: ./.github/workflows/versioning.yml
     with:
       mode: test
+      stream: ${{ matrix.system.version_stream }}
+
+  version-uat:
+    name: "Version Tag — UAT (${{ matrix.system.name }})"
+    needs: [frontend, active-systems, sonarcloud]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/uat' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
+      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/versioning.yml
+    with:
+      mode: uat
       stream: ${{ matrix.system.version_stream }}
 
   deploy-preview:
@@ -716,7 +757,7 @@ jobs:
       tags_json: ${{ steps.resolve.outputs.tags_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -783,7 +824,7 @@ jobs:
       versions_json: ${{ steps.build.outputs.versions_json }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -894,27 +935,27 @@ jobs:
           echo "results_json=${RESULTS_JSON}" >> "$GITHUB_OUTPUT"
           echo "versions_json=${VERSIONS_JSON}" >> "$GITHUB_OUTPUT"
 
-  selenium-e2e-postdeploy:
-    name: "Selenium E2E — Post-Deploy (${{ matrix.system.name }})"
+  playwright-e2e-postdeploy:
+    name: "Playwright E2E — Post-Deploy (${{ matrix.system.name }})"
     needs: [active-systems, frontend, qa-controls, deploy-preview, prepare-promotion-payload]
     if: >-
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
-      needs.qa-controls.outputs.enable_selenium == 'true' &&
+      needs.qa-controls.outputs.enable_playwright == 'true' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
       needs.prepare-promotion-payload.result == 'success'
     strategy:
       fail-fast: false
       matrix:
         system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
-    uses: ./.github/workflows/selenium-e2e.yml
+    uses: ./.github/workflows/playwright-e2e.yml
     with:
       working-directory: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      browser-list: ${{ needs.qa-controls.outputs.selenium_browsers }}
+      browser-list: ${{ needs.qa-controls.outputs.playwright_browsers }}
       e2e-base-url: ${{ needs.qa-controls.outputs.e2e_base_url != '' && needs.qa-controls.outputs.e2e_base_url || fromJson(needs.prepare-promotion-payload.outputs.deployment_urls_json)[matrix.system.name] }}
-      run-only-on-branch: ${{ needs.qa-controls.outputs.selenium_run_only_on_branch }}
+      run-only-on-branch: ${{ needs.qa-controls.outputs.playwright_run_only_on_branch }}
       parallel-mode: matrix
       max-parallel: 3
       fail-fast: false
@@ -969,17 +1010,17 @@ jobs:
 
   enforce-e2e-k6:
     name: "E2E + k6 Enforcement Gate"
-    needs: [qa-controls, active-systems, selenium-e2e-postdeploy, grafana-k6-postdeploy]
+    needs: [qa-controls, active-systems, playwright-e2e-postdeploy, grafana-k6-postdeploy]
     if: always() && fromJson(needs.active-systems.outputs.active_count) > 0
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Enforce Selenium and k6 checks on configured branches
+      - name: Enforce Playwright and k6 checks on configured branches
         env:
           REQUIRE_E2E_K6: ${{ needs.qa-controls.outputs.require_e2e_k6 }}
-          ENABLE_SELENIUM: ${{ needs.qa-controls.outputs.enable_selenium }}
+          ENABLE_PLAYWRIGHT: ${{ needs.qa-controls.outputs.enable_playwright }}
           ENABLE_GRAFANA_K6: ${{ needs.qa-controls.outputs.enable_grafana_k6 }}
-          SELENIUM_RESULT: ${{ needs.selenium-e2e-postdeploy.result }}
+          PLAYWRIGHT_RESULT: ${{ needs.playwright-e2e-postdeploy.result }}
           K6_RESULT: ${{ needs.grafana-k6-postdeploy.result }}
         run: |
           if [ "${REQUIRE_E2E_K6}" != "true" ]; then
@@ -987,8 +1028,8 @@ jobs:
             exit 0
           fi
 
-          if [ "${ENABLE_SELENIUM}" != "true" ]; then
-            echo "❌ Enforcement failed: Selenium is disabled on an enforced branch."
+          if [ "${ENABLE_PLAYWRIGHT}" != "true" ]; then
+            echo "❌ Enforcement failed: Playwright is disabled on an enforced branch."
             exit 1
           fi
 
@@ -997,8 +1038,8 @@ jobs:
             exit 1
           fi
 
-          if [ "${SELENIUM_RESULT}" != "success" ]; then
-            echo "❌ Enforcement failed: Selenium result is '${SELENIUM_RESULT}'."
+          if [ "${PLAYWRIGHT_RESULT}" != "success" ]; then
+            echo "❌ Enforcement failed: Playwright result is '${PLAYWRIGHT_RESULT}'."
             exit 1
           fi
 
@@ -1007,11 +1048,11 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Enforcement passed: Selenium and Grafana k6 succeeded."
+          echo "✅ Enforcement passed: Playwright and Grafana k6 succeeded."
 
   create-pr-to-uat:
     name: "Create PR → UAT"
-    needs: [systems-config, frontend, sonarcloud, selenium-e2e-postdeploy, version-test, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6]
+    needs: [systems-config, frontend, sonarcloud, playwright-e2e-postdeploy, version-test, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -1020,7 +1061,7 @@ jobs:
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
-      (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped') &&
+      (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') &&
       (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') &&
       needs.enforce-e2e-k6.result == 'success' &&
       needs.version-test.result == 'success' &&
@@ -1039,16 +1080,16 @@ jobs:
       lint-status: ${{ needs.frontend.result }}
       security-status: ${{ needs.frontend.result }}
       sonar-status: ${{ needs.sonarcloud.result }}
-      selenium-status: ${{ needs.selenium-e2e-postdeploy.result }}
+      playwright-status: ${{ needs.playwright-e2e-postdeploy.result }}
       grafana-status: ${{ needs.grafana-k6-postdeploy.result }}
-      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
+      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.playwright-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   create-pr-to-main:
     name: "Create PR → Main"
-    needs: [systems-config, frontend, sonarcloud, selenium-e2e-postdeploy, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6]
+    needs: [systems-config, frontend, sonarcloud, playwright-e2e-postdeploy, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6, version-uat]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -1057,11 +1098,12 @@ jobs:
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
-      (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped') &&
+      (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') &&
       (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') &&
       needs.enforce-e2e-k6.result == 'success' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
-      needs.prepare-promotion-payload.result == 'success'
+      needs.prepare-promotion-payload.result == 'success' &&
+      needs.version-uat.result == 'success'
     uses: ./.github/workflows/promotion.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
@@ -1075,9 +1117,9 @@ jobs:
       lint-status: ${{ needs.frontend.result }}
       security-status: ${{ needs.frontend.result }}
       sonar-status: ${{ needs.sonarcloud.result }}
-      selenium-status: ${{ needs.selenium-e2e-postdeploy.result }}
+      playwright-status: ${{ needs.playwright-e2e-postdeploy.result }}
       grafana-status: ${{ needs.grafana-k6-postdeploy.result }}
-      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
+      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.playwright-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.dry_run == true }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
@@ -1135,14 +1177,14 @@ jobs:
 
   pipeline-summary:
     name: "Pipeline Summary"
-    needs: [systems-config, frontend, sonarcloud, selenium-e2e, selenium-e2e-postdeploy, active-systems, grafana-k6-postdeploy, enforce-e2e-k6]
+    needs: [systems-config, frontend, sonarcloud, playwright-e2e, playwright-e2e-postdeploy, active-systems, grafana-k6-postdeploy, enforce-e2e-k6]
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
-      overall-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped')) || (github.ref_name == 'main' && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped'))) && ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') || (github.ref_name == 'main')) && needs.enforce-e2e-k6.result == 'success' && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.selenium-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
+      overall-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped')) || (github.ref_name == 'main' && (needs.playwright-e2e.result == 'success' || needs.playwright-e2e.result == 'skipped'))) && ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') || (github.ref_name == 'main')) && needs.enforce-e2e-k6.result == 'success' && 'success' || (needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.playwright-e2e.result == 'cancelled' || needs.playwright-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure' }}
 
   auto-revert-on-failure:
     name: "Auto Revert on Failure"
@@ -1154,7 +1196,7 @@ jobs:
         active-systems,
         frontend,
         sonarcloud,
-        selenium-e2e,
+        playwright-e2e,
         grafana-k6-postdeploy,
         enforce-e2e-k6,
         version-test,
@@ -1186,7 +1228,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ github.token }}
@@ -1241,14 +1283,14 @@ jobs:
 
   notify-pipeline:
     name: "Notify Pipeline Status"
-    needs: [systems-config, pipeline-summary, frontend, sonarcloud, selenium-e2e, selenium-e2e-postdeploy, grafana-k6-postdeploy, enforce-e2e-k6, active-systems, auto-revert-on-failure, prepare-promotion-payload, prepare-notify-prod-payload]
+    needs: [systems-config, pipeline-summary, frontend, sonarcloud, playwright-e2e, playwright-e2e-postdeploy, grafana-k6-postdeploy, enforce-e2e-k6, active-systems, auto-revert-on-failure, prepare-promotion-payload, prepare-notify-prod-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
-      status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped')) || (github.ref_name == 'main' && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped'))) && ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') || (github.ref_name == 'main')) && needs.enforce-e2e-k6.result == 'success' && 'success' || ((needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.selenium-e2e.result == 'cancelled' || needs.selenium-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure') }}
+      status: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped')) || (github.ref_name == 'main' && (needs.playwright-e2e.result == 'success' || needs.playwright-e2e.result == 'skipped'))) && ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') || (github.ref_name == 'main')) && needs.enforce-e2e-k6.result == 'success' && 'success' || ((needs.frontend.result == 'cancelled' || needs.sonarcloud.result == 'cancelled' || needs.playwright-e2e.result == 'cancelled' || needs.playwright-e2e-postdeploy.result == 'cancelled' || needs.grafana-k6-postdeploy.result == 'cancelled') && 'cancelled' || 'failure') }}
       system-dir: ${{ needs.active-systems.outputs.active_label }}
       pipeline-type: ${{ needs.systems-config.outputs.pipeline_mode == 'single' && 'FE Single Master' || 'FE Multi Master' }}
-      error-details: ${{ ((needs.frontend.result != 'success' && needs.frontend.result != 'skipped') || (needs.sonarcloud.result != 'success' && needs.sonarcloud.result != 'skipped') || ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.selenium-e2e-postdeploy.result != 'success' && needs.selenium-e2e-postdeploy.result != 'skipped')) || (github.ref_name == 'main' && (needs.selenium-e2e.result != 'success' && needs.selenium-e2e.result != 'skipped')) || ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.grafana-k6-postdeploy.result != 'success' && needs.grafana-k6-postdeploy.result != 'skipped')) || needs.enforce-e2e-k6.result != 'success') && (needs.systems-config.outputs.pipeline_mode == 'single' && 'Master FE single pipeline reported failures.' || 'Master FE multi pipeline reported failures.') || '' }}
+      error-details: ${{ ((needs.frontend.result != 'success' && needs.frontend.result != 'skipped') || (needs.sonarcloud.result != 'success' && needs.sonarcloud.result != 'skipped') || ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.playwright-e2e-postdeploy.result != 'success' && needs.playwright-e2e-postdeploy.result != 'skipped')) || (github.ref_name == 'main' && (needs.playwright-e2e.result != 'success' && needs.playwright-e2e.result != 'skipped')) || ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.grafana-k6-postdeploy.result != 'success' && needs.grafana-k6-postdeploy.result != 'skipped')) || needs.enforce-e2e-k6.result != 'success') && (needs.systems-config.outputs.pipeline_mode == 'single' && 'Master FE single pipeline reported failures.' || 'Master FE multi pipeline reported failures.') || '' }}
       deployment-url: ''
       deployment-urls-json: ${{ github.ref_name == 'main' && needs.prepare-notify-prod-payload.outputs.deployment_urls_json || ((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && needs.prepare-promotion-payload.outputs.deployment_urls_json || '{}') }}
       success-image-url: ${{ vars.DISCORD_SUCCESS_IMAGE_URL }}
@@ -1258,11 +1300,11 @@ jobs:
       lint-status: ${{ needs.frontend.result }}
       security-status: ${{ needs.frontend.result }}
       sonar-status: ${{ needs.sonarcloud.result }}
-      selenium-status: ${{ (github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && needs.selenium-e2e-postdeploy.result || needs.selenium-e2e.result }}
+      playwright-status: ${{ (github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && needs.playwright-e2e-postdeploy.result || needs.playwright-e2e.result }}
       grafana-status: ${{ (github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && needs.grafana-k6-postdeploy.result || 'skipped' }}
       enforce-gate-status: ${{ needs.enforce-e2e-k6.result }}
       versions-json: ${{ (github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && needs.prepare-promotion-payload.outputs.versions_json || '{}' }}
-      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.selenium-e2e-postdeploy.result == 'success' || needs.selenium-e2e-postdeploy.result == 'skipped')) || (github.ref_name == 'main' && (needs.selenium-e2e.result == 'success' || needs.selenium-e2e.result == 'skipped'))) && needs.enforce-e2e-k6.result == 'success' && 'success' || 'failure' }}
+      pipeline-result: ${{ (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') && (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') && (((github.ref_name == 'test' || github.base_ref == 'test' || github.ref_name == 'uat' || github.base_ref == 'uat') && (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped')) || (github.ref_name == 'main' && (needs.playwright-e2e.result == 'success' || needs.playwright-e2e.result == 'skipped'))) && needs.enforce-e2e-k6.result == 'success' && 'success' || 'failure' }}
     secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

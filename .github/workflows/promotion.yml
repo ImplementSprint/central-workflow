@@ -102,7 +102,7 @@ on:
         required: false
         type: string
         default: ""
-      selenium-status:
+      playwright-status:
         required: false
         type: string
         default: ""
@@ -137,7 +137,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.PR_TOKEN }}
@@ -169,7 +169,7 @@ jobs:
           LINT_STATUS_INPUT: ${{ inputs.lint-status }}
           SECURITY_STATUS_INPUT: ${{ inputs.security-status }}
           SONAR_STATUS_INPUT: ${{ inputs.sonar-status }}
-          SELENIUM_STATUS_INPUT: ${{ inputs.selenium-status }}
+          PLAYWRIGHT_STATUS_INPUT: ${{ inputs.playwright-status }}
           GRAFANA_STATUS_INPUT: ${{ inputs.grafana-status }}
           PIPELINE_RESULT_INPUT: ${{ inputs.pipeline-result }}
         run: |
@@ -343,7 +343,7 @@ jobs:
             LINT_STATUS="${LINT_STATUS_INPUT}"
             SECURITY_STATUS="${SECURITY_STATUS_INPUT}"
             SONAR_STATUS="${SONAR_STATUS_INPUT}"
-            SELENIUM_STATUS="${SELENIUM_STATUS_INPUT}"
+            PLAYWRIGHT_STATUS="${PLAYWRIGHT_STATUS_INPUT}"
             GRAFANA_STATUS="${GRAFANA_STATUS_INPUT}"
             PIPELINE_RESULT="${PIPELINE_RESULT_INPUT}"
 
@@ -351,7 +351,7 @@ jobs:
             if [ -z "${LINT_STATUS}" ]; then LINT_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${SECURITY_STATUS}" ]; then SECURITY_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${SONAR_STATUS}" ]; then SONAR_STATUS="${DEFAULT_RESULT}"; fi
-            if [ -z "${SELENIUM_STATUS}" ]; then SELENIUM_STATUS="${DEFAULT_RESULT}"; fi
+            if [ -z "${PLAYWRIGHT_STATUS}" ]; then PLAYWRIGHT_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${GRAFANA_STATUS}" ]; then GRAFANA_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${PIPELINE_RESULT}" ]; then PIPELINE_RESULT="${DEFAULT_RESULT}"; fi
 
@@ -382,7 +382,7 @@ jobs:
               fi
             done < <(echo "${QUALITY_GATES_JSON}" | jq -r '.[]')
           else
-            for _gate in "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${SELENIUM_STATUS}" "${GRAFANA_STATUS}"; do
+            for _gate in "${TESTS_STATUS}" "${LINT_STATUS}" "${SECURITY_STATUS}" "${SONAR_STATUS}" "${PLAYWRIGHT_STATUS}" "${GRAFANA_STATUS}"; do
               if [ "${_gate}" != "success" ] && [ "${_gate}" != "skipped" ]; then
                 ALL_GATES_PASSED="false"
                 break
@@ -450,14 +450,14 @@ jobs:
             QG_LINT_ICON=$(status_icon "${LINT_STATUS}")
             QG_SEC_ICON=$(status_icon "${SECURITY_STATUS}")
             QG_SONAR_ICON=$(status_icon "${SONAR_STATUS}")
-            QG_SELENIUM_ICON=$(status_icon "${SELENIUM_STATUS}")
+            QG_PLAYWRIGHT_ICON=$(status_icon "${PLAYWRIGHT_STATUS}")
             QG_GRAFANA_ICON=$(status_icon "${GRAFANA_STATUS}")
-            QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | ${BT}%s${BT} |\n| Lint | %s | ${BT}%s${BT} |\n| Security | %s | ${BT}%s${BT} |\n| SonarCloud | %s | ${BT}%s${BT} |\n| Selenium E2E | %s | ${BT}%s${BT} |\n| Grafana k6 | %s | ${BT}%s${BT} |" \
+            QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | ${BT}%s${BT} |\n| Lint | %s | ${BT}%s${BT} |\n| Security | %s | ${BT}%s${BT} |\n| SonarCloud | %s | ${BT}%s${BT} |\n| Playwright E2E | %s | ${BT}%s${BT} |\n| Grafana k6 | %s | ${BT}%s${BT} |" \
               "${QG_TESTS_ICON}" "${TESTS_STATUS}" \
               "${QG_LINT_ICON}" "${LINT_STATUS}" \
               "${QG_SEC_ICON}" "${SECURITY_STATUS}" \
               "${QG_SONAR_ICON}" "${SONAR_STATUS}" \
-              "${QG_SELENIUM_ICON}" "${SELENIUM_STATUS}" \
+              "${QG_PLAYWRIGHT_ICON}" "${PLAYWRIGHT_STATUS}" \
               "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
           fi
 

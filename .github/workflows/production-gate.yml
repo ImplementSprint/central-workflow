@@ -42,13 +42,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      name: ${{ inputs.require-approval && 'production' || 'non-production' }}
+      # Always route through the 'production' environment so that branch
+      # protection rules and required reviewers are enforced regardless of
+      # require-approval.  When require-approval is false the environment
+      # still runs, but callers can configure the 'production' environment in
+      # GitHub without required reviewers if they explicitly want unblocked
+      # deployments — keeping the audit trail intact in both cases.
+      name: production
     outputs:
       approved: ${{ steps.gate-check.outputs.approved }}
       audit-id: ${{ steps.audit.outputs.id }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Pre-Deployment Checklist
         id: checklist
@@ -74,11 +80,25 @@ jobs:
             echo "║ ✅ On main branch"
           fi
 
-          # Check: Must have staging artifacts
-          echo "║ ✅ Staging build artifacts exist"
+          # Check: Must have staging URL configured (if production deploy, staging-url should have been verified)
+          if [ -n "${{ inputs.staging-url }}" ]; then
+            echo "║ ✅ Staging URL configured: ${{ inputs.staging-url }}"
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ inputs.staging-url }}" || echo "000")
+            if [ "${STATUS}" = "200" ] || [ "${STATUS}" = "301" ] || [ "${STATUS}" = "302" ]; then
+              echo "║ ✅ Staging URL is reachable (HTTP ${STATUS})"
+            else
+              echo "║ ❌ Staging URL is not reachable (HTTP ${STATUS})"
+              PASS=false
+            fi
+          else
+            echo "║ ⚠️  Staging URL not provided — skipping reachability check"
+            echo "║    Set staging-url input to enforce this gate"
+          fi
 
-          # Check: Must have passing tests
-          echo "║ ✅ All tests passed in pipeline"
+          # Check: Must be called from a successful pipeline run (enforced by calling workflow's needs/if conditions)
+          # This gate cannot independently re-verify upstream test results; the calling pipeline is responsible
+          # for only invoking production-gate after all CI checks have passed.
+          echo "║ ✅ Upstream CI enforcement delegated to calling pipeline"
 
           echo "╚══════════════════════════════════════════════╝"
 
@@ -92,9 +112,12 @@ jobs:
         run: |
           echo "approved=true" >> $GITHUB_OUTPUT
           if [ "${{ inputs.require-approval }}" = "true" ]; then
-            echo "✅ Production gate passed with required approval"
+            echo "✅ Production gate passed with required approval (enforced via 'production' environment reviewers)"
           else
-            echo "✅ Production gate passed (approval not required)"
+            echo "⚠️  require-approval=false: manual reviewer gate is not enforced for this run."
+            echo "    The 'production' environment audit trail is still recorded."
+            echo "    Set require-approval=true (or configure required reviewers on the 'production'"
+            echo "    environment in GitHub repository settings) to block unattended production deploys."
           fi
 
       - name: Create Audit Log Entry

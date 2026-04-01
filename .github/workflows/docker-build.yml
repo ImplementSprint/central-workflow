@@ -33,7 +33,7 @@ on:
       fail-on-vulnerabilities:
         required: false
         type: boolean
-        default: false
+        default: true
         description: "Fail job when HIGH/CRITICAL vulnerabilities are found"
       build-args:
         required: false
@@ -64,7 +64,7 @@ on:
         value: ${{ jobs.docker-build.outputs.digest }}
       scan-result:
         description: "Vulnerability scan result"
-        value: ${{ jobs.vulnerability-scan.outputs.result }}
+        value: ${{ jobs.vulnerability-scan.outputs.result || jobs.docker-build.outputs.local-scan-result }}
 
 permissions:
   contents: read
@@ -81,9 +81,10 @@ jobs:
       image-tag: ${{ steps.meta.outputs.tags }}
       digest: ${{ steps.build-push.outputs.digest }}
       image-repo: ${{ steps.coords.outputs.image_repo }}
+      local-scan-result: ${{ steps.local-scan.outcome }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -132,13 +133,14 @@ jobs:
           context: ./${{ inputs.working-directory }}
           file: ./${{ inputs.working-directory }}/${{ inputs.dockerfile-path }}
           push: ${{ inputs.push-image }}
+          load: ${{ !inputs.push-image }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ steps.coords.outputs.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ steps.coords.outputs.cache_scope }}
           build-args: ${{ inputs.build-args }}
-          sbom: ${{ inputs.generate-sbom }}
-          provenance: ${{ inputs.generate-provenance }}
+          sbom: ${{ inputs.push-image && inputs.generate-sbom }}
+          provenance: ${{ inputs.push-image && inputs.generate-provenance }}
 
       - name: Image Summary
         run: |
@@ -147,9 +149,24 @@ jobs:
           echo ""
           echo "🏷️ Git SHA: ${{ github.sha }}"
 
+      # When not pushing, scan the locally-loaded image in this job
+      # (the separate vulnerability-scan job can only pull from GHCR)
+      - name: Local Vulnerability Scan
+        id: local-scan
+        if: ${{ !inputs.push-image && inputs.scan-vulnerabilities }}
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: "image"
+          image-ref: "${{ steps.coords.outputs.image_repo }}:sha-${{ github.sha }}"
+          format: "table"
+          severity: "CRITICAL,HIGH"
+          scanners: "vuln"
+          ignore-unfixed: true
+          exit-code: ${{ inputs.fail-on-vulnerabilities && '1' || '0' }}
+
   vulnerability-scan:
     name: "Container Security Scan"
-    if: ${{ inputs.scan-vulnerabilities }}
+    if: ${{ inputs.scan-vulnerabilities && inputs.push-image }}
     needs: docker-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -190,7 +207,7 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ steps.image-ref.outputs.image_ref }}
           format: "sarif"

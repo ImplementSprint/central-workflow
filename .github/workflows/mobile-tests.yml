@@ -19,7 +19,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       test-command:
         required: false
@@ -61,7 +61,7 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect package manager
         id: detect-pm
@@ -79,7 +79,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
         if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
@@ -88,7 +88,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "yarn"
@@ -97,7 +97,7 @@ jobs:
 
       - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
         if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "pnpm"

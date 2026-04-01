@@ -19,7 +19,7 @@ on:
       node-version:
         required: false
         type: number
-        default: 20
+        default: 24
         description: "Node.js version"
       test-command:
         required: false
@@ -74,10 +74,10 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ inputs.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
@@ -88,14 +88,16 @@ jobs:
 
       - name: Run Unit Tests
         id: test-run
-        run: |
-          if [ "${{ inputs.run-parallel }}" = "true" ]; then
-            ${{ inputs.test-command }} --maxWorkers=50%
-          else
-            ${{ inputs.test-command }} --runInBand
-          fi
         env:
           NODE_ENV: test
+          TEST_CMD: ${{ inputs.test-command }}
+          RUN_PARALLEL: ${{ inputs.run-parallel }}
+        run: |
+          if [ "${RUN_PARALLEL}" = "true" ]; then
+            bash -c "${TEST_CMD} --maxWorkers=50%"
+          else
+            bash -c "${TEST_CMD} --runInBand"
+          fi
 
       - name: Parse Coverage
         id: coverage-check
@@ -177,10 +179,10 @@ jobs:
           --health-retries 5
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ inputs.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
           cache: "npm"

@@ -104,7 +104,7 @@ jobs:
       result: ${{ steps.run-k6.outcome }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
@@ -128,7 +128,10 @@ jobs:
             exit 1
           fi
 
-          mapfile -t RESOLVED_SCRIPT_PATHS < <(
+          RESOLVED_SCRIPT_PATHS=()
+          while IFS= read -r f; do
+            [ -n "$f" ] && RESOLVED_SCRIPT_PATHS+=("$f")
+          done < <(
             if [ -n "${SCRIPT_PATH}" ] && [ -f "${SCRIPT_PATH}" ]; then
               printf "%s\n" "${SCRIPT_PATH}"
             elif [ -n "${SCRIPT_PATH}" ] && [ -d "${SCRIPT_PATH}" ]; then

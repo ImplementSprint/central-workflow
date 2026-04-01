@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run actionlint
         uses: docker://rhysd/actionlint:latest
@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Assert mobile caller template contract
         shell: bash
@@ -112,6 +112,9 @@ jobs:
               kotlin|android-kotlin|native-kotlin)
                 echo "kotlin"
                 ;;
+              react-native|rn)
+                echo "react-native"
+                ;;
               *)
                 echo "invalid"
                 ;;
@@ -120,11 +123,13 @@ jobs:
 
           EXPO_SINGLE='{"name":"mobile-expo","dir":".","mobile_stack":"expo"}'
           KOTLIN_SINGLE='{"name":"mobile-kotlin","dir":".","mobile_stack":"kotlin"}'
+          RN_SINGLE='{"name":"mobile-rn","dir":".","mobile_stack":"react-native"}'
           MIXED_MULTI='[{"name":"mobile-expo","dir":"apps/mobile-expo","mobile_stack":"expo"},{"name":"mobile-kotlin","dir":"apps/mobile-kotlin","mobile_stack":"kotlin"}]'
-          INVALID_SINGLE='{"name":"mobile-invalid","dir":".","mobile_stack":"react-native"}'
+          INVALID_SINGLE='{"name":"mobile-invalid","dir":".","mobile_stack":"swift"}'
 
           EXPO_NORM=$(normalize_and_validate "$EXPO_SINGLE")
           KOTLIN_NORM=$(normalize_and_validate "$KOTLIN_SINGLE")
+          RN_NORM=$(normalize_and_validate "$RN_SINGLE")
           MIXED_NORM=$(normalize_and_validate "$MIXED_MULTI")
           INVALID_NORM=$(normalize_and_validate "$INVALID_SINGLE")
 
@@ -138,6 +143,11 @@ jobs:
             exit 1
           fi
 
+          if [ "$(echo "$RN_NORM" | jq 'length')" -ne 1 ]; then
+            echo "❌ React Native single normalization failed"
+            exit 1
+          fi
+
           if [ "$(echo "$MIXED_NORM" | jq 'length')" -lt 2 ]; then
             echo "❌ Mixed multi normalization failed"
             exit 1
@@ -145,6 +155,7 @@ jobs:
 
           EXPO_CLASS=$(classify_target "$(echo "$EXPO_NORM" | jq -c '.[0]')")
           KOTLIN_CLASS=$(classify_target "$(echo "$KOTLIN_NORM" | jq -c '.[0]')")
+          RN_CLASS=$(classify_target "$(echo "$RN_NORM" | jq -c '.[0]')")
           INVALID_CLASS=$(classify_target "$(echo "$INVALID_NORM" | jq -c '.[0]')")
 
           if [ "$EXPO_CLASS" != "expo" ]; then
@@ -154,6 +165,11 @@ jobs:
 
           if [ "$KOTLIN_CLASS" != "kotlin" ]; then
             echo "❌ Kotlin sample classification expected kotlin, got $KOTLIN_CLASS"
+            exit 1
+          fi
+
+          if [ "$RN_CLASS" != "react-native" ]; then
+            echo "❌ React Native sample classification expected react-native, got $RN_CLASS"
             exit 1
           fi
 

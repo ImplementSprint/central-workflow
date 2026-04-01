@@ -47,7 +47,7 @@ jobs:
         working-directory: ./${{ inputs.working-directory }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Resolve Gradle Wrapper Directory
         id: gradle
@@ -70,7 +70,7 @@ jobs:
           echo "✅ Using gradle wrapper directory: ${GRADLE_DIR}"
 
       - name: Setup JDK ${{ inputs.java-version }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: ${{ inputs.java-version }}
