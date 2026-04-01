@@ -539,8 +539,10 @@ jobs:
           DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-ios-build-command }}
         run: |
           echo "ℹ️ Attempt 1/2: run repository Detox iOS build command."
+          ATTEMPT1_LOG="ios/build/detox-ios-build-attempt1.log"
+          mkdir -p "$(dirname "${ATTEMPT1_LOG}")"
           set +e
-          bash -c "${DETOX_IOS_BUILD_COMMAND}"
+          bash -c "${DETOX_IOS_BUILD_COMMAND}" > "${ATTEMPT1_LOG}" 2>&1
           BUILD_STATUS=$?
           set -e
 
@@ -550,6 +552,11 @@ jobs:
           fi
 
           echo "⚠️ Repository Detox iOS build command failed with exit code ${BUILD_STATUS}."
+          echo "📌 Attempt 1 concise error summary:"
+          grep -nE "error:|fatal error|Command PhaseScriptExecution failed|xcodebuild: error" "${ATTEMPT1_LOG}" | head -n 80 || true
+          echo "📌 Attempt 1 tail (last 100 lines):"
+          tail -n 100 "${ATTEMPT1_LOG}" || true
+
           echo "ℹ️ Attempt 2/2: fallback explicit xcodebuild for default simulator output path."
           XCODEBUILD_LOG="ios/build/xcodebuild-fallback.log"
           mkdir -p "$(dirname "${XCODEBUILD_LOG}")"
@@ -566,8 +573,8 @@ jobs:
             CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
             GCC_TREAT_WARNINGS_AS_ERRORS=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
-            clean build 2>&1 | tee "${XCODEBUILD_LOG}"
-          XCODEBUILD_STATUS=${PIPESTATUS[0]}
+            clean build > "${XCODEBUILD_LOG}" 2>&1
+          XCODEBUILD_STATUS=$?
           set -e
 
           if [ "${XCODEBUILD_STATUS}" -ne 0 ]; then

@@ -405,4 +405,60 @@ jobs:
             adb shell settings put global animator_duration_scale 0
 
             echo "▶️ Running Detox tests..."
-            DETOX_CMD="${{ inputs.detox-test-command }}" bash -lc 'set +e; bash -lc "$DETOX_CMD" > detox-run.log 2>&1; DETOX_STATUS=$?; set -e; cat detox-run.log; if [ "$DETOX_STATUS" -eq 0 ]; then exit 0; fi; if grep -q "Can'\''t find service: package" detox-run.log; then echo "⚠️ Detox failed due to transient PackageManager service outage. Retrying once..."; adb wait-for-device; RETRIES=0; MAX_RETRIES=90; until adb shell service check package 2>&1 | grep -q "Service package:"; do RETRIES=$((RETRIES + 1)); if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then echo "❌ PackageManager service did not recover after ${MAX_RETRIES}s"; adb shell service list 2>&1 | head -20 || true; exit 1; fi; sleep 1; done; adb shell cmd package list packages >/dev/null 2>&1 || true; echo "▶️ Running Detox tests (attempt 2)..."; bash -lc "$DETOX_CMD"; exit $?; fi; exit "$DETOX_STATUS"'
+            DETOX_CMD="${{ inputs.detox-test-command }}"
+
+            set +e
+            bash -lc "${DETOX_CMD}" > detox-run.log 2>&1
+            DETOX_STATUS=$?
+            set -e
+
+            if [ "${DETOX_STATUS}" -eq 0 ]; then
+              echo "✅ Detox tests passed."
+              tail -n 40 detox-run.log || true
+              exit 0
+            fi
+
+            echo "❌ Detox tests failed (attempt 1)."
+            echo "📌 Concise failure summary (attempt 1):"
+            grep -nE "FAIL|DetoxRuntimeError|Test suite failed|error:|Error:|AssertionError|Timed out|Cannot|can't" detox-run.log | head -n 120 || true
+            echo "📌 Tail of attempt 1 log (last 120 lines):"
+            tail -n 120 detox-run.log || true
+
+            if grep -Fq "Can't find service: package" detox-run.log; then
+              echo "⚠️ Detox failed due to transient PackageManager service outage. Retrying once..."
+              adb wait-for-device
+              RETRIES=0
+              MAX_RETRIES=90
+              until adb shell service check package 2>&1 | grep -q "Service package:"; do
+                RETRIES=$((RETRIES + 1))
+                if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+                  echo "❌ PackageManager service did not recover after ${MAX_RETRIES}s"
+                  adb shell service list 2>&1 | head -20 || true
+                  exit 1
+                fi
+                sleep 1
+              done
+
+              adb shell cmd package list packages >/dev/null 2>&1 || true
+              echo "▶️ Running Detox tests (attempt 2)..."
+
+              set +e
+              bash -lc "${DETOX_CMD}" > detox-run-retry.log 2>&1
+              RETRY_STATUS=$?
+              set -e
+
+              if [ "${RETRY_STATUS}" -eq 0 ]; then
+                echo "✅ Detox tests passed on retry."
+                tail -n 40 detox-run-retry.log || true
+                exit 0
+              fi
+
+              echo "❌ Detox tests failed (attempt 2)."
+              echo "📌 Concise failure summary (attempt 2):"
+              grep -nE "FAIL|DetoxRuntimeError|Test suite failed|error:|Error:|AssertionError|Timed out|Cannot|can't" detox-run-retry.log | head -n 120 || true
+              echo "📌 Tail of attempt 2 log (last 120 lines):"
+              tail -n 120 detox-run-retry.log || true
+              exit "${RETRY_STATUS}"
+            fi
+
+            exit "${DETOX_STATUS}"
