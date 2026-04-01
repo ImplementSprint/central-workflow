@@ -125,9 +125,9 @@ jobs:
               exit 1
               ;;
             api)
-              echo "⚙️  Backend API deployment not yet configured."
-              echo "❌ Provide real deployment commands (e.g. kubectl, docker push, cloud CLI) here."
-              exit 1
+              echo "⏭️  Backend API staging deployment skipped — not yet configured."
+              echo "   Add real deployment commands (e.g. kubectl, docker push, cloud CLI) here when ready."
+              exit 0
               ;;
             mobile)
               echo "📱 Mobile deployment not yet configured."
