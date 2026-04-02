@@ -271,15 +271,17 @@ jobs:
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
         run: |
           ZIP_FILE=$(find . -maxdepth 2 -type f \( -name "*.app.zip" -o -name "*-ios-simulator-app.zip" \) | head -n 1)
+          DEST_DIR="ios/build/Build/Products/Debug-iphonesimulator"
 
           if [ -z "${ZIP_FILE}" ]; then
             ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
           fi
 
           if [ -n "${ZIP_FILE}" ]; then
-            unzip -o "${ZIP_FILE}"
+            mkdir -p "${DEST_DIR}"
+            unzip -o "${ZIP_FILE}" -d "${DEST_DIR}"
             rm -f "${ZIP_FILE}"
-            echo "✅ Extracted pre-built iOS artifact: ${ZIP_FILE}"
+            echo "✅ Extracted pre-built iOS artifact into ${DEST_DIR}: ${ZIP_FILE}"
           else
             echo "❌ No iOS zip artifact found in downloaded artifact payload."
             exit 1
@@ -370,6 +372,8 @@ jobs:
           CONTAINER_PATH: ${{ steps.ios-scheme.outputs.container_path }}
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
           DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-build-command }}
+          FORCE_BUNDLING: "1"
+          SKIP_BUNDLING: ""
         run: |
           DEFAULT_CMD='npx detox build -c ios.sim.debug'
           if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then

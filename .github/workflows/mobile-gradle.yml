@@ -173,6 +173,40 @@ jobs:
             fi
           done
 
+      - name: Force React Native debug JS bundling for CI
+        if: ${{ steps.detect.outputs.stack == 'react-native' }}
+        run: |
+          BUILD_GRADLE="android/app/build.gradle"
+
+          if [ ! -f "${BUILD_GRADLE}" ]; then
+            echo "ℹ️ No ${BUILD_GRADLE} file found to patch."
+            exit 0
+          fi
+
+          if grep -Fq 'debuggableVariants = []' "${BUILD_GRADLE}"; then
+            echo "ℹ️ Debug JS bundling is already forced in ${BUILD_GRADLE}."
+            exit 0
+          fi
+
+          python3 <<'PY'
+from pathlib import Path
+
+build_gradle_path = Path("android/app/build.gradle")
+content = build_gradle_path.read_text(encoding="utf-8")
+needle = "react {\n"
+replacement = (
+    "react {\n"
+    "    // Force JS bundling in debug builds for CI Detox runs.\n"
+    "    debuggableVariants = []\n"
+)
+
+if needle not in content:
+    raise SystemExit(f"❌ Unable to find a react {{ block in {build_gradle_path}.")
+
+build_gradle_path.write_text(content.replace(needle, replacement, 1), encoding="utf-8")
+print(f"✅ Forced debug JS bundling in {build_gradle_path}.")
+PY
+
       - name: Resolve Gradle Wrapper Directory
         id: gradle
         run: |

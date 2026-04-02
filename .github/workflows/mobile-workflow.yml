@@ -538,6 +538,8 @@ jobs:
           CONTAINER_PATH: ${{ steps.ios-scheme.outputs.container_path }}
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
           DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-ios-build-command }}
+          FORCE_BUNDLING: "1"
+          SKIP_BUNDLING: ""
         run: |
           DEFAULT_CMD='npx detox build -c ios.sim.debug'
           if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
