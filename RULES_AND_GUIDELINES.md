@@ -106,13 +106,13 @@ You do not need access to central workflow internals. Follow these rules through
 
 - TypeScript strict mode is required for Expo and React Native TypeScript projects.
 - Keep lint, typecheck, and unit test scripts healthy.
-- Keep Detox E2E setup healthy for required platforms.
+- Keep Maestro E2E setup healthy for required platforms.
 - Coverage must remain >= 80%.
 
 ### 4.3 Build and Artifact Requirements
 
 - Android and iOS build jobs must pass where enabled for the system.
-- Detox E2E must pass after successful build jobs.
+- Maestro E2E must pass after successful build jobs.
 - Mobile artifact expectations:
 	- Android artifacts: `.apk` (and optional release `.aab`)
 	- iOS artifacts: `.app.zip` for app bundles and optional `.xcarchive.zip` for release-prep

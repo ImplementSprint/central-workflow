@@ -2,7 +2,7 @@
 # ║  ORCHESTRATOR: Expo Mobile CI/CD Pipeline                      ║
 # ║  Stage 1 (gates): test → typescript → lint → security         ║
 # ║  Stage 2 (build): local Android build · local iOS build        ║
-# ║  Stage 3 (test):  Detox Android E2E  · Detox iOS E2E           ║
+# ║  Stage 3 (test):  Maestro Android E2E · Maestro iOS E2E         ║
 # ╚══════════════════════════════════════════════════════════════════╝
 name: "Expo Mobile CI/CD Pipeline"
 
@@ -52,42 +52,42 @@ on:
         required: false
         type: boolean
         default: true
-        description: "Run local Android app build for Detox (debug APK)"
+        description: "Run local Android app build for Maestro (debug APK)"
       enable-ios-build:
         required: false
         type: boolean
         default: true
-        description: "Run local iOS simulator app build for Detox (.app)"
-      enable-detox:
+        description: "Run local iOS simulator app build for Maestro (.app)"
+      enable-maestro:
         required: false
         type: boolean
         default: true
-        description: "Run Detox Android E2E tests"
-      enable-detox-ios:
+        description: "Run Maestro Android E2E tests"
+      enable-maestro-ios:
         required: false
         type: boolean
         default: true
-        description: "Run Detox iOS E2E tests"
-      detox-build-command:
+        description: "Run Maestro iOS E2E tests"
+      android-build-command:
         required: false
         type: string
-        default: "npx detox build -c android.emu.debug"
-        description: "Command used to produce the Android app binary for Detox"
-      detox-test-command:
+        default: "cd android && ./gradlew :app:assembleDebug"
+        description: "Command used to produce the Android app binary for Maestro"
+      maestro-test-command:
         required: false
         type: string
-        default: "npx detox test -c android.emu.debug --headless"
-        description: "Detox Android test command"
-      detox-ios-build-command:
+        default: "maestro test .maestro"
+        description: "Maestro Android test command"
+      ios-build-command:
         required: false
         type: string
-        default: "npx detox build -c ios.sim.debug"
-        description: "Command used to produce the iOS app binary for Detox"
-      detox-ios-test-command:
+        default: ""
+        description: "Optional custom command used to produce the iOS app binary for Maestro"
+      maestro-ios-test-command:
         required: false
         type: string
-        default: "npx detox test -c ios.sim.debug --cleanup"
-        description: "Detox iOS test command"
+        default: "maestro test .maestro"
+        description: "Maestro iOS test command"
 
 permissions:
   contents: read
@@ -328,9 +328,9 @@ jobs:
           java-version: ${{ inputs.java-version }}
 
       - name: Build Android app binary
-        run: ${{ inputs.detox-build-command }}
+        run: ${{ inputs.android-build-command }}
 
-      - name: Normalize Android APK path for Detox
+      - name: Normalize Android APK path for Maestro
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
@@ -339,7 +339,7 @@ jobs:
             exit 0
           fi
 
-          CANDIDATE_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" | sort | head -n 1)
+          CANDIDATE_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
           if [ -n "${CANDIDATE_APK}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE_APK}" "${EXPECTED_APK}"
@@ -349,52 +349,26 @@ jobs:
             exit 1
           fi
 
-      - name: Normalize Android test APK path for Detox
-        run: |
-          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
-
-          if [ -f "${EXPECTED_TEST_APK}" ]; then
-            echo "✅ Android test APK already present at expected path: ${EXPECTED_TEST_APK}"
-            exit 0
-          fi
-
-          CANDIDATE_TEST_APK=$(find android/app/build/outputs/apk -type f \( -name "*-androidTest.apk" -o -path "*/androidTest/*/*.apk" \) | sort | head -n 1)
-          if [ -n "${CANDIDATE_TEST_APK}" ]; then
-            mkdir -p "$(dirname "${EXPECTED_TEST_APK}")"
-            cp "${CANDIDATE_TEST_APK}" "${EXPECTED_TEST_APK}"
-            echo "✅ Normalized Android test APK path: ${CANDIDATE_TEST_APK} -> ${EXPECTED_TEST_APK}"
-          else
-            echo "❌ No Android test APK was produced after build."
-            exit 1
-          fi
-
       - name: Archive Android build outputs
         id: archive-android
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
-          EXPECTED_TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
           if [ ! -f "${EXPECTED_APK}" ]; then
             echo "❌ Android APK not found at ${EXPECTED_APK} after build."
             exit 1
           fi
-          if [ ! -f "${EXPECTED_TEST_APK}" ]; then
-            echo "❌ Android test APK not found at ${EXPECTED_TEST_APK} after build."
-            exit 1
-          fi
 
-          ARTIFACT_DIR="android-detox-build-artifact"
+          ARTIFACT_DIR="android-maestro-build-artifact"
           mkdir -p "${ARTIFACT_DIR}/android/app/build/outputs/apk/debug"
-          mkdir -p "${ARTIFACT_DIR}/android/app/build/outputs/apk/androidTest/debug"
           cp "${EXPECTED_APK}" "${ARTIFACT_DIR}/android/app/build/outputs/apk/debug/app-debug.apk"
-          cp "${EXPECTED_TEST_APK}" "${ARTIFACT_DIR}/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 
           echo "artifact_path=${PWD}/${ARTIFACT_DIR}" >> "$GITHUB_OUTPUT"
-          echo "✅ Android app APK and test APK ready for upload."
+          echo "✅ Android app APK ready for upload."
 
       - name: Upload Android build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.system-name }}-android-detox-build
+          name: ${{ inputs.system-name }}-android-maestro-build
           path: ${{ steps.archive-android.outputs.artifact_path }}
           retention-days: 14
 
@@ -537,19 +511,18 @@ jobs:
           CONTAINER_FLAG: ${{ steps.ios-scheme.outputs.container_flag }}
           CONTAINER_PATH: ${{ steps.ios-scheme.outputs.container_path }}
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
-          DETOX_IOS_BUILD_COMMAND: ${{ inputs.detox-ios-build-command }}
+          IOS_BUILD_COMMAND: ${{ inputs.ios-build-command }}
           FORCE_BUNDLING: "1"
           SKIP_BUNDLING: ""
         run: |
-          DEFAULT_CMD='npx detox build -c ios.sim.debug'
-          if [ "${DETOX_IOS_BUILD_COMMAND}" != "${DEFAULT_CMD}" ]; then
-            echo "ℹ️ Running custom iOS app build command for Detox."
+          if [ -n "${IOS_BUILD_COMMAND}" ]; then
+            echo "ℹ️ Running custom iOS app build command for Maestro."
             # Use bash -c with the command passed via env var to avoid direct eval of interpolated input
-            bash -c "${DETOX_IOS_BUILD_COMMAND}"
+            bash -c "${IOS_BUILD_COMMAND}"
             exit 0
           fi
 
-          echo "ℹ️ Running explicit xcodebuild for the default Detox iOS simulator configuration."
+          echo "ℹ️ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
             -scheme "${SCHEME}" \
@@ -563,9 +536,9 @@ jobs:
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
             clean build
 
-      - name: Normalize iOS app bundle path for Detox
+      - name: Normalize iOS app bundle path for Maestro
         run: |
-          EXPECTED_APP="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
+          EXPECTED_APP="ios/build/Build/Products/Debug-iphonesimulator/MaestroApp.app"
 
           if [ -d "${EXPECTED_APP}" ]; then
             echo "✅ iOS app bundle already present at expected path: ${EXPECTED_APP}"
@@ -586,12 +559,12 @@ jobs:
       - name: Archive iOS build outputs
         id: archive-ios
         run: |
-          APP_PATH="ios/build/Build/Products/Debug-iphonesimulator/DetoxApp.app"
+          APP_PATH="ios/build/Build/Products/Debug-iphonesimulator/MaestroApp.app"
           if [ ! -d "${APP_PATH}" ]; then
             echo "❌ iOS .app bundle not found after the app build step."
             exit 1
           fi
-          ZIP_PATH="detox-ios-build.app.zip"
+          ZIP_PATH="maestro-ios-build.app.zip"
           ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
           echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
           echo "✅ iOS app bundle zipped for upload."
@@ -599,51 +572,51 @@ jobs:
       - name: Upload iOS build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.system-name }}-ios-detox-build
+          name: ${{ inputs.system-name }}-ios-maestro-build
           path: ${{ steps.archive-ios.outputs.artifact_path }}
           retention-days: 14
 
-  # ── Stage 3A: Detox Android E2E ──────────────────────────────────────────
-  mobile-detox:
-    name: "Mobile — Detox Android E2E"
+  # ── Stage 3A: Maestro Android E2E ──────────────────────────────────────────
+  mobile-maestro:
+    name: "Mobile — Maestro Android E2E"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
     if: |
       always() &&
-      inputs.enable-detox &&
+      inputs.enable-maestro &&
       needs.android-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
       !contains(needs.mobile-unit-tests.result, 'failure') &&
       !contains(needs.expo-typescript-standard.result, 'cancelled') &&
       !contains(needs.mobile-unit-tests.result, 'cancelled')
-    uses: ./.github/workflows/mobile-detox.yml
+    uses: ./.github/workflows/mobile-maestro.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
       java-version: ${{ inputs.java-version }}
-      detox-build-command: ${{ inputs.detox-build-command }}
-      detox-test-command: ${{ inputs.detox-test-command }}
+      android-build-command: ${{ inputs.android-build-command }}
+      maestro-test-command: ${{ inputs.maestro-test-command }}
       skip-build: ${{ needs.android-build.result == 'success' }}
-      build-artifact-name: ${{ needs.android-build.result == 'success' && format('{0}-android-detox-build', inputs.system-name) || '' }}
+      build-artifact-name: ${{ needs.android-build.result == 'success' && format('{0}-android-maestro-build', inputs.system-name) || '' }}
 
-  # ── Stage 3B: Detox iOS E2E ─────────────────────────────────────────────
-  mobile-detox-ios:
-    name: "Mobile — Detox iOS E2E"
+  # ── Stage 3B: Maestro iOS E2E ─────────────────────────────────────────────
+  mobile-maestro-ios:
+    name: "Mobile — Maestro iOS E2E"
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&
-      inputs.enable-detox-ios &&
+      inputs.enable-maestro-ios &&
       needs.ios-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
       !contains(needs.mobile-unit-tests.result, 'failure') &&
       !contains(needs.expo-typescript-standard.result, 'cancelled') &&
       !contains(needs.mobile-unit-tests.result, 'cancelled')
-    uses: ./.github/workflows/mobile-detox-ios.yml
+    uses: ./.github/workflows/mobile-maestro-ios.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      detox-build-command: ${{ inputs.detox-ios-build-command }}
-      detox-test-command: ${{ inputs.detox-ios-test-command }}
+      ios-build-command: ${{ inputs.ios-build-command }}
+      maestro-test-command: ${{ inputs.maestro-ios-test-command }}
       skip-build: ${{ needs.ios-build.result == 'success' }}
-      build-artifact-name: ${{ needs.ios-build.result == 'success' && format('{0}-ios-detox-build', inputs.system-name) || '' }}
+      build-artifact-name: ${{ needs.ios-build.result == 'success' && format('{0}-ios-maestro-build', inputs.system-name) || '' }}

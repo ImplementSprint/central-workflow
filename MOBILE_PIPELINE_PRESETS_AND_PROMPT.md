@@ -38,16 +38,17 @@ All other flags are optional overrides. If omitted, workflow defaults are used.
 Optional iOS override:
 
 - `enable_ios_build` (defaults to `true` for Expo systems)
-- `enable_detox_ios` (defaults to `true` for Expo systems; set to `false` to disable)
+- `enable_maestro_ios` (defaults to `true` for Expo systems; set to `false` to disable)
 
 Note:
 
 - SonarCloud runs once at the master mobile pipeline level, not inside each `mobile-workflow.yml` execution.
-- Detox runs by default for Expo systems and is not meant to be toggled per system.
-- Detox Android and Detox iOS run by default for Expo systems. Disable iOS Detox with `enable_detox_ios: false`.
+- Maestro runs by default for Expo systems and is not meant to be toggled per system.
+- Maestro Android and Maestro iOS run by default for Expo systems. Disable iOS Maestro with `enable_maestro_ios: false`.
 - Expo systems are required to use TypeScript, not JavaScript.
-- Builds are local (xcodebuild for iOS / Gradle for Android) — Detox consumes those app binaries for E2E, but is not the underlying builder.
-- Detox E2E tests consume build artifacts from the build stage (build → test flow).
+- Builds are local (xcodebuild for iOS / Gradle for Android) — Maestro consumes those app binaries for E2E, but is not the underlying builder.
+- Maestro E2E tests consume build artifacts from the build stage (build → test flow).
+- Maestro E2E fails fast if `.maestro` is missing or has no flow files.
 - The pipeline produces debug APK and simulator .app artifacts for each system.
 
 ---
@@ -79,7 +80,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "enable_security_scan": true,
   "enable_governance": true,
   "enable_android_build": true,
-  "enable_detox_ios": true,
+  "enable_maestro_ios": true,
   "version_stream": "mobile-expo"
 }
 ```
@@ -127,7 +128,7 @@ Variable name: `MOBILE_SINGLE_SYSTEMS_JSON`
   "enable_governance": true,
   "enable_android_build": true,
   "enable_ios_build": true,
-  "enable_detox_ios": true,
+  "enable_maestro_ios": true,
   "version_stream": "mobile-react-native"
 }
 ```
@@ -153,7 +154,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "enable_security_scan": true,
     "enable_governance": true,
     "enable_android_build": true,
-    "enable_detox_ios": true,
+    "enable_maestro_ios": true,
     "version_stream": "mobile-expo"
   },
   {
@@ -186,7 +187,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
     "enable_governance": true,
     "enable_android_build": true,
     "enable_ios_build": true,
-    "enable_detox_ios": true,
+    "enable_maestro_ios": true,
     "version_stream": "mobile-react-native"
   }
 ]
@@ -219,22 +220,21 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 >
 > - `package.json` exists at the Expo app folder
 > - `tsconfig.json` exists and strict TypeScript is enabled
-> - Detox configuration exists (`.detoxrc.js` or `detox` config in `package.json`) with `android.emu.debug` and `ios.sim.debug` configurations
-> - `detox` is installed as a local devDependency and the repo's Jest E2E config is compatible with the installed Detox version, either through a supported Detox runner entrypoint such as `detox/runners/jest/testEnvironment`, `detox/runners/jest`, legacy `detox/runners/jest-circus/...`, or a custom Jest environment file
-> - Do not keep legacy Detox init code that calls `jasmine.getEnv().addReporter(...)`; current Jest/Detox setups should not depend on the global `jasmine` object
+> - `.maestro/` exists and contains at least one flow file (`.yaml` or `.yml`)
+> - `maestro` is available in CI (via the central workflow install step)
 > - basic test/lint scripts exist in `package.json`
 >
 > For `kotlin-single`, ensure:
 >
 > - Gradle wrapper exists (`gradlew` + wrapper files)
 > - Android/Kotlin app structure is valid for `assembleDebug`
-
+>
 > For `react-native-single`, ensure:
-
+>
 > - `package.json` and `tsconfig.json` exist in the RN app folder
 > - `android/` and `ios/` native folders exist
-> - Detox configuration exists (`.detoxrc.js` or `detox` config in `package.json`) with `android.emu.debug` and `ios.sim.debug` configurations
-> - `detox` is installed as a local devDependency and the repo's Jest E2E config is compatible with the installed Detox version
+> - `.maestro/` exists and contains at least one flow file (`.yaml` or `.yml`)
+> - `maestro` is available in CI (via the central workflow install step)
 > - basic test/lint scripts exist in `package.json`
 >
 > For `mixed-multi`, ensure all configured structures exist in separate folders and are independently buildable.
@@ -282,13 +282,14 @@ The Expo and React Native CI sub-workflows (`mobile-workflow.yml`, `mobile-react
 
 **Stage 2 — Build binaries (parallel, starts after all Stage 1 gates pass):**
 
-- Android debug build for Detox (APK + androidTest APK)
-- iOS simulator build for Detox (`.app`, archived as `.app.zip`)
+- Android debug build for Maestro (APK)
+- iOS simulator build for Maestro (`.app`, archived as `.app.zip`)
 
-**Stage 3 — Detox E2E:**
+**Stage 3 — Maestro E2E:**
 
-- Detox Android runs only if Android build succeeded.
-- Detox iOS runs only if iOS build succeeded.
+- Maestro Android runs only if Android build succeeded.
+- Maestro iOS runs only if iOS build succeeded.
+- Maestro jobs fail fast when `.maestro` is missing or has no flow files.
 
 A failure in any Stage 1 gate blocks Stage 2 and Stage 3.
 
@@ -315,8 +316,8 @@ Release artifact builds run in a separate reusable workflow (`mobile-release-bui
 ## 7) Platform coverage note
 
 - Current CI implementation includes local Android/iOS build artifacts for Expo and React Native systems, plus direct Gradle builds for Kotlin Android systems.
-- Expo baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Detox Android/iOS E2E.
-- React Native baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Detox Android/iOS E2E.
+- Expo baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Maestro Android/iOS E2E.
+- React Native baseline: Jest + strict TypeScript + Android/iOS local build artifacts + Maestro Android/iOS E2E.
 - Kotlin baseline: direct Gradle Android build artifacts.
 - EAS credentials are not required for the default Expo pipeline path in this repository.
 

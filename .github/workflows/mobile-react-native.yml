@@ -52,36 +52,26 @@ on:
         type: boolean
         default: true
         description: "Run iOS simulator app build"
-      enable-detox:
+      enable-maestro:
         required: false
         type: boolean
         default: true
-        description: "Run Detox Android E2E tests"
-      enable-detox-ios:
+        description: "Run Maestro Android E2E tests"
+      enable-maestro-ios:
         required: false
         type: boolean
         default: true
-        description: "Run Detox iOS E2E tests"
-      detox-build-command:
+        description: "Run Maestro iOS E2E tests"
+      maestro-test-command:
         required: false
         type: string
-        default: "npx detox build -c android.emu.debug"
-        description: "Detox Android build command (used when skip-build is false)"
-      detox-test-command:
+        default: "maestro test .maestro"
+        description: "Maestro Android test command"
+      maestro-ios-test-command:
         required: false
         type: string
-        default: "npx detox test -c android.emu.debug --headless"
-        description: "Detox Android test command"
-      detox-ios-build-command:
-        required: false
-        type: string
-        default: "npx detox build -c ios.sim.debug"
-        description: "Detox iOS build command (used when skip-build is false)"
-      detox-ios-test-command:
-        required: false
-        type: string
-        default: "npx detox test -c ios.sim.debug --cleanup"
-        description: "Detox iOS test command"
+        default: "maestro test .maestro"
+        description: "Maestro iOS test command"
 
 permissions:
   contents: read
@@ -266,39 +256,37 @@ jobs:
       node-version: ${{ inputs.node-version }}
       upload-artifact: true
 
-  mobile-detox:
-    name: "Detox Android E2E"
+  mobile-maestro:
+    name: "Maestro Android E2E"
     needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
     if: |
       always() &&
-      inputs.enable-detox &&
+      inputs.enable-maestro &&
       needs.android-build.result == 'success' &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    uses: ./.github/workflows/mobile-detox.yml
+    uses: ./.github/workflows/mobile-maestro.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
       java-version: ${{ inputs.java-version }}
-      detox-build-command: ${{ inputs.detox-build-command }}
-      detox-test-command: ${{ inputs.detox-test-command }}
+      maestro-test-command: ${{ inputs.maestro-test-command }}
       skip-build: true
       build-artifact-name: ${{ format('{0}-android-build', inputs.system-name) }}
 
-  mobile-detox-ios:
-    name: "Detox iOS E2E"
+  mobile-maestro-ios:
+    name: "Maestro iOS E2E"
     needs: [rn-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&
-      inputs.enable-detox-ios &&
+      inputs.enable-maestro-ios &&
       needs.ios-build.result == 'success' &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    uses: ./.github/workflows/mobile-detox-ios.yml
+    uses: ./.github/workflows/mobile-maestro-ios.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      detox-build-command: ${{ inputs.detox-ios-build-command }}
-      detox-test-command: ${{ inputs.detox-ios-test-command }}
+      maestro-test-command: ${{ inputs.maestro-ios-test-command }}
       skip-build: true
       build-artifact-name: ${{ format('{0}-ios-simulator-build', inputs.system-name) }}

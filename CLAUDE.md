@@ -20,8 +20,8 @@ Stage 2 (builds, require all Stage 1 to pass):
   android-build, ios-build
 
 Stage 3 (E2E, require respective build to succeed):
-  mobile-detox       → requires android-build == success
-  mobile-detox-ios   → requires ios-build == success
+  mobile-maestro       → requires android-build == success
+  mobile-maestro-ios   → requires ios-build == success
 
 Separate release-build lanes (master pipeline):
   mobile-expo-release (runs after mobile-expo success/skipped)
@@ -66,7 +66,7 @@ Build/deploy: Docker build, staging deploy, production gate.
 - Android release (optional): upload direct `.aab`/`.apk` artifacts
 - Android release default task runs `assembleRelease bundleRelease` to produce installable APK and AAB
 - iOS release-prep (optional): upload `.xcarchive.zip` until signed IPA export is enabled
-- Naming: `{system-name}-{type}` (e.g., `MyApp-android-detox-build`)
+- Naming: `{system-name}-{type}` (e.g., `MyApp-android-maestro-build`)
 - Retention: 14 days for build artifacts, 30 days for audit reports
 
 ### Concurrency & Deduplication
@@ -83,8 +83,9 @@ Build/deploy: Docker build, staging deploy, production gate.
 
 - Build jobs use `always()` + `!contains(needs.*.result, 'failure')` because
   GitHub Actions skips dependent jobs by default when upstream is skipped.
-- Detox E2E jobs require `needs.<build>.result == 'success'` (strict — no skipped fallback).
-- The `always()` is still needed on Detox jobs because upstream build jobs use `always()`.
+- Maestro E2E jobs require `needs.<build>.result == 'success'` (strict — no skipped fallback).
+- The `always()` is still needed on Maestro jobs because upstream build jobs use `always()`.
+- Maestro E2E jobs fail fast when `.maestro` is missing or contains no flow files.
 - Release build lanes are branch-gated to test/uat/main and run after Expo/RN CI lane success/skipped.
 - For nested reusable workflows, caller jobs must explicitly grant any permissions
   requested by nested jobs (for example `packages: write` and `security-events: write`
@@ -112,8 +113,8 @@ Linear promotion with automated PR creation via `promotion.yml`.
 | `mobile-workflow.yml` | Expo mobile CI/CD orchestrator |
 | `mobile-react-native.yml` | React Native mobile CI/CD orchestrator |
 | `mobile-release-build.yml` | Expo release artifact builder (reusable) |
-| `mobile-detox.yml` | Android Detox E2E (reusable) |
-| `mobile-detox-ios.yml` | iOS Detox E2E (reusable) |
+| `mobile-maestro.yml` | Android Maestro E2E (reusable) |
+| `mobile-maestro-ios.yml` | iOS Maestro E2E (reusable) |
 | `mobile-gradle.yml` | Android Gradle build (reusable) |
 | `mobile-ios-build.yml` | iOS xcodebuild (reusable) |
 | `mobile-rn-ios-build.yml` | React Native iOS xcodebuild (reusable) |

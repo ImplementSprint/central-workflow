@@ -196,7 +196,7 @@ jobs:
           needle = "react {\n"
           replacement = (
               "react {\n"
-              "    // Force JS bundling in debug builds for CI Detox runs.\n"
+              "    // Force JS bundling in debug builds for CI mobile E2E runs.\n"
               "    debuggableVariants = []\n"
           )
 
