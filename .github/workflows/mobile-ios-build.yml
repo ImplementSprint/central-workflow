@@ -163,6 +163,8 @@ jobs:
           CONTAINER_FLAG: ${{ steps.scheme.outputs.container_flag }}
           CONTAINER_PATH: ${{ steps.scheme.outputs.container_path }}
           SCHEME: ${{ steps.scheme.outputs.scheme }}
+          FORCE_BUNDLING: "1"
+          SKIP_BUNDLING: ""
         run: |
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \

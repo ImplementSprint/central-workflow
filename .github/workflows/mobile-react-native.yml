@@ -238,7 +238,7 @@ jobs:
       node-version: ${{ inputs.node-version }}
       java-version: ${{ inputs.java-version }}
       project-type: react-native
-      gradle-task: "assembleDebug assembleAndroidTest"
+      gradle-task: "assembleDebug"
       enable-docker-build: false
       upload-artifact: true
 
@@ -249,7 +249,7 @@ jobs:
       always() &&
       inputs.enable-ios-build &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    uses: ./.github/workflows/mobile-rn-ios-build.yml
+    uses: ./.github/workflows/mobile-ios-build.yml
     with:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
