@@ -464,7 +464,8 @@ jobs:
     needs: [classify-systems, mobile-expo]
     if: >-
       always() &&
-      fromJson(needs.classify-systems.outputs.expo_count) > 0 &&
+      needs.classify-systems.result == 'success' &&
+      fromJson(needs.classify-systems.outputs.expo_count || '0') > 0 &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
@@ -562,7 +563,8 @@ jobs:
     needs: [classify-systems, mobile-react-native]
     if: >-
       always() &&
-      fromJson(needs.classify-systems.outputs.react_native_count) > 0 &&
+      needs.classify-systems.result == 'success' &&
+      fromJson(needs.classify-systems.outputs.react_native_count || '0') > 0 &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped') &&
       (github.ref == 'refs/heads/test' || github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
