@@ -31,6 +31,9 @@ on:
         description: "npm audit result"
         value: ${{ jobs.dependency-audit.outputs.result }}
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 

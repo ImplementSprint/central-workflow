@@ -43,6 +43,9 @@ on:
         default: ""
         description: "GitHub artifact name containing pre-built Android output (direct APK files)"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
@@ -266,6 +269,8 @@ jobs:
           script: |
             cd ${{ inputs.working-directory }}
             export PATH="$HOME/.maestro/bin:$PATH"
+            LOG_FILE="maestro-run.log"
+            : > "${LOG_FILE}"
 
             echo "⏳ Waiting for Android emulator boot completion..."
             SERIAL=""
@@ -348,7 +353,7 @@ jobs:
             export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
             MAESTRO_CMD="${{ inputs.maestro-test-command }}"
 
-            if [[ "${MAESTRO_CMD}" == *"maestro test .maestro"* ]] && [[ "${MAESTRO_CMD}" != *"--include-tags"* ]] && [[ "${MAESTRO_CMD}" != *"--exclude-tags"* ]]; then
+            if echo "${MAESTRO_CMD}" | grep -q 'maestro test .maestro' && ! echo "${MAESTRO_CMD}" | grep -q -- '--include-tags' && ! echo "${MAESTRO_CMD}" | grep -q -- '--exclude-tags'; then
               MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags ios"
               echo "ℹ️ Auto-applied Maestro Android filter: --exclude-tags ios"
             fi
@@ -372,10 +377,10 @@ jobs:
 
             echo "▶️ Running Maestro tests..."
             set +e
-            bash -lc "${MAESTRO_CMD}" > maestro-run.log 2>&1
+            bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
             MAESTRO_STATUS=$?
             set -e
-            cat maestro-run.log
+            cat "${LOG_FILE}"
             echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
             exit 0
 
@@ -384,7 +389,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.system-name }}-maestro-android-log
-          path: ${{ format('{0}/maestro-run.log', inputs.working-directory) }}
+          path: ${{ format('{0}/{1}/maestro-run.log', github.workspace, inputs.working-directory) }}
           if-no-files-found: warn
           retention-days: 14
 

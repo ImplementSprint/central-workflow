@@ -23,6 +23,9 @@ on:
         default: true
         description: "Upload iOS simulator build artifact"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 

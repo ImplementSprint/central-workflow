@@ -44,6 +44,9 @@ on:
         description: "Code coverage percentage"
         value: ${{ jobs.mobile-unit-tests.outputs.coverage }}
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
