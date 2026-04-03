@@ -340,10 +340,17 @@ jobs:
 
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND}"
 
-          if echo "${MAESTRO_CMD}" | grep -q 'maestro test .maestro' && ! echo "${MAESTRO_CMD}" | grep -q -- '--include-tags' && ! echo "${MAESTRO_CMD}" | grep -q -- '--exclude-tags'; then
-            MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags android"
-            echo "ℹ️ Auto-applied Maestro iOS filter: --exclude-tags android"
-          fi
+          case "${MAESTRO_CMD}" in
+            *"maestro test .maestro"*)
+              case "${MAESTRO_CMD}" in
+                *"--include-tags"*|*"--exclude-tags"*) ;;
+                *)
+                  MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags android"
+                  echo "ℹ️ Auto-applied Maestro iOS filter: --exclude-tags android"
+                  ;;
+              esac
+              ;;
+          esac
 
           FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
           if [ -n "${FLOW_APP_ID}" ] && [ -n "${RESOLVED_BUNDLE_ID}" ] && [ "${FLOW_APP_ID}" != "${RESOLVED_BUNDLE_ID}" ]; then
@@ -368,7 +375,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-maestro-ios-log
-          path: ${{ format('{0}/{1}/maestro-ios-run.log', github.workspace, inputs.working-directory) }}
+          path: ${{ inputs.working-directory == '.' && format('{0}/maestro-ios-run.log', github.workspace) || format('{0}/{1}/maestro-ios-run.log', github.workspace, inputs.working-directory) }}
           if-no-files-found: warn
           retention-days: 14
 

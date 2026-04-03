@@ -265,7 +265,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -accel off -noaudio -no-boot-anim -wipe-data
           disable-animations: false
           script: |
-            cd ${{ inputs.working-directory }}
+            cd "${{ inputs.working-directory }}"
             export PATH="$HOME/.maestro/bin:$PATH"
             LOG_FILE="maestro-run.log"
             : > "${LOG_FILE}"
@@ -351,10 +351,17 @@ jobs:
             export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
             MAESTRO_CMD="${{ inputs.maestro-test-command }}"
 
-            if echo "${MAESTRO_CMD}" | grep -q 'maestro test .maestro' && ! echo "${MAESTRO_CMD}" | grep -q -- '--include-tags' && ! echo "${MAESTRO_CMD}" | grep -q -- '--exclude-tags'; then
-              MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags ios"
-              echo "ℹ️ Auto-applied Maestro Android filter: --exclude-tags ios"
-            fi
+            case "${MAESTRO_CMD}" in
+              *"maestro test .maestro"*)
+                case "${MAESTRO_CMD}" in
+                  *"--include-tags"*|*"--exclude-tags"*) ;;
+                  *)
+                    MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags ios"
+                    echo "ℹ️ Auto-applied Maestro Android filter: --exclude-tags ios"
+                    ;;
+                esac
+                ;;
+            esac
 
             FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
             if [ -n "${FLOW_APP_ID}" ]; then
@@ -387,7 +394,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-maestro-android-log
-          path: ${{ format('{0}/{1}/maestro-run.log', github.workspace, inputs.working-directory) }}
+          path: ${{ inputs.working-directory == '.' && format('{0}/maestro-run.log', github.workspace) || format('{0}/{1}/maestro-run.log', github.workspace, inputs.working-directory) }}
           if-no-files-found: warn
           retention-days: 14
 
