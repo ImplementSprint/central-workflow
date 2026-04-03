@@ -674,6 +674,13 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=.
+            -Dsonar.tests=tests
+            -Dsonar.test.inclusions=tests/**/*
+            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**,**/.expo/**,**/.next/**,**/tests/**
+            -Dsonar.coverage.exclusions=**/tests/**,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/scripts/**,**/app.config.ts
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,**/coverage/lcov.info
+            -Dsonar.qualitygate.wait=true
 
   k6-systems:
     name: "Detect k6-Enabled Mobile Systems"
