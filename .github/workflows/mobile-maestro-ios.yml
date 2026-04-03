@@ -38,8 +38,6 @@ on:
         default: ""
         description: "GitHub artifact name containing pre-built iOS simulator output (.app.zip)"
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 permissions:
   contents: read
@@ -147,7 +145,7 @@ jobs:
 
       - name: Download pre-built iOS artifact
         if: ${{ inputs.skip-build && inputs.build-artifact-name != '' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.build-artifact-name }}
           path: ${{ inputs.working-directory != '.' && format('{0}/{1}', github.workspace, inputs.working-directory) || github.workspace }}
@@ -367,7 +365,7 @@ jobs:
 
       - name: Upload Maestro iOS run log
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-maestro-ios-log
           path: ${{ format('{0}/{1}/maestro-ios-run.log', github.workspace, inputs.working-directory) }}

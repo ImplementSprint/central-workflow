@@ -90,7 +90,7 @@ jobs:
           echo "release_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Download mobile artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{ inputs.system-name }}-*
           path: release-assets/${{ inputs.system-name }}

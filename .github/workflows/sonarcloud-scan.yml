@@ -76,7 +76,7 @@ jobs:
 
       - name: Download Coverage Report
         if: ${{ inputs.coverage-artifact-name != '' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.coverage-artifact-name }}
           path: ${{ inputs.working-directory }}/coverage

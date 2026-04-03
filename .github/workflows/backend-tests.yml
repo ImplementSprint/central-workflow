@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload Coverage Artifact
         if: ${{ inputs.upload-artifact && always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-coverage
           path: ${{ inputs.working-directory }}/coverage
@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-unit-test-results
           path: |
@@ -201,7 +201,7 @@ jobs:
 
       - name: Upload Integration Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-integration-test-results
           path: ${{ inputs.working-directory }}/test-results/

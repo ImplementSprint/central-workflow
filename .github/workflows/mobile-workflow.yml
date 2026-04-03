@@ -89,8 +89,6 @@ on:
         default: "maestro test .maestro"
         description: "Maestro iOS test command"
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 permissions:
   contents: read
@@ -369,7 +367,7 @@ jobs:
           echo "✅ Android app APK ready for upload."
 
       - name: Upload Android build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-android-maestro-build
           path: ${{ steps.archive-android.outputs.artifact_path }}
@@ -573,7 +571,7 @@ jobs:
           echo "✅ iOS app bundle zipped for upload."
 
       - name: Upload iOS build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-ios-maestro-build
           path: ${{ steps.archive-ios.outputs.artifact_path }}

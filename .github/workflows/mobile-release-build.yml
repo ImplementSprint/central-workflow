@@ -228,7 +228,7 @@ jobs:
           ./gradlew ${{ inputs.android-release-gradle-task }} --no-daemon --stacktrace --warning-mode all
 
       - name: Upload Android release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-android-release-build
           path: |
@@ -407,7 +407,7 @@ jobs:
           echo "✅ iOS release-prep archive zipped for upload."
 
       - name: Upload iOS release-prep artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-ios-release-build
           path: ${{ steps.archive-ios-release.outputs.artifact_path }}
