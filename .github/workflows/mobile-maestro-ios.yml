@@ -325,6 +325,7 @@ jobs:
           echo "✅ Installed app on simulator ${SIM_UDID}"
 
       - name: Run Maestro tests on iOS simulator
+        id: maestro-ios-run
         env:
           MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
           SIM_UDID: ${{ steps.ios-sim.outputs.sim_udid }}
@@ -356,4 +357,20 @@ jobs:
           MAESTRO_STATUS=$?
           set -e
           cat maestro-ios-run.log
-          exit "${MAESTRO_STATUS}"
+          echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload Maestro iOS run log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-maestro-ios-log
+          path: ${{ format('{0}/maestro-ios-run.log', inputs.working-directory) }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail if Maestro iOS tests failed
+        if: ${{ steps.maestro-ios-run.outputs.maestro_status != '0' }}
+        run: |
+          echo "❌ Maestro iOS tests failed with exit code ${{ steps.maestro-ios-run.outputs.maestro_status }}."
+          exit 1

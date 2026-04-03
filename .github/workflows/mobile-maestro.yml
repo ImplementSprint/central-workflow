@@ -252,6 +252,7 @@ jobs:
           adb start-server || true
 
       - name: Run Maestro tests on Android emulator
+        id: maestro-android-run
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -375,4 +376,20 @@ jobs:
             MAESTRO_STATUS=$?
             set -e
             cat maestro-run.log
-            exit "${MAESTRO_STATUS}"
+            echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
+            exit 0
+
+      - name: Upload Maestro Android run log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.system-name }}-maestro-android-log
+          path: ${{ format('{0}/maestro-run.log', inputs.working-directory) }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail if Maestro Android tests failed
+        if: ${{ steps.maestro-android-run.outputs.maestro_status != '0' }}
+        run: |
+          echo "❌ Maestro Android tests failed with exit code ${{ steps.maestro-android-run.outputs.maestro_status }}."
+          exit 1
