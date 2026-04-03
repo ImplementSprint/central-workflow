@@ -227,13 +227,39 @@ jobs:
           chmod +x gradlew
           ./gradlew ${{ inputs.android-release-gradle-task }} --no-daemon --stacktrace --warning-mode all
 
+      - name: Stage Android release artifacts (flat)
+        id: stage-android-release
+        run: |
+          OUTPUT_DIR="release-artifacts/android"
+          mkdir -p "${OUTPUT_DIR}"
+
+          SEARCH_ROOT="${{ steps.gradle.outputs.gradle_dir }}/app/build/outputs"
+          APK_PATH=$(find "${SEARCH_ROOT}" -type f -name "*.apk" ! -name "*-androidTest.apk" -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-)
+          AAB_PATH=$(find "${SEARCH_ROOT}" -type f -name "*.aab" -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-)
+
+          if [ -z "${APK_PATH}" ] && [ -z "${AAB_PATH}" ]; then
+            echo "❌ No Android release APK/AAB outputs found under ${SEARCH_ROOT}."
+            exit 1
+          fi
+
+          if [ -n "${APK_PATH}" ]; then
+            cp "${APK_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.apk"
+            echo "✅ Staged release APK: ${APK_PATH}"
+          fi
+
+          if [ -n "${AAB_PATH}" ]; then
+            cp "${AAB_PATH}" "${OUTPUT_DIR}/${{ inputs.system-name }}-android.aab"
+            echo "✅ Staged release AAB: ${AAB_PATH}"
+          fi
+
       - name: Upload Android release artifacts
         uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-android-release-build
           path: |
-            ${{ inputs.system-dir }}/**/app/build/outputs/**/*.apk
-            ${{ inputs.system-dir }}/**/app/build/outputs/**/*.aab
+            ${{ inputs.system-dir }}/release-artifacts/android/*.apk
+            ${{ inputs.system-dir }}/release-artifacts/android/*.aab
+          if-no-files-found: error
           retention-days: 14
 
   ios-release-build:
