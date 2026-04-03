@@ -45,6 +45,14 @@ on:
         description: "Run governance checks (overrides per-system JSON)"
         type: boolean
         default: true
+      enable_maestro:
+        description: "Run Maestro Android E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
+      enable_maestro_ios:
+        description: "Run Maestro iOS E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -93,6 +101,14 @@ on:
         default: true
       enable_governance:
         description: "Run governance checks (overrides per-system JSON)"
+        type: boolean
+        default: true
+      enable_maestro:
+        description: "Run Maestro Android E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
+      enable_maestro_ios:
+        description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
         default: true
       run_deploy:
@@ -452,10 +468,10 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-maestro: true
+      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
       android-build-command: ${{ matrix.system.android_build_command || 'cd android && ./gradlew :app:assembleDebug' }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: true
+      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
     secrets: inherit
@@ -552,9 +568,9 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-maestro: true
+      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null }}
+      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
 
   mobile-react-native-release:
