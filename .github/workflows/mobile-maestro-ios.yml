@@ -336,6 +336,11 @@ jobs:
 
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND}"
 
+          if [[ "${MAESTRO_CMD}" == *"maestro test .maestro"* ]] && [[ "${MAESTRO_CMD}" != *"--include-tags"* ]] && [[ "${MAESTRO_CMD}" != *"--exclude-tags"* ]]; then
+            MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags android"
+            echo "ℹ️ Auto-applied Maestro iOS filter: --exclude-tags android"
+          fi
+
           FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
           if [ -n "${FLOW_APP_ID}" ] && [ -n "${RESOLVED_BUNDLE_ID}" ] && [ "${FLOW_APP_ID}" != "${RESOLVED_BUNDLE_ID}" ]; then
             echo "⚠️ Flow appId (${FLOW_APP_ID}) differs from built bundle id (${RESOLVED_BUNDLE_ID})."
