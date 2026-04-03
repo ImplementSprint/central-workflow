@@ -150,14 +150,26 @@ jobs:
     timeout-minutes: 30
     outputs:
       systems_json: ${{ steps.skip-check.outputs.skip == 'true' && '[]' || steps.resolve.outputs.systems_json }}
-      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (push superseded by open PR)' || steps.resolve.outputs.systems_label }}
+      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (dedupe/promotion policy)' || steps.resolve.outputs.systems_label }}
       pipeline_mode: ${{ steps.skip-check.outputs.skip == 'true' && 'skip' || steps.resolve.outputs.pipeline_mode }}
     steps:
-      - name: Prefer PR run when PR exists
+      - name: Apply run dedupe and promotion PR policy
         id: skip-check
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            case "${{ github.head_ref }}" in
+              test|uat|main)
+                echo "⏭️ Skipping promotion PR run for head branch '${{ github.head_ref }}'; protected-branch push run is authoritative."
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              *)
+                ;;
+            esac
+          fi
+
           if [ "${{ github.event_name }}" = "push" ]; then
             case "${{ github.ref_name }}" in
               test|uat|main)
