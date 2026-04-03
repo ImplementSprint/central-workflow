@@ -259,8 +259,149 @@ jobs:
           mkdir -p "${LOG_DIR}"
           : > "${LOG_DIR}/maestro-run.log"
 
+      - name: Create Android Maestro executor script
+        run: |
+          LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
+          SCRIPT_PATH="${LOG_DIR}/.maestro-android-exec.sh"
+
+          cat > "${SCRIPT_PATH}" <<'BASH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          LOG_DIR="__LOG_DIR__"
+          LOG_FILE="${LOG_DIR}/maestro-run.log"
+
+          cd "${LOG_DIR}"
+          export PATH="$HOME/.maestro/bin:$PATH"
+          : > "${LOG_FILE}"
+
+          echo "⏳ Waiting for Android emulator boot completion..."
+          SERIAL=""
+          for ATTEMPT in $(seq 1 60); do
+            SERIAL="$(adb devices | awk 'NR>1 && $1 ~ /^emulator-/ {print $1; exit}')"
+            if [ -n "${SERIAL}" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "${SERIAL}" ]; then
+            echo "❌ Could not detect emulator serial after 60s."
+            adb devices -l || true
+            exit 1
+          fi
+
+          echo "ℹ️ Using emulator serial: ${SERIAL}"
+          adb -s "${SERIAL}" wait-for-device
+
+          BOOT_RETRIES=0
+          MAX_BOOT_RETRIES=360
+          OFFLINE_RESETS=0
+          MAX_OFFLINE_RESETS=3
+
+          while true; do
+            BOOT_RETRIES=$((BOOT_RETRIES + 1))
+            STATE="$(adb devices | awk -v s="${SERIAL}" '$1==s {print $2}')"
+
+            if [ "${STATE}" = "offline" ]; then
+              OFFLINE_RESETS=$((OFFLINE_RESETS + 1))
+              echo "⚠️ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
+              adb kill-server || true
+              sleep 2
+              adb start-server || true
+              adb -s "${SERIAL}" wait-for-device || true
+            fi
+
+            if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then
+              echo "❌ Emulator remained offline after ${MAX_OFFLINE_RESETS} adb resets."
+              adb devices -l || true
+              exit 1
+            fi
+
+            SYS_BOOT_COMPLETED="$(adb -s "${SERIAL}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+            DEV_BOOT_COMPLETED="$(adb -s "${SERIAL}" shell getprop dev.bootcomplete 2>/dev/null | tr -d '\r')"
+            BOOT_ANIM="$(adb -s "${SERIAL}" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')"
+
+            if [ "${SYS_BOOT_COMPLETED}" = "1" ] && [ "${DEV_BOOT_COMPLETED}" = "1" ] && { [ "${BOOT_ANIM}" = "stopped" ] || [ -z "${BOOT_ANIM}" ]; }; then
+              break
+            fi
+
+            if [ "${BOOT_RETRIES}" -ge "${MAX_BOOT_RETRIES}" ]; then
+              echo "❌ Emulator boot not ready after ${MAX_BOOT_RETRIES}s."
+              echo "ℹ️ Last state: deviceState=${STATE:-unknown}, sys.boot_completed=${SYS_BOOT_COMPLETED:-unset}, dev.bootcomplete=${DEV_BOOT_COMPLETED:-unset}, init.svc.bootanim=${BOOT_ANIM:-unset}"
+              adb devices -l || true
+              adb -s "${SERIAL}" shell getprop | head -80 || true
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          adb -s "${SERIAL}" shell input keyevent 82 || true
+          echo "✅ Emulator boot completed"
+
+          APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "${APP_APK}" ]; then
+            APP_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+          fi
+
+          if [ -z "${APP_APK}" ] || [ ! -f "${APP_APK}" ]; then
+            echo "❌ Could not resolve app APK path for Maestro execution."
+            exit 1
+          fi
+
+          echo "📦 Installing APK: ${APP_APK}"
+          adb install -r "${APP_APK}"
+
+          export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
+          MAESTRO_CMD="${MAESTRO_TEST_COMMAND:-maestro test .maestro}"
+
+          case "${MAESTRO_CMD}" in
+            *"maestro test .maestro"*)
+              case "${MAESTRO_CMD}" in
+                *"--include-tags"*|*"--exclude-tags"*) ;;
+                *)
+                  MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags ios"
+                  echo "ℹ️ Auto-applied Maestro Android filter: --exclude-tags ios"
+                  ;;
+              esac
+              ;;
+          esac
+
+          FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
+          if [ -n "${FLOW_APP_ID}" ]; then
+            if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
+              echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
+              adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+            else
+              echo "❌ Flow appId not installed on emulator: ${FLOW_APP_ID}"
+              echo "📦 Installed package sample:"
+              adb shell pm list packages | head -n 30 || true
+              exit 1
+            fi
+          else
+            echo "⚠️ No appId found in Maestro flow files."
+          fi
+
+          echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
+
+          echo "▶️ Running Maestro tests..."
+          set +e
+          bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
+          MAESTRO_STATUS=$?
+          set -e
+          cat "${LOG_FILE}"
+          echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
+          exit 0
+          BASH
+
+          sed -i "s|__LOG_DIR__|${LOG_DIR}|g" "${SCRIPT_PATH}"
+          chmod +x "${SCRIPT_PATH}"
+
       - name: Run Maestro tests on Android emulator
         id: maestro-android-run
+        env:
+          MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -271,132 +412,7 @@ jobs:
           emulator-boot-timeout: 420
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -accel off -noaudio -no-boot-anim -wipe-data
           disable-animations: false
-          script: |
-            LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
-
-            cd "${LOG_DIR}"
-            export PATH="$HOME/.maestro/bin:$PATH"
-            LOG_FILE="${LOG_DIR}/maestro-run.log"
-            : > "${LOG_FILE}"
-
-            echo "⏳ Waiting for Android emulator boot completion..."
-            SERIAL=""
-            for ATTEMPT in $(seq 1 60); do
-              SERIAL="$(adb devices | awk 'NR>1 && $1 ~ /^emulator-/ {print $1; exit}')"
-              if [ -n "${SERIAL}" ]; then
-                break
-              fi
-              sleep 1
-            done
-
-            if [ -z "${SERIAL}" ]; then
-              echo "❌ Could not detect emulator serial after 60s."
-              adb devices -l || true
-              exit 1
-            fi
-
-            echo "ℹ️ Using emulator serial: ${SERIAL}"
-            adb -s "${SERIAL}" wait-for-device
-
-            BOOT_RETRIES=0
-            MAX_BOOT_RETRIES=360
-            OFFLINE_RESETS=0
-            MAX_OFFLINE_RESETS=3
-
-            while true; do
-              BOOT_RETRIES=$((BOOT_RETRIES + 1))
-              STATE="$(adb devices | awk -v s="${SERIAL}" '$1==s {print $2}')"
-
-              if [ "${STATE}" = "offline" ]; then
-                OFFLINE_RESETS=$((OFFLINE_RESETS + 1))
-                echo "⚠️ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
-                adb kill-server || true
-                sleep 2
-                adb start-server || true
-                adb -s "${SERIAL}" wait-for-device || true
-              fi
-
-              if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then
-                echo "❌ Emulator remained offline after ${MAX_OFFLINE_RESETS} adb resets."
-                adb devices -l || true
-                exit 1
-              fi
-
-              SYS_BOOT_COMPLETED="$(adb -s "${SERIAL}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
-              DEV_BOOT_COMPLETED="$(adb -s "${SERIAL}" shell getprop dev.bootcomplete 2>/dev/null | tr -d '\r')"
-              BOOT_ANIM="$(adb -s "${SERIAL}" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')"
-
-              if [ "${SYS_BOOT_COMPLETED}" = "1" ] && [ "${DEV_BOOT_COMPLETED}" = "1" ] && { [ "${BOOT_ANIM}" = "stopped" ] || [ -z "${BOOT_ANIM}" ]; }; then
-                break
-              fi
-
-              if [ "${BOOT_RETRIES}" -ge "${MAX_BOOT_RETRIES}" ]; then
-                echo "❌ Emulator boot not ready after ${MAX_BOOT_RETRIES}s."
-                echo "ℹ️ Last state: deviceState=${STATE:-unknown}, sys.boot_completed=${SYS_BOOT_COMPLETED:-unset}, dev.bootcomplete=${DEV_BOOT_COMPLETED:-unset}, init.svc.bootanim=${BOOT_ANIM:-unset}"
-                adb devices -l || true
-                adb -s "${SERIAL}" shell getprop | head -80 || true
-                exit 1
-              fi
-
-              sleep 1
-            done
-
-            adb -s "${SERIAL}" shell input keyevent 82 || true
-            echo "✅ Emulator boot completed"
-
-            APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
-            if [ ! -f "${APP_APK}" ]; then
-              APP_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
-            fi
-
-            if [ -z "${APP_APK}" ] || [ ! -f "${APP_APK}" ]; then
-              echo "❌ Could not resolve app APK path for Maestro execution."
-              exit 1
-            fi
-
-            echo "📦 Installing APK: ${APP_APK}"
-            adb install -r "${APP_APK}"
-
-            export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
-            MAESTRO_CMD="${{ inputs.maestro-test-command }}"
-
-            case "${MAESTRO_CMD}" in
-              *"maestro test .maestro"*)
-                case "${MAESTRO_CMD}" in
-                  *"--include-tags"*|*"--exclude-tags"*) ;;
-                  *)
-                    MAESTRO_CMD="${MAESTRO_CMD} --exclude-tags ios"
-                    echo "ℹ️ Auto-applied Maestro Android filter: --exclude-tags ios"
-                    ;;
-                esac
-                ;;
-            esac
-
-            FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
-            if [ -n "${FLOW_APP_ID}" ]; then
-              if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
-                echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
-                adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-              else
-                echo "❌ Flow appId not installed on emulator: ${FLOW_APP_ID}"
-                echo "📦 Installed package sample:"
-                adb shell pm list packages | head -n 30 || true
-                exit 1
-              fi
-            else
-              echo "⚠️ No appId found in Maestro flow files."
-            fi
-
-            echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
-
-            echo "▶️ Running Maestro tests..."
-            set +e
-            bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
-            MAESTRO_STATUS=$?
-            set -e
-            cat "${LOG_FILE}"
-            echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
-            exit 0
+          script: bash "${{ inputs.working-directory == '.' && format('{0}/.maestro-android-exec.sh', github.workspace) || format('{0}/{1}/.maestro-android-exec.sh', github.workspace, inputs.working-directory) }}"
 
       - name: Upload Maestro Android run log
         if: ${{ always() }}
