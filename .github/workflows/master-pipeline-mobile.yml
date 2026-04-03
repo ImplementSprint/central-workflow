@@ -691,7 +691,7 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.tests=tests
             -Dsonar.test.inclusions=tests/**/*
-            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**,**/.expo/**,**/.next/**,**/tests/**
+            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-artifacts/**,**/dist/**,**/build/**,**/.expo/**,**/.next/**,**/tests/**,**/.github/**
             -Dsonar.coverage.exclusions=**/tests/**,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/scripts/**,**/app.config.ts
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,**/coverage/lcov.info,coverage-artifacts/**/lcov.info
             -Dsonar.qualitygate.wait=true
