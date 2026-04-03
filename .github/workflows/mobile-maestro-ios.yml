@@ -325,6 +325,16 @@ jobs:
           xcrun simctl install "${SIM_UDID}" "${APP_PATH}"
           echo "✅ Installed app on simulator ${SIM_UDID}"
 
+      - name: Prepare Maestro iOS run log
+        run: |
+          LOG_DIR="${GITHUB_WORKSPACE}"
+          if [ "${{ inputs.working-directory }}" != "." ]; then
+            LOG_DIR="${LOG_DIR}/${{ inputs.working-directory }}"
+          fi
+
+          mkdir -p "${LOG_DIR}"
+          : > "${LOG_DIR}/maestro-ios-run.log"
+
       - name: Run Maestro tests on iOS simulator
         id: maestro-ios-run
         env:
@@ -335,7 +345,13 @@ jobs:
           export PATH="$HOME/.maestro/bin:$PATH"
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
           export MAESTRO_IOS_DEVICE_ID="${SIM_UDID}"
-          LOG_FILE="maestro-ios-run.log"
+
+          LOG_DIR="${GITHUB_WORKSPACE}"
+          if [ "${{ inputs.working-directory }}" != "." ]; then
+            LOG_DIR="${LOG_DIR}/${{ inputs.working-directory }}"
+          fi
+
+          LOG_FILE="${LOG_DIR}/maestro-ios-run.log"
           : > "${LOG_FILE}"
 
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND}"
