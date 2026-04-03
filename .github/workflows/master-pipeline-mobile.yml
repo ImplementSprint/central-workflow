@@ -664,6 +664,20 @@ jobs:
 
           echo "✅ SonarCloud preflight passed."
 
+      - name: Download coverage artifacts
+        if: ${{ fromJson(needs.classify-systems.outputs.expo_count || '0') > 0 || fromJson(needs.classify-systems.outputs.react_native_count || '0') > 0 }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-coverage"
+          path: coverage-artifacts
+        continue-on-error: true
+
+      - name: List discovered LCOV files
+        if: ${{ fromJson(needs.classify-systems.outputs.expo_count || '0') > 0 || fromJson(needs.classify-systems.outputs.react_native_count || '0') > 0 }}
+        run: |
+          echo "🔎 Searching for lcov.info files before Sonar scan..."
+          find . -type f -name "lcov.info" | sed 's#^./##' || true
+
       - name: Run SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v7
         env:
@@ -679,7 +693,7 @@ jobs:
             -Dsonar.test.inclusions=tests/**/*
             -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/dist/**,**/build/**,**/.expo/**,**/.next/**,**/tests/**
             -Dsonar.coverage.exclusions=**/tests/**,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/scripts/**,**/app.config.ts
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,**/coverage/lcov.info
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,**/coverage/lcov.info,coverage-artifacts/**/lcov.info
             -Dsonar.qualitygate.wait=true
 
   k6-systems:
