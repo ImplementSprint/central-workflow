@@ -31,7 +31,7 @@ on:
         required: false
         type: boolean
         default: true
-        description: "Run iOS release-prep build (.xcarchive)"
+        description: "Run iOS app build and upload .app artifact (.zip)"
       android-release-gradle-task:
         required: false
         type: string
@@ -73,7 +73,7 @@ on:
         required: false
         type: boolean
         default: true
-        description: "Run iOS release-prep build (.xcarchive)"
+        description: "Run iOS app build and upload .app artifact (.zip)"
       android-release-gradle-task:
         required: false
         type: string
@@ -237,7 +237,7 @@ jobs:
           retention-days: 14
 
   ios-release-build:
-    name: "iOS Release Prep Build (.xcarchive)"
+    name: "iOS App Build (.app)"
     needs: [branch-guard]
     if: ${{ inputs.enable-ios-release-build }}
     runs-on: macos-15
@@ -363,52 +363,47 @@ jobs:
           echo "scheme=${SCHEME}" >> "$GITHUB_OUTPUT"
           echo "✅ Using iOS scheme: ${SCHEME}"
 
-      - name: Build iOS release-prep archive
+      - name: Build iOS app artifact (.app)
+        id: build-ios-release-app
         env:
           CONTAINER_FLAG: ${{ steps.ios-scheme.outputs.container_flag }}
           CONTAINER_PATH: ${{ steps.ios-scheme.outputs.container_path }}
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
+          FORCE_BUNDLING: "1"
+          SKIP_BUNDLING: ""
         run: |
-          ARCHIVE_DIR="ios/build/ReleaseArchive"
-          ARCHIVE_PATH="${ARCHIVE_DIR}/${{ inputs.system-name }}.xcarchive"
-          mkdir -p "${ARCHIVE_DIR}"
-
           xcodebuild \
             ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
             -scheme "${SCHEME}" \
             -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -archivePath "${ARCHIVE_PATH}" \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
             CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
             GCC_TREAT_WARNINGS_AS_ERRORS=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
-            clean archive
+            clean build
 
-          if [ ! -d "${ARCHIVE_PATH}" ]; then
-            echo "❌ iOS .xcarchive not found after release-prep build."
+          APP_PATH=$(find ios/build/Build/Products -type d -name "*.app" | head -n 1)
+          if [ -z "${APP_PATH}" ]; then
+            echo "❌ iOS .app output not found after build."
             exit 1
           fi
+
+          ZIP_PATH="build/${{ inputs.system-name }}-ios-release-app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+          echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "✅ iOS .app zipped for upload."
 
       - name: Reserve signed iOS export
         if: ${{ inputs.ios-release-export-enabled }}
         run: |
           echo "ℹ️ Signed iOS export is reserved for future hardening (certificates/profiles)."
 
-      - name: Archive iOS release-prep outputs
-        id: archive-ios-release
-        run: |
-          ARCHIVE_PATH="ios/build/ReleaseArchive/${{ inputs.system-name }}.xcarchive"
-          ZIP_PATH="${{ inputs.system-name }}-ios-release-prep.xcarchive.zip"
-          ditto -c -k --sequesterRsrc --keepParent "${ARCHIVE_PATH}" "${ZIP_PATH}"
-          echo "artifact_path=${PWD}/${ZIP_PATH}" >> "$GITHUB_OUTPUT"
-          echo "✅ iOS release-prep archive zipped for upload."
-
-      - name: Upload iOS release-prep artifact
+      - name: Upload iOS app artifact
         uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-ios-release-build
-          path: ${{ steps.archive-ios-release.outputs.artifact_path }}
+          path: ${{ steps.build-ios-release-app.outputs.artifact_path }}
           retention-days: 14
