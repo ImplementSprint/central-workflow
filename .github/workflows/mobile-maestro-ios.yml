@@ -327,14 +327,27 @@ jobs:
       - name: Run Maestro tests on iOS simulator
         env:
           MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
+          SIM_UDID: ${{ steps.ios-sim.outputs.sim_udid }}
+          RESOLVED_BUNDLE_ID: ${{ steps.ios-bundle-id.outputs.bundle_id }}
         run: |
           export PATH="$HOME/.maestro/bin:$PATH"
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
+          export MAESTRO_IOS_DEVICE_ID="${SIM_UDID}"
 
-          echo "ℹ️ Using bundle id: ${{ steps.ios-bundle-id.outputs.bundle_id }}"
+          MAESTRO_CMD="${MAESTRO_TEST_COMMAND}"
+
+          FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
+          if [ -n "${FLOW_APP_ID}" ] && [ -n "${RESOLVED_BUNDLE_ID}" ] && [ "${FLOW_APP_ID}" != "${RESOLVED_BUNDLE_ID}" ]; then
+            echo "⚠️ Flow appId (${FLOW_APP_ID}) differs from built bundle id (${RESOLVED_BUNDLE_ID})."
+          fi
+
+          xcrun simctl launch "${SIM_UDID}" "${RESOLVED_BUNDLE_ID}" >/dev/null 2>&1 || true
+
+          echo "ℹ️ Using bundle id: ${RESOLVED_BUNDLE_ID}"
+          echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
 
           set +e
-          bash -lc "${MAESTRO_TEST_COMMAND}" > maestro-ios-run.log 2>&1
+          bash -lc "${MAESTRO_CMD}" > maestro-ios-run.log 2>&1
           MAESTRO_STATUS=$?
           set -e
           cat maestro-ios-run.log

@@ -297,6 +297,23 @@ jobs:
             export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
             MAESTRO_CMD="${{ inputs.maestro-test-command }}"
 
+            FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
+            if [ -n "${FLOW_APP_ID}" ]; then
+              if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
+                echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
+                adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+              else
+                echo "❌ Flow appId not installed on emulator: ${FLOW_APP_ID}"
+                echo "📦 Installed package sample:"
+                adb shell pm list packages | head -n 30 || true
+                exit 1
+              fi
+            else
+              echo "⚠️ No appId found in Maestro flow files."
+            fi
+
+            echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
+
             echo "▶️ Running Maestro tests..."
             set +e
             bash -lc "${MAESTRO_CMD}" > maestro-run.log 2>&1

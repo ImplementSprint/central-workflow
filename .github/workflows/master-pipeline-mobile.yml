@@ -443,7 +443,7 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
       enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
@@ -479,7 +479,7 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
       enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
@@ -518,7 +518,7 @@ jobs:
     with:
       working-directory: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       project-type: kotlin
       gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
@@ -543,7 +543,7 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
       enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
@@ -576,7 +576,7 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
       enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
