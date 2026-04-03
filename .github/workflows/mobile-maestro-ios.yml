@@ -327,10 +327,7 @@ jobs:
 
       - name: Prepare Maestro iOS run log
         run: |
-          LOG_DIR="${GITHUB_WORKSPACE}"
-          if [ "${{ inputs.working-directory }}" != "." ]; then
-            LOG_DIR="${LOG_DIR}/${{ inputs.working-directory }}"
-          fi
+          LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
 
           mkdir -p "${LOG_DIR}"
           : > "${LOG_DIR}/maestro-ios-run.log"
@@ -346,10 +343,7 @@ jobs:
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
           export MAESTRO_IOS_DEVICE_ID="${SIM_UDID}"
 
-          LOG_DIR="${GITHUB_WORKSPACE}"
-          if [ "${{ inputs.working-directory }}" != "." ]; then
-            LOG_DIR="${LOG_DIR}/${{ inputs.working-directory }}"
-          fi
+          LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
 
           LOG_FILE="${LOG_DIR}/maestro-ios-run.log"
           : > "${LOG_FILE}"
