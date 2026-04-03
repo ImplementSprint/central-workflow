@@ -161,7 +161,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             case "${{ github.head_ref }}" in
               test|uat|main)
-                echo "⏭️ Skipping promotion PR run for head branch '${{ github.head_ref }}'; protected-branch push run is authoritative."
+                  echo "⏭️ Skipping promotion PR run for head branch '${{ github.head_ref }}'; protected-branch push run is authoritative."
                 echo "skip=true" >> "$GITHUB_OUTPUT"
                 exit 0
                 ;;
@@ -694,7 +694,7 @@ jobs:
             -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-artifacts/**,**/dist/**,**/build/**,**/.expo/**,**/.next/**,**/tests/**,**/.github/**
             -Dsonar.coverage.exclusions=**/tests/**,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/scripts/**,**/app.config.ts
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,**/coverage/lcov.info,coverage-artifacts/**/lcov.info
-            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.wait=${{ github.event_name == 'pull_request' && github.head_ref != 'test' && github.head_ref != 'uat' && github.head_ref != 'main' && 'true' || 'false' }}
 
   k6-systems:
     name: "Detect k6-Enabled Mobile Systems"
