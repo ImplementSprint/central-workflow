@@ -627,10 +627,6 @@ jobs:
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       inputs.enable_sonar != false &&
-      (
-        (github.event_name == 'pull_request' && github.head_ref != 'test' && github.head_ref != 'uat' && github.head_ref != 'main') ||
-        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main'))
-      ) &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped')
