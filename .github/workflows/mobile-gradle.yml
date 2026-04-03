@@ -32,6 +32,11 @@ on:
         type: string
         default: "assembleDebug"
         description: "Gradle task to run"
+      android-build-command:
+        required: false
+        type: string
+        default: ""
+        description: "Optional full Android build command override"
       enable-docker-build:
         required: false
         type: boolean
@@ -144,6 +149,54 @@ jobs:
             npm ci --ignore-scripts
           fi
 
+      - name: Ensure required React Native CLI dependencies
+        if: ${{ steps.detect.outputs.stack == 'react-native' }}
+        env:
+          PACKAGE_MANAGER: ${{ steps.detect.outputs.package_manager }}
+        run: |
+          MISSING_PACKAGES=$(node <<'NODE'
+          const fs = require('fs');
+          const required = [
+            '@react-native-community/cli',
+            '@react-native-community/cli-platform-android',
+            '@react-native-community/cli-platform-ios',
+          ];
+
+          if (!fs.existsSync('package.json')) {
+            process.stdout.write(required.join(' '));
+            process.exit(0);
+          }
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const deps = {
+            ...(pkg.dependencies || {}),
+            ...(pkg.devDependencies || {}),
+            ...(pkg.peerDependencies || {}),
+          };
+
+          const missing = required.filter((name) => !deps[name]);
+          process.stdout.write(missing.join(' '));
+          NODE
+          )
+
+          if [ -z "${MISSING_PACKAGES}" ]; then
+            echo "✅ Required React Native CLI dependencies are present."
+            exit 0
+          fi
+
+          echo "⚠️ Missing React Native CLI dependencies: ${MISSING_PACKAGES}"
+          echo "ℹ️ Installing missing dependencies to keep CI builds stable."
+
+          if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
+            corepack enable
+            yarn add --dev ${MISSING_PACKAGES}
+          elif [ "${PACKAGE_MANAGER}" = "pnpm" ]; then
+            corepack enable
+            pnpm add --save-dev ${MISSING_PACKAGES}
+          else
+            npm install --save-dev --no-package-lock ${MISSING_PACKAGES}
+          fi
+
       - name: Ensure Android Native Project
         if: ${{ steps.detect.outputs.stack == 'react-native' }}
         run: |
@@ -249,8 +302,16 @@ jobs:
       - name: Setup Gradle Cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Gradle Task
+      - name: Run Android Build
+        env:
+          CUSTOM_ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
         run: |
+          if [ -n "${CUSTOM_ANDROID_BUILD_COMMAND}" ]; then
+            echo "ℹ️ Running custom Android build command."
+            bash -c "${CUSTOM_ANDROID_BUILD_COMMAND}"
+            exit 0
+          fi
+
           cd "${{ steps.gradle.outputs.gradle_dir }}"
           chmod +x gradlew
           ./gradlew ${{ inputs.gradle-task }} --no-daemon --stacktrace --warning-mode all

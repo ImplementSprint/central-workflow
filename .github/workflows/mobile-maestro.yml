@@ -258,27 +258,77 @@ jobs:
           arch: x86_64
           profile: pixel_5
           force-avd-creation: true
+          disable-linux-hw-accel: true
           emulator-boot-timeout: 420
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -wipe-data
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -accel off -noaudio -no-boot-anim -wipe-data
           disable-animations: false
           script: |
             cd ${{ inputs.working-directory }}
             export PATH="$HOME/.maestro/bin:$PATH"
 
             echo "⏳ Waiting for Android emulator boot completion..."
-            SERIAL="$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
-            if [ -z "${SERIAL}" ]; then
+            SERIAL=""
+            for ATTEMPT in $(seq 1 60); do
               SERIAL="$(adb devices | awk 'NR>1 && $1 ~ /^emulator-/ {print $1; exit}')"
-            fi
+              if [ -n "${SERIAL}" ]; then
+                break
+              fi
+              sleep 1
+            done
 
             if [ -z "${SERIAL}" ]; then
-              SERIAL="emulator-5554"
+              echo "❌ Could not detect emulator serial after 60s."
+              adb devices -l || true
+              exit 1
             fi
 
             echo "ℹ️ Using emulator serial: ${SERIAL}"
             adb -s "${SERIAL}" wait-for-device
 
-            bash -lc 'SERIAL="$1"; RETRIES=0; MAX_RETRIES=180; OFFLINE_RESETS=0; MAX_OFFLINE_RESETS=3; until [ "$(adb -s "${SERIAL}" shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do RETRIES=$((RETRIES + 1)); STATE="$(adb devices | awk -v s="${SERIAL}" "\$1==s {print \$2}")"; if [ "${STATE}" = "offline" ]; then OFFLINE_RESETS=$((OFFLINE_RESETS + 1)); echo "⚠️ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb"; adb kill-server || true; sleep 2; adb start-server || true; adb -s "${SERIAL}" wait-for-device || true; fi; if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then echo "❌ Emulator stayed offline after ${MAX_OFFLINE_RESETS} adb resets."; adb devices -l || true; exit 1; fi; if [ "${RETRIES}" -ge "${MAX_RETRIES}" ]; then echo "❌ Emulator did not report sys.boot_completed=1 after ${MAX_RETRIES}s"; adb devices -l || true; adb -s "${SERIAL}" shell getprop | head -40 || true; exit 1; fi; sleep 1; done' _ "${SERIAL}"
+            BOOT_RETRIES=0
+            MAX_BOOT_RETRIES=360
+            OFFLINE_RESETS=0
+            MAX_OFFLINE_RESETS=3
+
+            while true; do
+              BOOT_RETRIES=$((BOOT_RETRIES + 1))
+              STATE="$(adb devices | awk -v s="${SERIAL}" '$1==s {print $2}')"
+
+              if [ "${STATE}" = "offline" ]; then
+                OFFLINE_RESETS=$((OFFLINE_RESETS + 1))
+                echo "⚠️ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
+                adb kill-server || true
+                sleep 2
+                adb start-server || true
+                adb -s "${SERIAL}" wait-for-device || true
+              fi
+
+              if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then
+                echo "❌ Emulator remained offline after ${MAX_OFFLINE_RESETS} adb resets."
+                adb devices -l || true
+                exit 1
+              fi
+
+              SYS_BOOT_COMPLETED="$(adb -s "${SERIAL}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+              DEV_BOOT_COMPLETED="$(adb -s "${SERIAL}" shell getprop dev.bootcomplete 2>/dev/null | tr -d '\r')"
+              BOOT_ANIM="$(adb -s "${SERIAL}" shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r')"
+
+              if [ "${SYS_BOOT_COMPLETED}" = "1" ] && [ "${DEV_BOOT_COMPLETED}" = "1" ] && { [ "${BOOT_ANIM}" = "stopped" ] || [ -z "${BOOT_ANIM}" ]; }; then
+                break
+              fi
+
+              if [ "${BOOT_RETRIES}" -ge "${MAX_BOOT_RETRIES}" ]; then
+                echo "❌ Emulator boot not ready after ${MAX_BOOT_RETRIES}s."
+                echo "ℹ️ Last state: deviceState=${STATE:-unknown}, sys.boot_completed=${SYS_BOOT_COMPLETED:-unset}, dev.bootcomplete=${DEV_BOOT_COMPLETED:-unset}, init.svc.bootanim=${BOOT_ANIM:-unset}"
+                adb devices -l || true
+                adb -s "${SERIAL}" shell getprop | head -80 || true
+                exit 1
+              fi
+
+              sleep 1
+            done
+
+            adb -s "${SERIAL}" shell input keyevent 82 || true
             echo "✅ Emulator boot completed"
 
             APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
