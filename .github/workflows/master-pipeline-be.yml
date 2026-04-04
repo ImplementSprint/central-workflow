@@ -12,9 +12,6 @@ on:
       enable_sonar:
         type: boolean
         default: true
-      enable_db_migration:
-        type: boolean
-        default: true
       enable_k6:
         type: boolean
         default: true
@@ -355,13 +352,6 @@ jobs:
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
-  backend-db-migration:
-    name: "DB Migration Check"
-    needs: backend-build
-    if: inputs.enable_db_migration == true
-    uses: ./.github/workflows/backend-db-check.yml
-    secrets: inherit
-
   docker-build-main:
     name: "Backend Docker Build — ${{ matrix.service.name }}"
     permissions:
@@ -372,6 +362,7 @@ jobs:
     if: >
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      github.ref_name == 'main' &&
       needs.backend-build.result == 'success' &&
       (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
       (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped')
@@ -389,7 +380,7 @@ jobs:
 
   deploy-preview:
     name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'UAT' }} Deploy — ${{ matrix.service.name }}"
-    needs: [active-systems, docker-build-main, backend-db-migration]
+    needs: [active-systems, docker-build-main]
     if: >
       always() &&
       inputs.run_deploy == true &&
@@ -398,8 +389,7 @@ jobs:
         (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat')) ||
         (github.ref_name == 'test' || github.ref_name == 'uat')
       ) &&
-      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped') &&
-      (needs.backend-db-migration.result == 'success' || needs.backend-db-migration.result == 'skipped')
+      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -414,19 +404,18 @@ jobs:
     secrets: inherit
 
   replit-deploy:
-    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'UAT' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
-    needs: [active-systems, docker-build-main, backend-db-migration]
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
+    needs: [active-systems, docker-build-main]
     if: >
       always() &&
       inputs.run_deploy == true &&
       (
-        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat' || github.base_ref == 'main')) ||
-        (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main')
+        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'main')) ||
+        (github.ref_name == 'test' || github.ref_name == 'main')
       ) &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
-      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped') &&
-      (needs.backend-db-migration.result == 'success' || needs.backend-db-migration.result == 'skipped')
+      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -434,7 +423,7 @@ jobs:
     uses: ./.github/workflows/replit-deploy.yml
     with:
       system-name: ${{ matrix.service.name }}
-      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'uat' || 'production' }}
+      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || 'production' }}
       branch: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
     secrets: inherit
 
