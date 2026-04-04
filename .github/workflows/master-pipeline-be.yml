@@ -40,7 +40,7 @@ permissions:
 
 concurrency:
   group: backend-master-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   systems-config:
