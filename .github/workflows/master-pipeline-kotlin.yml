@@ -97,12 +97,11 @@ jobs:
     name: "Mobile Kotlin Build"
     needs: [kotlin-governance]
     if: ${{ needs.kotlin-governance.result == 'success' || needs.kotlin-governance.result == 'skipped' }}
-    uses: ./.github/workflows/mobile-gradle.yml
+    uses: ./.github/workflows/kotlin-gradle.yml
     with:
       working-directory: ${{ inputs.working-directory }}
       system-name: ${{ inputs.system-name }}
       java-version: ${{ inputs.java-version }}
-      project-type: kotlin
       gradle-task: ${{ inputs.gradle-task }}
       upload-artifact: true
     secrets: inherit
@@ -166,7 +165,8 @@ jobs:
     with:
       working-directory: ${{ inputs.working-directory }}
       system-name: ${{ inputs.system-name }}
-      sources-path: "."
+      # Keep main and test sets disjoint to avoid Sonar duplicate indexing errors.
+      sources-path: "app/src/main"
       tests-path: "app/src/test"
       sources-exclusions: "**/build/**"
       coverage-report-path: ""
@@ -208,12 +208,11 @@ jobs:
     name: "Kotlin Release Build"
     needs: [kotlin-build, kotlin-security-scan, sonarcloud-kotlin]
     if: ${{ github.ref_name == 'main' && inputs.run_deploy == true && inputs.dry_run != true && needs.kotlin-build.result == 'success' && (needs.kotlin-security-scan.result == 'success' || needs.kotlin-security-scan.result == 'skipped') && (needs.sonarcloud-kotlin.result == 'success' || needs.sonarcloud-kotlin.result == 'skipped') }}
-    uses: ./.github/workflows/mobile-gradle.yml
+    uses: ./.github/workflows/kotlin-gradle.yml
     with:
       working-directory: ${{ inputs.working-directory }}
       system-name: ${{ inputs.system-name }}
       java-version: ${{ inputs.java-version }}
-      project-type: kotlin
       gradle-task: ${{ inputs.release-gradle-task }}
       upload-artifact: true
     secrets: inherit
