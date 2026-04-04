@@ -3,8 +3,6 @@ name: "BE Pipeline Caller"
 on:
   push:
     branches: [test, uat, main]
-  pull_request:
-    branches: [test, uat, main]
   workflow_dispatch:
     inputs:
       pipeline_mode:
@@ -50,7 +48,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
