@@ -160,7 +160,7 @@ jobs:
   sonarcloud-kotlin:
     name: "SonarCloud Kotlin"
     needs: [kotlin-build, kotlin-security-scan, resolve-secret-flags]
-    if: ${{ inputs.enable_sonar && needs.kotlin-build.result == 'success' && (needs.kotlin-security-scan.result == 'success' || needs.kotlin-security-scan.result == 'skipped') && needs.resolve-secret-flags.outputs.sonar_ready == 'true' }}
+    if: ${{ inputs.enable_sonar && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.kotlin-build.result == 'success' && (needs.kotlin-security-scan.result == 'success' || needs.kotlin-security-scan.result == 'skipped') && needs.resolve-secret-flags.outputs.sonar_ready == 'true' }}
     uses: ./.github/workflows/sonarcloud-scan.yml
     with:
       working-directory: ${{ inputs.working-directory }}
