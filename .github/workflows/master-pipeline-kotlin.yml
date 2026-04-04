@@ -105,9 +105,6 @@ jobs:
       project-type: kotlin
       gradle-task: ${{ inputs.gradle-task }}
       upload-artifact: true
-      enable-docker-build: false
-      docker-image-name: ""
-      dockerfile-path: "Dockerfile"
     secrets: inherit
 
   kotlin-security-scan:
@@ -219,9 +216,6 @@ jobs:
       project-type: kotlin
       gradle-task: ${{ inputs.release-gradle-task }}
       upload-artifact: true
-      enable-docker-build: false
-      docker-image-name: ""
-      dockerfile-path: "Dockerfile"
     secrets: inherit
 
   publish-kotlin-release:
