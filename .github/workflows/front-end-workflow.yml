@@ -99,7 +99,7 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      test-command: npm run test -- --coverage --coverageReporters=json-summary tests/unit
+      test-command: npm run test -- --coverage --testPathPattern="tests/unit" --coverageReporters=json-summary
       coverage-threshold: ${{ inputs.coverage-threshold }}
 
   # ── Stage 2: Build Web Application ─────────────────────────────
