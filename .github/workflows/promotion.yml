@@ -198,8 +198,8 @@ jobs:
             TITLE="🚀 Release: Promote TEST → UAT (${SHORT_SHA})"
             HEADER="## 🚀 Promote TEST → UAT"
             CONTEXT_LABEL="TEST"
-            FOOTER="*Merge this PR to trigger UAT deployment.*"
-            INTRO="This PR was **automatically created** after all CI checks and TEST deployments passed on the ${BT}test${BT} branch."
+            FOOTER="*Merge this PR to continue promotion into UAT.*"
+            INTRO="This PR was **automatically created** after the required CI quality gates and promotion checks passed on the ${BT}test${BT} branch."
 
             if [ "${PIPELINE_KIND}" = "single" ] && { [ -z "${VERSION_TAG}" ] || [ "${VERSION_TAG}" = "test-v" ]; }; then
               VERSION_TAG=$(git tag -l 'test-v*' | grep -E '^test-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
@@ -213,8 +213,8 @@ jobs:
             TITLE="🚀 Release: Promote UAT → Production (${SHORT_SHA})"
             HEADER="## 🚀 Promote UAT → Production"
             CONTEXT_LABEL="UAT"
-            FOOTER="*Merge this PR to deploy to production. A production readiness gate will run automatically.*"
-            INTRO="This PR was **automatically created** after all CI checks and UAT deployments passed on the ${BT}uat${BT} branch."
+            FOOTER="*Merge this PR to continue promotion into production. A production readiness gate will run automatically.*"
+            INTRO="This PR was **automatically created** after the required CI quality gates and promotion checks passed on the ${BT}uat${BT} branch."
 
             if [ "${PIPELINE_KIND}" = "single" ] && [ -z "${VERSION_TAG}" ]; then
               VERSION_TAG=$(git tag -l 'uat-v*' | grep -E '^uat-v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
@@ -239,10 +239,10 @@ jobs:
             REVIEW_LINK_STEP="2. Open each **Release Link** and verify the published artifacts"
             CHECKLIST_TEMPLATE="Verified **%s** release assets on ${CONTEXT_LABEL}"
           else
-            LINKS_SECTION_TITLE="### 🔗 Vercel ${CONTEXT_LABEL} Deployment Links"
-            LINKS_COLUMN_HEADER="${CONTEXT_LABEL} Preview Link"
-            LINKS_ACTION_TEXT="Open deployment"
-            REVIEW_LINK_STEP="2. Open each **Deployment Link** and verify the changes visually"
+            LINKS_SECTION_TITLE="### 🔗 ${CONTEXT_LABEL} Deployment Links"
+            LINKS_COLUMN_HEADER="${CONTEXT_LABEL} Deployment Link"
+            LINKS_ACTION_TEXT="Open link"
+            REVIEW_LINK_STEP="2. Open each **Deployment Link** and verify the relevant behavior for that system"
             CHECKLIST_TEMPLATE="Verified **%s** deployment on ${CONTEXT_LABEL}"
           fi
 
@@ -347,6 +347,13 @@ jobs:
             GRAFANA_STATUS="${GRAFANA_STATUS_INPUT}"
             PIPELINE_RESULT="${PIPELINE_RESULT_INPUT}"
 
+            TESTS_STATUS_RAW="${TESTS_STATUS_INPUT}"
+            LINT_STATUS_RAW="${LINT_STATUS_INPUT}"
+            SECURITY_STATUS_RAW="${SECURITY_STATUS_INPUT}"
+            SONAR_STATUS_RAW="${SONAR_STATUS_INPUT}"
+            PLAYWRIGHT_STATUS_RAW="${PLAYWRIGHT_STATUS_INPUT}"
+            GRAFANA_STATUS_RAW="${GRAFANA_STATUS_INPUT}"
+
             if [ -z "${TESTS_STATUS}" ]; then TESTS_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${LINT_STATUS}" ]; then LINT_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${SECURITY_STATUS}" ]; then SECURITY_STATUS="${DEFAULT_RESULT}"; fi
@@ -354,6 +361,28 @@ jobs:
             if [ -z "${PLAYWRIGHT_STATUS}" ]; then PLAYWRIGHT_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${GRAFANA_STATUS}" ]; then GRAFANA_STATUS="${DEFAULT_RESULT}"; fi
             if [ -z "${PIPELINE_RESULT}" ]; then PIPELINE_RESULT="${DEFAULT_RESULT}"; fi
+
+            if [ "$(echo "${QUALITY_GATES_JSON}" | jq 'length')" -eq 0 ]; then
+              QUALITY_GATES_JSON=$(jq -nc \
+                --arg tests "${TESTS_STATUS_RAW}" \
+                --arg lint "${LINT_STATUS_RAW}" \
+                --arg security "${SECURITY_STATUS_RAW}" \
+                --arg sonar "${SONAR_STATUS_RAW}" \
+                --arg playwright "${PLAYWRIGHT_STATUS_RAW}" \
+                --arg grafana "${GRAFANA_STATUS_RAW}" \
+                '({}
+                  + (if ($tests | length) > 0 then {"Tests": $tests} else {} end)
+                  + (if ($lint | length) > 0 then {"Lint": $lint} else {} end)
+                  + (if ($security | length) > 0 then {"Security": $security} else {} end)
+                  + (if ($sonar | length) > 0 then {"SonarCloud": $sonar} else {} end)
+                  + (if ($playwright | length) > 0 then {"Playwright E2E": $playwright} else {} end)
+                  + (if ($grafana | length) > 0 then {"Grafana k6": $grafana} else {} end)
+                )')
+
+              if [ "$(echo "${QUALITY_GATES_JSON}" | jq 'length')" -eq 0 ]; then
+                QUALITY_GATES_JSON=$(jq -nc --arg pipeline "${PIPELINE_RESULT}" '{"Pipeline": (if ($pipeline | length) > 0 then $pipeline else "unknown" end)}')
+              fi
+            fi
 
           # ── Backtick variable (avoids YAML/bash/jq escape issues) ──
           BT='`'
@@ -434,32 +463,16 @@ jobs:
           ')
 
           # ── Quality gates table with emoji ──
-          if [ "$(echo "${QUALITY_GATES_JSON}" | jq 'length')" -gt 0 ]; then
-            QUALITY_GATE_ROWS=$(echo "${QUALITY_GATES_JSON}" | jq -r --arg bt "${BT}" '
-              to_entries
-              | map(
-                  "| " + .key + " | " +
-                  (if .value == "success" then "✅" elif .value == "failure" then "❌" elif .value == "cancelled" then "⚠️" elif .value == "skipped" then "⏭️" else "⬜" end) +
-                  " | " + $bt + (.value | tostring) + $bt + " |"
-                )
-              | join("\n")
-            ')
-            QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n%s" "${QUALITY_GATE_ROWS}")
-          else
-            QG_TESTS_ICON=$(status_icon "${TESTS_STATUS}")
-            QG_LINT_ICON=$(status_icon "${LINT_STATUS}")
-            QG_SEC_ICON=$(status_icon "${SECURITY_STATUS}")
-            QG_SONAR_ICON=$(status_icon "${SONAR_STATUS}")
-            QG_PLAYWRIGHT_ICON=$(status_icon "${PLAYWRIGHT_STATUS}")
-            QG_GRAFANA_ICON=$(status_icon "${GRAFANA_STATUS}")
-            QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n| Tests | %s | ${BT}%s${BT} |\n| Lint | %s | ${BT}%s${BT} |\n| Security | %s | ${BT}%s${BT} |\n| SonarCloud | %s | ${BT}%s${BT} |\n| Playwright E2E | %s | ${BT}%s${BT} |\n| Grafana k6 | %s | ${BT}%s${BT} |" \
-              "${QG_TESTS_ICON}" "${TESTS_STATUS}" \
-              "${QG_LINT_ICON}" "${LINT_STATUS}" \
-              "${QG_SEC_ICON}" "${SECURITY_STATUS}" \
-              "${QG_SONAR_ICON}" "${SONAR_STATUS}" \
-              "${QG_PLAYWRIGHT_ICON}" "${PLAYWRIGHT_STATUS}" \
-              "${QG_GRAFANA_ICON}" "${GRAFANA_STATUS}")
-          fi
+          QUALITY_GATE_ROWS=$(echo "${QUALITY_GATES_JSON}" | jq -r --arg bt "${BT}" '
+            to_entries
+            | map(
+                "| " + .key + " | " +
+                (if .value == "success" then "✅" elif .value == "failure" then "❌" elif .value == "cancelled" then "⚠️" elif .value == "skipped" then "⏭️" else "⬜" end) +
+                " | " + $bt + (.value | tostring) + $bt + " |"
+              )
+            | join("\n")
+          ')
+          QUALITY_GATES=$(printf -- "| Gate | | Result |\n|------|---|--------|\n%s" "${QUALITY_GATE_ROWS}")
 
           # ── Version tags table ──
           VERSION_ROWS=$(echo "${SYSTEMS_JSON}" | jq -r --argjson versions "${VERSIONS_JSON}" --arg bt "${BT}" '.[] | "| " + .name + " | " + $bt + ((($versions[.name] // "") | tostring) | if length > 0 then . else "N/A" end) + $bt + " |"')
