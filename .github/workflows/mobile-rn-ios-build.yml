@@ -190,7 +190,7 @@ jobs:
 
       - name: Upload iOS Build Artifact
         if: ${{ inputs.upload-artifact }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-ios-simulator-build
           path: ${{ steps.build-ios.outputs.artifact_path }}

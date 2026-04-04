@@ -395,21 +395,23 @@ jobs:
 
               ((try ($qualityGatesJson | fromjson) catch {}) | to_entries | map(select((.key | length) > 0 and ((.value | tostring) | length) > 0))) as $qualityGateEntries |
 
+              # Build fallback gates from whichever statuses are actually provided
+              ([
+                {key:"Tests", value:$testsStatus},
+                {key:"Lint", value:$lintStatus},
+                {key:"Security", value:$securityStatus},
+                {key:"SonarCloud", value:$sonarStatus},
+                {key:"Playwright E2E", value:$playwrightStatus},
+                {key:"Grafana k6", value:$grafanaStatus},
+                {key:"Enforcement Gate", value:$enforceStatus}
+              ] | map(select(((.value | tostring) | length) > 0))) as $fallbackGateEntries |
+
+              (if ($qualityGateEntries | length) > 0 then $qualityGateEntries else $fallbackGateEntries end) as $resolvedGateEntries |
+
               # Build quality gates section
-              (if ($qualityGateEntries | length) > 0 then
+              (if ($resolvedGateEntries | length) > 0 then
                 "**Quality Gates**\n" +
-                ($qualityGateEntries | map((.value | icon) + " " + .key + " · `" + (.value | tostring) + "`") | join("\n"))
-              elif ($testsStatus | length) > 0 then
-                "**Quality Gates**\n" +
-                ($testsStatus | icon) + " Tests · " +
-                ($lintStatus | icon) + " Lint · " +
-                ($securityStatus | icon) + " Security\n" +
-                ($sonarStatus | icon) + " SonarCloud · " +
-                ($playwrightStatus | icon) + " Playwright E2E · " +
-                ($grafanaStatus | icon) + " Grafana k6" +
-                (if ($enforceStatus | length) > 0 then
-                  "\n🔒 Enforcement Gate: " + ($enforceStatus | icon) + " `" + $enforceStatus + "`"
-                else "" end)
+                ($resolvedGateEntries | map((.value | icon) + " " + .key + " · `" + (.value | tostring) + "`") | join("\n"))
               else "" end) as $gatesBlock |
 
               # Assemble description

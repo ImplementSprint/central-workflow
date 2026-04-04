@@ -90,7 +90,7 @@ jobs:
           echo "release_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Download mobile artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: ${{ inputs.system-name }}-*
           path: release-assets/${{ inputs.system-name }}
@@ -114,27 +114,30 @@ jobs:
             exit 1
           fi
 
-          while IFS= read -r -d '' file_path; do
-            base_name=$(basename "${file_path}")
-            target_name="${base_name}"
+          choose_largest() {
+            pattern="$1"
+            find "${SOURCE_DIR}" -type f -name "${pattern}" -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-
+          }
 
-            case "${base_name}" in
-              *.apk)
-                target_name="${SYSTEM_NAME}-android.apk"
-                ;;
-              *.aab)
-                target_name="${SYSTEM_NAME}-android.aab"
-                ;;
-              *.ipa)
-                target_name="${SYSTEM_NAME}-ios.ipa"
-                ;;
-              *ios*.zip|*simulator*.zip)
-                target_name="${SYSTEM_NAME}-ios.app.zip"
-                ;;
-            esac
+          APK_PATH=$(choose_largest "*.apk")
+          if [ -n "${APK_PATH}" ]; then
+            cp "${APK_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-android.apk"
+          fi
 
-            cp "${file_path}" "${OUTPUT_DIR}/${target_name}"
-          done < <(find "${SOURCE_DIR}" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.ipa" -o -name "*.zip" \) -print0)
+          AAB_PATH=$(choose_largest "*.aab")
+          if [ -n "${AAB_PATH}" ]; then
+            cp "${AAB_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-android.aab"
+          fi
+
+          IPA_PATH=$(choose_largest "*.ipa")
+          if [ -n "${IPA_PATH}" ]; then
+            cp "${IPA_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-ios.ipa"
+          fi
+
+          IOS_APP_ZIP_PATH=$(find "${SOURCE_DIR}" -type f \( -name "*ios*.zip" -o -name "*simulator*.zip" \) -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n 1 | cut -f2-)
+          if [ -n "${IOS_APP_ZIP_PATH}" ]; then
+            cp "${IOS_APP_ZIP_PATH}" "${OUTPUT_DIR}/${SYSTEM_NAME}-ios.app.zip"
+          fi
 
           # tar.gz fallback blocks removed — artifacts are now uploaded as
           # direct .apk (Android) and .app.zip (iOS) files, which the primary
@@ -153,7 +156,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.1
         with:
           tag_name: ${{ steps.resolve-tag.outputs.tag }}
           name: ${{ steps.resolve-tag.outputs.tag }}

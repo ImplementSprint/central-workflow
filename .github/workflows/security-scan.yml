@@ -31,6 +31,7 @@ on:
         description: "npm audit result"
         value: ${{ jobs.dependency-audit.outputs.result }}
 
+
 permissions:
   contents: read
 
@@ -113,7 +114,7 @@ jobs:
 
       - name: Upload Audit Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-audit-report
           path: ${{ inputs.working-directory }}/audit-report.json

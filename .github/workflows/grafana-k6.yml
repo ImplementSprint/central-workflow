@@ -183,7 +183,7 @@ jobs:
 
       - name: Upload k6 artifacts
         if: ${{ inputs.upload-artifacts && always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-grafana-k6-artifacts
           path: |

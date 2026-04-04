@@ -175,7 +175,7 @@ git push --force-with-lease origin feature/IS-142-user-dashboard
 feat(dashboard): add user activity chart
 fix(auth): resolve token refresh race condition
 chore(deps): upgrade Next.js to 15.x
-ci(pipeline): add Detox E2E step for mobile
+ci(pipeline): add Maestro E2E step for mobile
 ```
 
 ### PR Description Template
@@ -467,7 +467,7 @@ Per-environment secrets:
 | Manual approval | No | No | Optional |
 | Audit log generation | No | No | Yes (365-day retention) |
 | Auto-revert on failure | No | Yes | Yes |
-| Detox E2E (mobile) | No | Yes | No |
+| Maestro E2E (mobile) | No | Yes | No |
 | Playwright E2E (web) | Yes (enforced) | Yes (enforced) | Optional |
 | Grafana k6 (cloud) | Yes (enforced) | Yes (enforced) | Optional |
 | Notification escalation (`@here`) | No | Yes | Yes |
@@ -496,7 +496,7 @@ Every push or PR to `test`, `uat`, or `main` triggers the full pipeline:
 │     ├→ Unit tests + coverage                                │
 │     ├→ Security scan (dependency audit + license check)     │
 │     ├→ Build                                                │
-│     └→ [mobile] Gradle build + Detox E2E (uat only)        │
+│     └→ [mobile] Gradle build + Maestro E2E (uat only)      │
 │                                                             │
 │  4. SonarCloud                                              │
 │     └→ Code quality + security analysis                     │

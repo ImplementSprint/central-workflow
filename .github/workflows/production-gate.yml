@@ -145,7 +145,7 @@ jobs:
           cat audit-log.json
 
       - name: Upload Audit Log
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-dir }}-production-audit
           path: audit-log.json

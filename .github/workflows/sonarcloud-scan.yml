@@ -76,7 +76,7 @@ jobs:
 
       - name: Download Coverage Report
         if: ${{ inputs.coverage-artifact-name != '' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.coverage-artifact-name }}
           path: ${{ inputs.working-directory }}/coverage
@@ -108,7 +108,7 @@ jobs:
           echo "✅ SonarCloud preflight passed."
 
       - name: Run SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -45,6 +45,14 @@ on:
         description: "Run governance checks (overrides per-system JSON)"
         type: boolean
         default: true
+      enable_maestro:
+        description: "Run Maestro Android E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
+      enable_maestro_ios:
+        description: "Run Maestro iOS E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -95,6 +103,14 @@ on:
         description: "Run governance checks (overrides per-system JSON)"
         type: boolean
         default: true
+      enable_maestro:
+        description: "Run Maestro Android E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
+      enable_maestro_ios:
+        description: "Run Maestro iOS E2E (overrides per-system JSON)"
+        type: boolean
+        default: true
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -115,6 +131,7 @@ on:
       SONAR_ORGANIZATION:
         required: false
 
+
 permissions:
   contents: write
   packages: write
@@ -133,26 +150,33 @@ jobs:
     timeout-minutes: 30
     outputs:
       systems_json: ${{ steps.skip-check.outputs.skip == 'true' && '[]' || steps.resolve.outputs.systems_json }}
-      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (push superseded by open PR)' || steps.resolve.outputs.systems_label }}
+      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (dedupe/promotion policy)' || steps.resolve.outputs.systems_label }}
       pipeline_mode: ${{ steps.skip-check.outputs.skip == 'true' && 'skip' || steps.resolve.outputs.pipeline_mode }}
     steps:
-      - name: Prefer PR run when PR exists
+      - name: Apply run dedupe and promotion PR policy
         id: skip-check
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
-            API_URL="${{ github.api_url }}/repos/${{ github.repository }}/pulls?state=open&head=${{ github.repository_owner }}:${{ github.ref_name }}&per_page=1"
-            OPEN_PR_COUNT=$(curl -fsSL \
-              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              "${API_URL}" | jq 'length')
+            case "${{ github.ref_name }}" in
+              test|uat|main)
+                echo "ℹ️ Protected branch push detected ('${{ github.ref_name }}'); keeping push run active."
+                ;;
+              *)
+                API_URL="${{ github.api_url }}/repos/${{ github.repository }}/pulls?state=open&head=${{ github.repository_owner }}:${{ github.ref_name }}&per_page=1"
+                OPEN_PR_COUNT=$(curl -fsSL \
+                  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  "${API_URL}" | jq 'length')
 
-            if [ "${OPEN_PR_COUNT}" -gt 0 ]; then
-              echo "⏭️ Skipping push run for branch '${{ github.ref_name }}' because an open PR already exists."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
+                if [ "${OPEN_PR_COUNT}" -gt 0 ]; then
+                  echo "⏭️ Skipping push run for branch '${{ github.ref_name }}' because an open PR already exists."
+                  echo "skip=true" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                ;;
+            esac
           fi
 
           echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -443,7 +467,7 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
       enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
@@ -451,12 +475,12 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-detox: true
-      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
-      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
-      enable-detox-ios: true
-      detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build -c ios.sim.debug' }}
-      detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test -c ios.sim.debug --cleanup' }}
+      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
+      android-build-command: ${{ matrix.system.android_build_command || 'cd android && ./gradlew :app:assembleDebug' }}
+      maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
+      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
+      ios-build-command: ${{ matrix.system.ios_build_command || '' }}
+      maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
     secrets: inherit
 
   mobile-expo-release:
@@ -479,11 +503,11 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
-      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-android-release-build: true
       enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
-      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
     secrets: inherit
 
@@ -518,7 +542,7 @@ jobs:
     with:
       working-directory: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       project-type: kotlin
       gradle-task: ${{ matrix.system.gradle_task || 'assembleDebug' }}
@@ -543,7 +567,7 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
       enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
@@ -551,12 +575,10 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-detox: true
-      detox-build-command: ${{ matrix.system.detox_build_command || 'npx detox build -c android.emu.debug' }}
-      detox-test-command: ${{ matrix.system.detox_test_command || 'npx detox test -c android.emu.debug --headless' }}
-      enable-detox-ios: ${{ matrix.system.enable_detox_ios == true || matrix.system.enable_detox_ios == null }}
-      detox-ios-build-command: ${{ matrix.system.detox_ios_build_command || 'npx detox build -c ios.sim.debug' }}
-      detox-ios-test-command: ${{ matrix.system.detox_ios_test_command || 'npx detox test -c ios.sim.debug --cleanup' }}
+      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
+      maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
+      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
+      maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
 
   mobile-react-native-release:
     name: "Mobile React Native Release Build — ${{ matrix.system.name }}"
@@ -578,11 +600,11 @@ jobs:
     with:
       system-dir: ${{ matrix.system.dir }}
       system-name: ${{ matrix.system.name }}
-      node-version: ${{ matrix.system.node_version || 20 }}
+      node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
-      enable-android-release-build: ${{ matrix.system.enable_android_release_build == true || matrix.system.enable_android_release_build == null }}
+      enable-android-release-build: true
       enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
-      android-release-gradle-task: ${{ matrix.system.android_release_gradle_task || 'assembleRelease bundleRelease' }}
+      android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
     secrets: inherit
 
@@ -630,8 +652,22 @@ jobs:
 
           echo "✅ SonarCloud preflight passed."
 
+      - name: Download coverage artifacts
+        if: ${{ fromJson(needs.classify-systems.outputs.expo_count || '0') > 0 || fromJson(needs.classify-systems.outputs.react_native_count || '0') > 0 }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-coverage"
+          path: coverage-artifacts
+        continue-on-error: true
+
+      - name: List discovered LCOV files
+        if: ${{ fromJson(needs.classify-systems.outputs.expo_count || '0') > 0 || fromJson(needs.classify-systems.outputs.react_native_count || '0') > 0 }}
+        run: |
+          echo "🔎 Searching for lcov.info files before Sonar scan..."
+          find . -type f -name "lcov.info" | sed 's#^./##' || true
+
       - name: Run SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -640,6 +676,13 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=.
+            -Dsonar.tests=tests
+            -Dsonar.test.inclusions=tests/**/*
+            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/coverage-artifacts/**,**/dist/**,**/build/**,**/.expo/**,**/.next/**,**/tests/**,**/.github/**
+            -Dsonar.coverage.exclusions=**/tests/**,**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/scripts/**,**/app.config.ts
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info,**/coverage/lcov.info,coverage-artifacts/**/lcov.info
+            -Dsonar.qualitygate.wait=${{ github.event_name == 'pull_request' && github.head_ref != 'test' && github.head_ref != 'uat' && github.head_ref != 'main' && 'true' || 'false' }}
 
   k6-systems:
     name: "Detect k6-Enabled Mobile Systems"

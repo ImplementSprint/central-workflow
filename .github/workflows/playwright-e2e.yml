@@ -202,7 +202,7 @@ jobs:
 
       - name: Upload E2E Artifacts
         if: ${{ inputs.upload-artifacts && always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.system-name }}-playwright-e2e-${{ matrix.browser }}-artifacts
           path: |

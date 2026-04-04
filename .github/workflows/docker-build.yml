@@ -236,7 +236,7 @@ jobs:
 
       - name: Upload Scan Artifact
         if: always() && steps.sarif-check.outputs.exists == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.image-name }}-security-scan
           path: trivy-results.sarif
