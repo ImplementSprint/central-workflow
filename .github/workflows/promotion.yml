@@ -424,6 +424,13 @@ jobs:
             READINESS_BADGE="> 🔴 **NOT READY** — One or more quality gates failed"
           fi
 
+          if [ "${ALL_GATES_PASSED}" != "true" ] || [ "${PIPELINE_RESULT}" != "success" ]; then
+            echo "❌ Promotion PR blocked: required quality gates did not pass."
+            echo "Gate summary: ${QUALITY_GATES_JSON}"
+            echo "Pipeline result: ${PIPELINE_RESULT}"
+            exit 1
+          fi
+
             ARTIFACT_LINKS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${ARTIFACT_LINKS_JSON}" --arg runUrl "${RUN_URL}" '
               reduce .[] as $s ({};
                 .[$s.name] = ((($urls[$s.name] // "") | tostring) | if length > 0 then . else $runUrl end)
