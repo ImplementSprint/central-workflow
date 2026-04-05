@@ -344,6 +344,8 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
 
   docker-build-main:
     name: "Backend Docker Build — ${{ matrix.service.name }}"
