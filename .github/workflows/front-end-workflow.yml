@@ -87,8 +87,8 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
-      # Keep test branch unblocked by HIGH findings; enforce HIGH on uat/main.
-      fail-on-high: ${{ github.ref_name != 'test' && github.base_ref != 'test' }}
+      # Enforce HIGH/CRITICAL findings on all branches, including test.
+      fail-on-high: true
 
   # ── Stage 1D: Governance Checks (parallel with tests/lint/security) ──────────────
   web-governance:
