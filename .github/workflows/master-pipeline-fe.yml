@@ -805,6 +805,28 @@ jobs:
       scan-vulnerabilities: true
     secrets: inherit
 
+  docker-security-gate:
+    name: "Container Security Gate — ${{ matrix.system.name }}"
+    needs: [active-systems]
+    if: >-
+      (((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') || ((github.event_name == 'pull_request' && github.base_ref == 'uat') || github.ref == 'refs/heads/uat')) &&
+      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
+      fromJson(needs.active-systems.outputs.active_count) > 0
+    strategy:
+      fail-fast: false
+      matrix:
+        system: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      working-directory: ${{ matrix.system.dir }}
+      image-name: ${{ matrix.system.image }}
+      push-image: false
+      scan-vulnerabilities: true
+      fail-on-vulnerabilities: true
+      generate-sbom: false
+      generate-provenance: false
+    secrets: inherit
+
   prepare-promotion-payload:
     name: "Prepare Promotion Payload"
     needs: [active-systems, frontend, deploy-preview, version-test]
@@ -1052,7 +1074,7 @@ jobs:
 
   create-pr-to-uat:
     name: "Create PR → UAT"
-    needs: [systems-config, frontend, sonarcloud, playwright-e2e-postdeploy, version-test, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6]
+    needs: [systems-config, frontend, sonarcloud, playwright-e2e-postdeploy, version-test, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6, docker-security-gate]
     if: >-
       always() &&
       github.ref == 'refs/heads/test' &&
@@ -1064,6 +1086,7 @@ jobs:
       (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') &&
       (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') &&
       needs.enforce-e2e-k6.result == 'success' &&
+      needs.docker-security-gate.result == 'success' &&
       needs.version-test.result == 'success' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
       needs.prepare-promotion-payload.result == 'success'
@@ -1089,7 +1112,7 @@ jobs:
 
   create-pr-to-main:
     name: "Create PR → Main"
-    needs: [systems-config, frontend, sonarcloud, playwright-e2e-postdeploy, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6, version-uat]
+    needs: [systems-config, frontend, sonarcloud, playwright-e2e-postdeploy, deploy-preview, active-systems, prepare-promotion-payload, grafana-k6-postdeploy, enforce-e2e-k6, version-uat, docker-security-gate]
     if: >-
       always() &&
       github.ref == 'refs/heads/uat' &&
@@ -1101,6 +1124,7 @@ jobs:
       (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') &&
       (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') &&
       needs.enforce-e2e-k6.result == 'success' &&
+      needs.docker-security-gate.result == 'success' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
       needs.prepare-promotion-payload.result == 'success' &&
       needs.version-uat.result == 'success'
