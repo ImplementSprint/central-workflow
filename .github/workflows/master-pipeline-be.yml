@@ -12,9 +12,6 @@ on:
       enable_sonar:
         type: boolean
         default: true
-      enable_db_migration:
-        type: boolean
-        default: true
       enable_k6:
         type: boolean
         default: true
@@ -26,7 +23,7 @@ on:
         default: ""
       k6_run_only_on_branch:
         type: string
-        default: "test,uat"
+        default: "test,main"
       run_deploy:
         type: boolean
         default: true
@@ -42,8 +39,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: backend-master-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  group: backend-master-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   systems-config:
@@ -52,23 +49,16 @@ jobs:
     timeout-minutes: 30
     outputs:
       systems_json: ${{ steps.skip-check.outputs.skip == 'true' && '[]' || steps.resolve.outputs.systems_json }}
-      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (push superseded by open PR)' || steps.resolve.outputs.systems_label }}
+      systems_label: ${{ steps.skip-check.outputs.skip == 'true' && 'Skipped (promotion PR sync)' || steps.resolve.outputs.systems_label }}
       pipeline_mode: ${{ steps.skip-check.outputs.skip == 'true' && 'skip' || steps.resolve.outputs.pipeline_mode }}
     steps:
-      - name: Prefer PR run when PR exists
+      - name: Skip promotion-branch PR sync
         id: skip-check
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            API_URL="${{ github.api_url }}/repos/${{ github.repository }}/pulls?state=open&head=${{ github.repository_owner }}:${{ github.ref_name }}&per_page=1"
-            OPEN_PR_COUNT=$(curl -fsSL \
-              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              "${API_URL}" | jq 'length')
-
-            if [ "${OPEN_PR_COUNT}" -gt 0 ]; then
-              echo "⏭️ Skipping push run for branch '${{ github.ref_name }}' because an open PR already exists."
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            HEAD_BRANCH="${{ github.head_ref }}"
+            if [ "${HEAD_BRANCH}" = "test" ] || [ "${HEAD_BRANCH}" = "uat" ] || [ "${HEAD_BRANCH}" = "main" ]; then
+              echo "⏭️ Skipping PR sync for promotion branch '${HEAD_BRANCH}'."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -355,13 +345,6 @@ jobs:
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
-  backend-db-migration:
-    name: "DB Migration Check"
-    needs: backend-build
-    if: inputs.enable_db_migration == true
-    uses: ./.github/workflows/backend-db-check.yml
-    secrets: inherit
-
   docker-build-main:
     name: "Backend Docker Build — ${{ matrix.service.name }}"
     permissions:
@@ -372,6 +355,7 @@ jobs:
     if: >
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      github.ref_name == 'main' &&
       needs.backend-build.result == 'success' &&
       (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
       (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped')
@@ -389,7 +373,7 @@ jobs:
 
   deploy-preview:
     name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'UAT' }} Deploy — ${{ matrix.service.name }}"
-    needs: [active-systems, docker-build-main, backend-db-migration]
+    needs: [active-systems, docker-build-main]
     if: >
       always() &&
       inputs.run_deploy == true &&
@@ -398,8 +382,7 @@ jobs:
         (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat')) ||
         (github.ref_name == 'test' || github.ref_name == 'uat')
       ) &&
-      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped') &&
-      (needs.backend-db-migration.result == 'success' || needs.backend-db-migration.result == 'skipped')
+      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -414,19 +397,18 @@ jobs:
     secrets: inherit
 
   replit-deploy:
-    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'UAT' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
-    needs: [active-systems, docker-build-main, backend-db-migration]
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
+    needs: [active-systems, docker-build-main]
     if: >
       always() &&
       inputs.run_deploy == true &&
       (
-        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat' || github.base_ref == 'main')) ||
-        (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main')
+        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'main')) ||
+        (github.ref_name == 'test' || github.ref_name == 'main')
       ) &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
-      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped') &&
-      (needs.backend-db-migration.result == 'success' || needs.backend-db-migration.result == 'skipped')
+      (needs.docker-build-main.result == 'success' || needs.docker-build-main.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -434,8 +416,32 @@ jobs:
     uses: ./.github/workflows/replit-deploy.yml
     with:
       system-name: ${{ matrix.service.name }}
-      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'uat' || 'production' }}
+      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || 'production' }}
       branch: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
+    secrets: inherit
+
+  grafana-k6:
+    name: "Backend Grafana k6 — ${{ matrix.service.name }}"
+    needs: [active-systems, backend-build, backend-security, backend-sonar, replit-deploy]
+    if: >
+      always() &&
+      inputs.enable_k6 == true &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') &&
+      (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
+      (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') &&
+      (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
+    uses: ./.github/workflows/grafana-k6.yml
+    with:
+      system-name: ${{ matrix.service.name }}
+      working-directory: ${{ matrix.service.dir }}
+      script-path: ${{ matrix.service.k6_script_path || inputs.k6_script_path }}
+      target-base-url: ${{ matrix.service.k6_base_url || inputs.k6_base_url }}
+      run-only-on-branch: ${{ matrix.service.k6_run_only_on_branch || inputs.k6_run_only_on_branch }}
     secrets: inherit
 
   version-test:
@@ -500,12 +506,14 @@ jobs:
 
   prepare-promotion-payload:
     name: "Prepare Promotion Payload"
-    needs: [active-systems, deploy-preview, replit-deploy, version-test, version-uat]
+    needs: [active-systems, deploy-preview, replit-deploy, grafana-k6, version-test, version-uat]
     if: >-
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (github.ref_name == 'test' || github.ref_name == 'uat') &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
+      (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       ((github.ref_name == 'test' && (needs.version-test.result == 'success' || needs.version-test.result == 'skipped')) || (github.ref_name == 'uat' && (needs.version-uat.result == 'success' || needs.version-uat.result == 'skipped')))
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -551,17 +559,72 @@ jobs:
           echo "results_json=${RESULTS_JSON}" >> "$GITHUB_OUTPUT"
           echo "versions_json=${VERSIONS_JSON}" >> "$GITHUB_OUTPUT"
 
+  promotion-diff-check:
+    name: "Promotion Branch Diff Check"
+    needs: [active-systems]
+    if: >-
+      always() &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      inputs.run_promotion == true &&
+      (github.ref_name == 'test' || github.ref_name == 'uat')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      test_to_uat_has_commits: ${{ steps.diff.outputs.test_to_uat_has_commits }}
+      uat_to_main_has_commits: ${{ steps.diff.outputs.uat_to_main_has_commits }}
+      test_to_uat_ahead: ${{ steps.diff.outputs.test_to_uat_ahead }}
+      uat_to_main_ahead: ${{ steps.diff.outputs.uat_to_main_ahead }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve promotion branch deltas
+        id: diff
+        run: |
+          git fetch --no-tags origin test uat main
+
+          TEST_TO_UAT_AHEAD=$(git rev-list --count origin/uat..origin/test 2>/dev/null || echo 0)
+          UAT_TO_MAIN_AHEAD=$(git rev-list --count origin/main..origin/uat 2>/dev/null || echo 0)
+
+          if [ "${TEST_TO_UAT_AHEAD}" -gt 0 ]; then
+            TEST_TO_UAT_HAS_COMMITS="true"
+          else
+            TEST_TO_UAT_HAS_COMMITS="false"
+          fi
+
+          if [ "${UAT_TO_MAIN_AHEAD}" -gt 0 ]; then
+            UAT_TO_MAIN_HAS_COMMITS="true"
+          else
+            UAT_TO_MAIN_HAS_COMMITS="false"
+          fi
+
+          echo "test_to_uat_ahead=${TEST_TO_UAT_AHEAD}" >> "$GITHUB_OUTPUT"
+          echo "uat_to_main_ahead=${UAT_TO_MAIN_AHEAD}" >> "$GITHUB_OUTPUT"
+          echo "test_to_uat_has_commits=${TEST_TO_UAT_HAS_COMMITS}" >> "$GITHUB_OUTPUT"
+          echo "uat_to_main_has_commits=${UAT_TO_MAIN_HAS_COMMITS}" >> "$GITHUB_OUTPUT"
+
+          echo "test->uat ahead count: ${TEST_TO_UAT_AHEAD}"
+          echo "uat->main ahead count: ${UAT_TO_MAIN_AHEAD}"
+
   pr-to-uat:
     name: "Create PR → UAT"
     permissions:
       contents: read
       pull-requests: write
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, prepare-promotion-payload, version-test]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-test, promotion-diff-check]
     if: >
       always() &&
       github.ref_name == 'test' &&
+      needs.promotion-diff-check.result == 'success' &&
+      needs.promotion-diff-check.outputs.test_to_uat_has_commits == 'true' &&
       needs.prepare-promotion-payload.result == 'success' &&
       (needs.version-test.result == 'success' || needs.version-test.result == 'skipped') &&
+      needs.backend-build.result == 'success' &&
+      (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
+      (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       inputs.run_promotion == true
     uses: ./.github/workflows/promotion.yml
     with:
@@ -574,7 +637,9 @@ jobs:
       tests-status: ${{ needs.backend-build.result }}
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
-      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled') && 'cancelled' || 'failure' }}
+      grafana-status: ${{ needs.grafana-k6.result }}
+      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","Grafana k6":"{3}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.grafana-k6.result) }}
+      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ inputs.dry_run }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
@@ -584,12 +649,18 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, prepare-promotion-payload, version-uat]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-uat, promotion-diff-check]
     if: >
       always() &&
       github.ref_name == 'uat' &&
+      needs.promotion-diff-check.result == 'success' &&
+      needs.promotion-diff-check.outputs.uat_to_main_has_commits == 'true' &&
       needs.prepare-promotion-payload.result == 'success' &&
       (needs.version-uat.result == 'success' || needs.version-uat.result == 'skipped') &&
+      needs.backend-build.result == 'success' &&
+      (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
+      (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') &&
+      (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       inputs.run_promotion == true
     uses: ./.github/workflows/promotion.yml
     with:
@@ -602,25 +673,27 @@ jobs:
       tests-status: ${{ needs.backend-build.result }}
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
-      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled') && 'cancelled' || 'failure' }}
+      grafana-status: ${{ needs.grafana-k6.result }}
+      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","Grafana k6":"{3}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.grafana-k6.result) }}
+      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ inputs.dry_run }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   pipeline-summary:
     name: "Pipeline Summary"
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, version-main, replit-deploy]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, version-main, replit-deploy]
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
-      overall-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.version-main.result == 'success' || needs.version-main.result == 'skipped') && (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.version-main.result == 'cancelled' || needs.replit-deploy.result == 'cancelled') && 'cancelled' || 'failure' }}
+      overall-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && (needs.version-main.result == 'success' || needs.version-main.result == 'skipped') && (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled' || needs.version-main.result == 'cancelled' || needs.replit-deploy.result == 'cancelled') && 'cancelled' || 'failure' }}
 
   notify:
     name: "Notify Backend Pipeline"
-    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, replit-deploy, prepare-promotion-payload]
+    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, grafana-k6, replit-deploy, prepare-promotion-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
@@ -631,5 +704,6 @@ jobs:
       tests-status: ${{ needs.backend-build.result }}
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
+      grafana-status: ${{ needs.grafana-k6.result }}
       pipeline-result: ${{ needs.pipeline-summary.result == 'success' && 'success' || needs.pipeline-summary.result == 'cancelled' && 'cancelled' || 'failure' }}
     secrets: inherit

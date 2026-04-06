@@ -571,5 +571,16 @@ jobs:
             exit 0
           fi
 
+          # Skip no-op promotions when source has no commits ahead of target.
+          if ! git rev-parse --verify "origin/${SOURCE_BRANCH}" >/dev/null 2>&1 || ! git rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "${SOURCE_BRANCH}" "${TARGET_BRANCH}" >/dev/null 2>&1 || true
+          fi
+
+          AHEAD_COUNT=$(git rev-list --count "origin/${TARGET_BRANCH}..origin/${SOURCE_BRANCH}" 2>/dev/null || git rev-list --count "${TARGET_BRANCH}..${SOURCE_BRANCH}" 2>/dev/null || echo "0")
+          if [ "${AHEAD_COUNT}" = "0" ]; then
+            echo "ℹ️ No commits between ${TARGET_BRANCH} and ${SOURCE_BRANCH}; skipping PR creation."
+            exit 0
+          fi
+
           retry 3 3 gh pr create --base "${TARGET_BRANCH}" --head "${SOURCE_BRANCH}" --title "${TITLE}" --body "${PR_BODY}"
           echo "✅ Created PR: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
