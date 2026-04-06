@@ -135,9 +135,9 @@ jobs:
             if [ -n "${SCRIPT_PATH}" ] && [ -f "${SCRIPT_PATH}" ]; then
               printf "%s\n" "${SCRIPT_PATH}"
             elif [ -n "${SCRIPT_PATH}" ] && [ -d "${SCRIPT_PATH}" ]; then
-              find "${SCRIPT_PATH}" -type f \( -name '*.js' -o -name '*.ts' \) | sort
+              find "${SCRIPT_PATH}" -type f \( -name '*.js' -o -name '*.ts' \) ! -name '*.d.ts' | sort
             else
-              find "${PERFORMANCE_TESTS_DIRECTORY}" -type f \( -name '*.js' -o -name '*.ts' \) | sort
+              find "${PERFORMANCE_TESTS_DIRECTORY}" -type f \( -name '*.js' -o -name '*.ts' \) ! -name '*.d.ts' | sort
             fi
           )
 
