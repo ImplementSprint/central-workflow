@@ -424,13 +424,6 @@ jobs:
             READINESS_BADGE="> 🔴 **NOT READY** — One or more quality gates failed"
           fi
 
-          if [ "${ALL_GATES_PASSED}" != "true" ] || [ "${PIPELINE_RESULT}" != "success" ]; then
-            echo "❌ Promotion PR blocked: required quality gates did not pass."
-            echo "Gate summary: ${QUALITY_GATES_JSON}"
-            echo "Pipeline result: ${PIPELINE_RESULT}"
-            exit 1
-          fi
-
             ARTIFACT_LINKS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c --argjson urls "${ARTIFACT_LINKS_JSON}" --arg runUrl "${RUN_URL}" '
               reduce .[] as $s ({};
                 .[$s.name] = ((($urls[$s.name] // "") | tostring) | if length > 0 then . else $runUrl end)
@@ -575,6 +568,17 @@ jobs:
           if [ -n "${EXISTING_PR}" ]; then
             retry 3 3 gh pr edit "${EXISTING_PR}" --title "${TITLE}" --body "${PR_BODY}"
             echo "✅ Updated PR #${EXISTING_PR}: ${SOURCE_BRANCH} → ${TARGET_BRANCH}"
+            exit 0
+          fi
+
+          # Skip no-op promotions when source has no commits ahead of target.
+          if ! git rev-parse --verify "origin/${SOURCE_BRANCH}" >/dev/null 2>&1 || ! git rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "${SOURCE_BRANCH}" "${TARGET_BRANCH}" >/dev/null 2>&1 || true
+          fi
+
+          AHEAD_COUNT=$(git rev-list --count "origin/${TARGET_BRANCH}..origin/${SOURCE_BRANCH}" 2>/dev/null || git rev-list --count "${TARGET_BRANCH}..${SOURCE_BRANCH}" 2>/dev/null || echo "0")
+          if [ "${AHEAD_COUNT}" = "0" ]; then
+            echo "ℹ️ No commits between ${TARGET_BRANCH} and ${SOURCE_BRANCH}; skipping PR creation."
             exit 0
           fi
 

@@ -559,15 +559,66 @@ jobs:
           echo "results_json=${RESULTS_JSON}" >> "$GITHUB_OUTPUT"
           echo "versions_json=${VERSIONS_JSON}" >> "$GITHUB_OUTPUT"
 
+  promotion-diff-check:
+    name: "Promotion Branch Diff Check"
+    needs: [active-systems]
+    if: >-
+      always() &&
+      fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      inputs.run_promotion == true &&
+      (github.ref_name == 'test' || github.ref_name == 'uat')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      test_to_uat_has_commits: ${{ steps.diff.outputs.test_to_uat_has_commits }}
+      uat_to_main_has_commits: ${{ steps.diff.outputs.uat_to_main_has_commits }}
+      test_to_uat_ahead: ${{ steps.diff.outputs.test_to_uat_ahead }}
+      uat_to_main_ahead: ${{ steps.diff.outputs.uat_to_main_ahead }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve promotion branch deltas
+        id: diff
+        run: |
+          git fetch --no-tags origin test uat main
+
+          TEST_TO_UAT_AHEAD=$(git rev-list --count origin/uat..origin/test 2>/dev/null || echo 0)
+          UAT_TO_MAIN_AHEAD=$(git rev-list --count origin/main..origin/uat 2>/dev/null || echo 0)
+
+          if [ "${TEST_TO_UAT_AHEAD}" -gt 0 ]; then
+            TEST_TO_UAT_HAS_COMMITS="true"
+          else
+            TEST_TO_UAT_HAS_COMMITS="false"
+          fi
+
+          if [ "${UAT_TO_MAIN_AHEAD}" -gt 0 ]; then
+            UAT_TO_MAIN_HAS_COMMITS="true"
+          else
+            UAT_TO_MAIN_HAS_COMMITS="false"
+          fi
+
+          echo "test_to_uat_ahead=${TEST_TO_UAT_AHEAD}" >> "$GITHUB_OUTPUT"
+          echo "uat_to_main_ahead=${UAT_TO_MAIN_AHEAD}" >> "$GITHUB_OUTPUT"
+          echo "test_to_uat_has_commits=${TEST_TO_UAT_HAS_COMMITS}" >> "$GITHUB_OUTPUT"
+          echo "uat_to_main_has_commits=${UAT_TO_MAIN_HAS_COMMITS}" >> "$GITHUB_OUTPUT"
+
+          echo "test->uat ahead count: ${TEST_TO_UAT_AHEAD}"
+          echo "uat->main ahead count: ${UAT_TO_MAIN_AHEAD}"
+
   pr-to-uat:
     name: "Create PR → UAT"
     permissions:
       contents: read
       pull-requests: write
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-test]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-test, promotion-diff-check]
     if: >
       always() &&
       github.ref_name == 'test' &&
+      needs.promotion-diff-check.result == 'success' &&
+      needs.promotion-diff-check.outputs.test_to_uat_has_commits == 'true' &&
       needs.prepare-promotion-payload.result == 'success' &&
       (needs.version-test.result == 'success' || needs.version-test.result == 'skipped') &&
       needs.backend-build.result == 'success' &&
@@ -598,10 +649,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-uat]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-uat, promotion-diff-check]
     if: >
       always() &&
       github.ref_name == 'uat' &&
+      needs.promotion-diff-check.result == 'success' &&
+      needs.promotion-diff-check.outputs.uat_to_main_has_commits == 'true' &&
       needs.prepare-promotion-payload.result == 'success' &&
       (needs.version-uat.result == 'success' || needs.version-uat.result == 'skipped') &&
       needs.backend-build.result == 'success' &&
