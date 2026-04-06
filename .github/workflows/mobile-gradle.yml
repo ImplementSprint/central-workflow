@@ -306,14 +306,15 @@ jobs:
         env:
           CUSTOM_ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
         run: |
+          cd "${{ steps.gradle.outputs.gradle_dir }}"
+          chmod +x gradlew
+
           if [ -n "${CUSTOM_ANDROID_BUILD_COMMAND}" ]; then
             echo "ℹ️ Running custom Android build command."
             bash -c "${CUSTOM_ANDROID_BUILD_COMMAND}"
             exit 0
           fi
 
-          cd "${{ steps.gradle.outputs.gradle_dir }}"
-          chmod +x gradlew
           ./gradlew ${{ inputs.gradle-task }} --no-daemon --stacktrace --warning-mode all
 
       - name: Stage Android Artifact (flat)
