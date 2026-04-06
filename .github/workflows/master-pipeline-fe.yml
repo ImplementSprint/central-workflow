@@ -809,9 +809,12 @@ jobs:
     name: "Container Security Gate — ${{ matrix.system.name }}"
     needs: [active-systems, playwright-e2e-postdeploy, grafana-k6-postdeploy, enforce-e2e-k6]
     if: >-
-      (((github.event_name == 'pull_request' && github.base_ref == 'test') || github.ref == 'refs/heads/test') || ((github.event_name == 'pull_request' && github.base_ref == 'uat') || github.ref == 'refs/heads/uat')) &&
+      always() &&
+      (((github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat')) || github.ref_name == 'test' || github.ref_name == 'uat')) &&
       (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
+      (needs.playwright-e2e-postdeploy.result == 'success' || needs.playwright-e2e-postdeploy.result == 'skipped') &&
+      (needs.grafana-k6-postdeploy.result == 'success' || needs.grafana-k6-postdeploy.result == 'skipped') &&
       needs.enforce-e2e-k6.result == 'success'
     strategy:
       fail-fast: false
