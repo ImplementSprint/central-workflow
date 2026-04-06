@@ -476,7 +476,7 @@ jobs:
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
       enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
-      android-build-command: ${{ matrix.system.android_build_command || 'cd android && ./gradlew :app:assembleDebug' }}
+      android-build-command: ${{ matrix.system.android_build_command || './gradlew :app:assembleDebug' }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
       enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}

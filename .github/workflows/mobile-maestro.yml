@@ -25,7 +25,7 @@ on:
       android-build-command:
         required: false
         type: string
-        default: "cd android && ./gradlew :app:assembleDebug"
+        default: "./gradlew :app:assembleDebug"
         description: "Command used to produce the Android app binary for Maestro"
       maestro-test-command:
         required: false
