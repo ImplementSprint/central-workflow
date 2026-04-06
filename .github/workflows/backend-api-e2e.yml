@@ -1,0 +1,95 @@
+name: "Reusable: Backend API E2E"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: "."
+        description: "Project directory"
+      system-name:
+        required: true
+        type: string
+        description: "System name for display/artifacts"
+      node-version:
+        required: false
+        type: number
+        default: 24
+        description: "Node.js version"
+      e2e-command:
+        required: true
+        type: string
+        description: "API E2E command to run"
+      upload-artifact:
+        required: false
+        type: boolean
+        default: true
+        description: "Upload E2E artifacts/logs"
+
+permissions:
+  contents: read
+
+jobs:
+  api-e2e:
+    name: "API E2E"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./${{ inputs.working-directory }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js ${{ inputs.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "npm"
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run API E2E
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/testdb
+          REDIS_URL: redis://localhost:6379
+          API_E2E_COMMAND: ${{ inputs.e2e-command }}
+        run: bash -c "${API_E2E_COMMAND}"
+
+      - name: Upload API E2E Artifacts
+        if: ${{ inputs.upload-artifact && always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.system-name }}-api-e2e-results
+          path: |
+            ${{ inputs.working-directory }}/test-results/
+            ${{ inputs.working-directory }}/coverage/
+          retention-days: 7
+          if-no-files-found: ignore

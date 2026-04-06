@@ -53,6 +53,22 @@ on:
         description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
         default: true
+      maestro_test_command_full:
+        description: "Optional full-suite Maestro Android command override"
+        type: string
+        default: ""
+      maestro_test_command_smoke:
+        description: "Optional smoke-suite Maestro Android command override"
+        type: string
+        default: ""
+      maestro_ios_test_command_full:
+        description: "Optional full-suite Maestro iOS command override"
+        type: string
+        default: ""
+      maestro_ios_test_command_smoke:
+        description: "Optional smoke-suite Maestro iOS command override"
+        type: string
+        default: ""
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -111,6 +127,22 @@ on:
         description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
         default: true
+      maestro_test_command_full:
+        description: "Optional full-suite Maestro Android command override"
+        type: string
+        default: ""
+      maestro_test_command_smoke:
+        description: "Optional smoke-suite Maestro Android command override"
+        type: string
+        default: ""
+      maestro_ios_test_command_full:
+        description: "Optional full-suite Maestro iOS command override"
+        type: string
+        default: ""
+      maestro_ios_test_command_smoke:
+        description: "Optional smoke-suite Maestro iOS command override"
+        type: string
+        default: ""
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -276,16 +308,34 @@ jobs:
       k6_script_path: ${{ steps.resolve.outputs.k6_script_path }}
       k6_base_url: ${{ steps.resolve.outputs.k6_base_url }}
       k6_run_only_on_branch: ${{ steps.resolve.outputs.k6_run_only_on_branch }}
+      target_branch: ${{ steps.resolve.outputs.target_branch }}
+      e2e_tier: ${{ steps.resolve.outputs.e2e_tier }}
+      enable_maestro: ${{ steps.resolve.outputs.enable_maestro }}
+      enable_maestro_ios: ${{ steps.resolve.outputs.enable_maestro_ios }}
+      maestro_android_command: ${{ steps.resolve.outputs.maestro_android_command }}
+      maestro_ios_command: ${{ steps.resolve.outputs.maestro_ios_command }}
     steps:
       - name: Resolve QA inputs
         id: resolve
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          IN_REF_NAME: ${{ github.ref_name }}
+          IN_BASE_REF: ${{ github.base_ref }}
           IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
           IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
           IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
           IN_K6_RUN_ONLY_ON_BRANCH: ${{ inputs.k6_run_only_on_branch }}
+          IN_MAESTRO_TEST_COMMAND_FULL: ${{ inputs.maestro_test_command_full }}
+          IN_MAESTRO_TEST_COMMAND_SMOKE: ${{ inputs.maestro_test_command_smoke }}
+          IN_MAESTRO_IOS_TEST_COMMAND_FULL: ${{ inputs.maestro_ios_test_command_full }}
+          IN_MAESTRO_IOS_TEST_COMMAND_SMOKE: ${{ inputs.maestro_ios_test_command_smoke }}
         run: |
           ENABLE_GRAFANA_K6="${IN_ENABLE_GRAFANA_K6}"
+          TARGET_BRANCH="${IN_REF_NAME}"
+
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "${IN_BASE_REF}" ]; then
+            TARGET_BRANCH="${IN_BASE_REF}"
+          fi
 
           if [ -z "${ENABLE_GRAFANA_K6}" ]; then
             ENABLE_GRAFANA_K6="false"
@@ -305,10 +355,61 @@ jobs:
             K6_RUN_ONLY_ON_BRANCH="${IN_K6_RUN_ONLY_ON_BRANCH}"
           fi
 
+          E2E_TIER="skip"
+          ENABLE_MAESTRO="false"
+          ENABLE_MAESTRO_IOS="false"
+
+          case "${TARGET_BRANCH}" in
+            test)
+              E2E_TIER="full"
+              ENABLE_MAESTRO="true"
+              ENABLE_MAESTRO_IOS="true"
+              ;;
+            uat)
+              E2E_TIER="smoke"
+              ENABLE_MAESTRO="true"
+              ENABLE_MAESTRO_IOS="true"
+              ;;
+          esac
+
+          MAESTRO_ANDROID_FULL="${IN_MAESTRO_TEST_COMMAND_FULL}"
+          if [ -z "${MAESTRO_ANDROID_FULL}" ]; then
+            MAESTRO_ANDROID_FULL="maestro test .maestro"
+          fi
+
+          MAESTRO_ANDROID_SMOKE="${IN_MAESTRO_TEST_COMMAND_SMOKE}"
+          if [ -z "${MAESTRO_ANDROID_SMOKE}" ]; then
+            MAESTRO_ANDROID_SMOKE="${MAESTRO_ANDROID_FULL}"
+          fi
+
+          MAESTRO_IOS_FULL="${IN_MAESTRO_IOS_TEST_COMMAND_FULL}"
+          if [ -z "${MAESTRO_IOS_FULL}" ]; then
+            MAESTRO_IOS_FULL="maestro test .maestro"
+          fi
+
+          MAESTRO_IOS_SMOKE="${IN_MAESTRO_IOS_TEST_COMMAND_SMOKE}"
+          if [ -z "${MAESTRO_IOS_SMOKE}" ]; then
+            MAESTRO_IOS_SMOKE="${MAESTRO_IOS_FULL}"
+          fi
+
+          if [ "${E2E_TIER}" = "smoke" ]; then
+            MAESTRO_ANDROID_COMMAND="${MAESTRO_ANDROID_SMOKE}"
+            MAESTRO_IOS_COMMAND="${MAESTRO_IOS_SMOKE}"
+          else
+            MAESTRO_ANDROID_COMMAND="${MAESTRO_ANDROID_FULL}"
+            MAESTRO_IOS_COMMAND="${MAESTRO_IOS_FULL}"
+          fi
+
           echo "enable_grafana_k6=${ENABLE_GRAFANA_K6}" >> "$GITHUB_OUTPUT"
           echo "k6_script_path=${K6_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
           echo "k6_base_url=${IN_K6_BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "k6_run_only_on_branch=${K6_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "e2e_tier=${E2E_TIER}" >> "$GITHUB_OUTPUT"
+          echo "enable_maestro=${ENABLE_MAESTRO}" >> "$GITHUB_OUTPUT"
+          echo "enable_maestro_ios=${ENABLE_MAESTRO_IOS}" >> "$GITHUB_OUTPUT"
+          echo "maestro_android_command=${MAESTRO_ANDROID_COMMAND}" >> "$GITHUB_OUTPUT"
+          echo "maestro_ios_command=${MAESTRO_IOS_COMMAND}" >> "$GITHUB_OUTPUT"
 
   active-systems:
     name: "Detect Active Mobile Systems"
@@ -457,7 +558,7 @@ jobs:
 
   mobile-expo:
     name: "Mobile Expo — ${{ matrix.system.name }}"
-    needs: [classify-systems]
+    needs: [classify-systems, qa-controls]
     if: fromJson(needs.classify-systems.outputs.expo_count) > 0
     strategy:
       fail-fast: false
@@ -475,12 +576,12 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
+      enable-maestro: ${{ needs.qa-controls.outputs.enable_maestro == 'true' && inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
       android-build-command: ${{ matrix.system.android_build_command || './gradlew :app:assembleDebug' }}
-      maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
+      maestro-test-command: ${{ needs.qa-controls.outputs.e2e_tier == 'smoke' && (matrix.system.maestro_test_command_smoke || matrix.system.maestro_test_command || needs.qa-controls.outputs.maestro_android_command) || (matrix.system.maestro_test_command_full || matrix.system.maestro_test_command || needs.qa-controls.outputs.maestro_android_command) }}
+      enable-maestro-ios: ${{ needs.qa-controls.outputs.enable_maestro_ios == 'true' && inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}
-      maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
+      maestro-ios-test-command: ${{ needs.qa-controls.outputs.e2e_tier == 'smoke' && (matrix.system.maestro_ios_test_command_smoke || matrix.system.maestro_ios_test_command || needs.qa-controls.outputs.maestro_ios_command) || (matrix.system.maestro_ios_test_command_full || matrix.system.maestro_ios_test_command || needs.qa-controls.outputs.maestro_ios_command) }}
     secrets: inherit
 
   mobile-expo-release:
@@ -553,7 +654,7 @@ jobs:
 
   mobile-react-native:
     name: "Mobile React Native — ${{ matrix.system.name }}"
-    needs: [classify-systems]
+    needs: [classify-systems, qa-controls]
     if: fromJson(needs.classify-systems.outputs.react_native_count) > 0
     strategy:
       fail-fast: false
@@ -575,10 +676,10 @@ jobs:
       enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
       enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
-      maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
-      maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
+      enable-maestro: ${{ needs.qa-controls.outputs.enable_maestro == 'true' && inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
+      maestro-test-command: ${{ needs.qa-controls.outputs.e2e_tier == 'smoke' && (matrix.system.maestro_test_command_smoke || matrix.system.maestro_test_command || needs.qa-controls.outputs.maestro_android_command) || (matrix.system.maestro_test_command_full || matrix.system.maestro_test_command || needs.qa-controls.outputs.maestro_android_command) }}
+      enable-maestro-ios: ${{ needs.qa-controls.outputs.enable_maestro_ios == 'true' && inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
+      maestro-ios-test-command: ${{ needs.qa-controls.outputs.e2e_tier == 'smoke' && (matrix.system.maestro_ios_test_command_smoke || matrix.system.maestro_ios_test_command || needs.qa-controls.outputs.maestro_ios_command) || (matrix.system.maestro_ios_test_command_full || matrix.system.maestro_ios_test_command || needs.qa-controls.outputs.maestro_ios_command) }}
 
   mobile-react-native-release:
     name: "Mobile React Native Release Build — ${{ matrix.system.name }}"

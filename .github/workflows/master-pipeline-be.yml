@@ -24,6 +24,15 @@ on:
       k6_run_only_on_branch:
         type: string
         default: "test,main"
+      enable_api_e2e:
+        type: boolean
+        default: true
+      api_e2e_full_command:
+        type: string
+        default: ""
+      api_e2e_smoke_command:
+        type: string
+        default: ""
       run_deploy:
         type: boolean
         default: true
@@ -151,6 +160,57 @@ jobs:
           echo "systems_label=${SYSTEMS_LABEL}" >> "$GITHUB_OUTPUT"
           echo "pipeline_mode=${PIPELINE_MODE}" >> "$GITHUB_OUTPUT"
 
+  qa-controls:
+    name: "Resolve Backend QA Controls"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      target_branch: ${{ steps.resolve.outputs.target_branch }}
+      e2e_tier: ${{ steps.resolve.outputs.e2e_tier }}
+      enable_api_e2e: ${{ steps.resolve.outputs.enable_api_e2e }}
+      api_e2e_quality_gate_label: ${{ steps.resolve.outputs.api_e2e_quality_gate_label }}
+    steps:
+      - name: Resolve backend E2E tier
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          IN_REF_NAME: ${{ github.ref_name }}
+          IN_BASE_REF: ${{ github.base_ref }}
+          IN_ENABLE_API_E2E: ${{ inputs.enable_api_e2e }}
+        run: |
+          TARGET_BRANCH="${IN_REF_NAME}"
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "${IN_BASE_REF}" ]; then
+            TARGET_BRANCH="${IN_BASE_REF}"
+          fi
+
+          ENABLE_API_E2E="${IN_ENABLE_API_E2E}"
+          if [ -z "${ENABLE_API_E2E}" ]; then
+            ENABLE_API_E2E="true"
+          fi
+          if [ "${ENABLE_API_E2E}" != "true" ] && [ "${ENABLE_API_E2E}" != "false" ]; then
+            ENABLE_API_E2E="true"
+          fi
+
+          E2E_TIER="skip"
+          API_E2E_QUALITY_GATE_LABEL="API E2E"
+          if [ "${ENABLE_API_E2E}" = "true" ]; then
+            case "${TARGET_BRANCH}" in
+              test)
+                E2E_TIER="full"
+                API_E2E_QUALITY_GATE_LABEL="API Full E2E"
+                ;;
+              uat)
+                E2E_TIER="smoke"
+                API_E2E_QUALITY_GATE_LABEL="API Smoke E2E"
+                ;;
+            esac
+          fi
+
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "e2e_tier=${E2E_TIER}" >> "$GITHUB_OUTPUT"
+          echo "enable_api_e2e=${ENABLE_API_E2E}" >> "$GITHUB_OUTPUT"
+          echo "api_e2e_quality_gate_label=${API_E2E_QUALITY_GATE_LABEL}" >> "$GITHUB_OUTPUT"
+
   active-systems:
     name: "Detect Active Backend Systems"
     needs: [systems-config]
@@ -240,6 +300,59 @@ jobs:
             fi
           done
           echo "✅ All backend directories exist."
+
+  api-e2e-systems:
+    name: "Resolve API E2E Systems"
+    needs: [active-systems, qa-controls]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      systems_json: ${{ steps.resolve.outputs.systems_json }}
+      count: ${{ steps.resolve.outputs.count }}
+    steps:
+      - name: Resolve systems with API E2E commands
+        id: resolve
+        env:
+          ACTIVE_SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
+          ENABLE_API_E2E: ${{ needs.qa-controls.outputs.enable_api_e2e }}
+          E2E_TIER: ${{ needs.qa-controls.outputs.e2e_tier }}
+          GLOBAL_FULL: ${{ inputs.api_e2e_full_command }}
+          GLOBAL_SMOKE: ${{ inputs.api_e2e_smoke_command }}
+        run: |
+          RESOLVED='[]'
+
+          if [ "${ENABLE_API_E2E}" = "true" ] && [ "${E2E_TIER}" != "skip" ]; then
+            while IFS= read -r system; do
+              [ -z "${system}" ] && continue
+
+              FULL_CMD=$(echo "${system}" | jq -r '.api_e2e_full_command // empty')
+              SMOKE_CMD=$(echo "${system}" | jq -r '.api_e2e_smoke_command // empty')
+
+              if [ -z "${FULL_CMD}" ]; then
+                FULL_CMD="${GLOBAL_FULL}"
+              fi
+
+              if [ -z "${SMOKE_CMD}" ]; then
+                SMOKE_CMD="${GLOBAL_SMOKE}"
+              fi
+
+              if [ "${E2E_TIER}" = "smoke" ]; then
+                RESOLVED_CMD="${SMOKE_CMD}"
+                if [ -z "${RESOLVED_CMD}" ]; then
+                  RESOLVED_CMD="${FULL_CMD}"
+                fi
+              else
+                RESOLVED_CMD="${FULL_CMD}"
+              fi
+
+              if [ -n "${RESOLVED_CMD}" ]; then
+                RESOLVED=$(echo "${RESOLVED}" | jq -c --argjson item "${system}" --arg cmd "${RESOLVED_CMD}" '. + [($item + {api_e2e_command: $cmd})]')
+              fi
+            done < <(echo "${ACTIVE_SYSTEMS_JSON}" | jq -c '.[]')
+          fi
+
+          echo "systems_json=${RESOLVED}" >> "$GITHUB_OUTPUT"
+          echo "count=$(echo "${RESOLVED}" | jq 'length')" >> "$GITHUB_OUTPUT"
 
   backend-build:
     name: "Backend Build — ${{ matrix.service.name }}"
@@ -344,6 +457,26 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+
+  backend-api-e2e:
+    name: "Backend API E2E — ${{ matrix.service.name }}"
+    needs: [api-e2e-systems, backend-build, backend-security, backend-sonar]
+    if: >
+      always() &&
+      fromJson(needs.api-e2e-systems.outputs.count) > 0 &&
+      (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') &&
+      (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
+      (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.api-e2e-systems.outputs.systems_json) }}
+    uses: ./.github/workflows/backend-api-e2e.yml
+    with:
+      working-directory: ${{ matrix.service.dir }}
+      system-name: ${{ matrix.service.name }}
+      e2e-command: ${{ matrix.service.api_e2e_command }}
+    secrets: inherit
 
   docker-build-main:
     name: "Backend Docker Build — ${{ matrix.service.name }}"
@@ -613,7 +746,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-test, promotion-diff-check]
+    needs: [systems-config, qa-controls, active-systems, backend-build, backend-security, backend-sonar, backend-api-e2e, grafana-k6, prepare-promotion-payload, version-test, promotion-diff-check]
     if: >
       always() &&
       github.ref_name == 'test' &&
@@ -624,6 +757,7 @@ jobs:
       needs.backend-build.result == 'success' &&
       (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
       (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') &&
+      (needs.backend-api-e2e.result == 'success' || needs.backend-api-e2e.result == 'skipped') &&
       (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       inputs.run_promotion == true
     uses: ./.github/workflows/promotion.yml
@@ -638,8 +772,8 @@ jobs:
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
       grafana-status: ${{ needs.grafana-k6.result }}
-      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","Grafana k6":"{3}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.grafana-k6.result) }}
-      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
+      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","{3}":"{4}","Grafana k6":"{5}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.qa-controls.outputs.api_e2e_quality_gate_label, needs.backend-api-e2e.result, needs.grafana-k6.result) }}
+      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.backend-api-e2e.result == 'success' || needs.backend-api-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.backend-api-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ inputs.dry_run }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
@@ -649,7 +783,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, prepare-promotion-payload, version-uat, promotion-diff-check]
+    needs: [systems-config, qa-controls, active-systems, backend-build, backend-security, backend-sonar, backend-api-e2e, grafana-k6, prepare-promotion-payload, version-uat, promotion-diff-check]
     if: >
       always() &&
       github.ref_name == 'uat' &&
@@ -660,6 +794,7 @@ jobs:
       needs.backend-build.result == 'success' &&
       (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
       (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') &&
+      (needs.backend-api-e2e.result == 'success' || needs.backend-api-e2e.result == 'skipped') &&
       (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       inputs.run_promotion == true
     uses: ./.github/workflows/promotion.yml
@@ -674,26 +809,26 @@ jobs:
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
       grafana-status: ${{ needs.grafana-k6.result }}
-      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","Grafana k6":"{3}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.grafana-k6.result) }}
-      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
+      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","{3}":"{4}","Grafana k6":"{5}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.qa-controls.outputs.api_e2e_quality_gate_label, needs.backend-api-e2e.result, needs.grafana-k6.result) }}
+      pipeline-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.backend-api-e2e.result == 'success' || needs.backend-api-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.backend-api-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled') && 'cancelled' || 'failure' }}
       dry-run: ${{ inputs.dry_run }}
     secrets:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   pipeline-summary:
     name: "Pipeline Summary"
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, version-main, replit-deploy]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, backend-api-e2e, grafana-k6, version-main, replit-deploy]
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
-      overall-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && (needs.version-main.result == 'success' || needs.version-main.result == 'skipped') && (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled' || needs.version-main.result == 'cancelled' || needs.replit-deploy.result == 'cancelled') && 'cancelled' || 'failure' }}
+      overall-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.backend-api-e2e.result == 'success' || needs.backend-api-e2e.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && (needs.version-main.result == 'success' || needs.version-main.result == 'skipped') && (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.backend-api-e2e.result == 'cancelled' || needs.grafana-k6.result == 'cancelled' || needs.version-main.result == 'cancelled' || needs.replit-deploy.result == 'cancelled') && 'cancelled' || 'failure' }}
 
   notify:
     name: "Notify Backend Pipeline"
-    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, grafana-k6, replit-deploy, prepare-promotion-payload]
+    needs: [systems-config, qa-controls, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, backend-api-e2e, grafana-k6, replit-deploy, prepare-promotion-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
@@ -705,5 +840,6 @@ jobs:
       security-status: ${{ needs.backend-security.result }}
       sonar-status: ${{ needs.backend-sonar.result }}
       grafana-status: ${{ needs.grafana-k6.result }}
+      quality-gates-json: ${{ format('{{"Tests":"{0}","Security":"{1}","SonarCloud":"{2}","{3}":"{4}","Grafana k6":"{5}"}}', needs.backend-build.result, needs.backend-security.result, needs.backend-sonar.result, needs.qa-controls.outputs.api_e2e_quality_gate_label, needs.backend-api-e2e.result, needs.grafana-k6.result) }}
       pipeline-result: ${{ needs.pipeline-summary.result == 'success' && 'success' || needs.pipeline-summary.result == 'cancelled' && 'cancelled' || 'failure' }}
     secrets: inherit

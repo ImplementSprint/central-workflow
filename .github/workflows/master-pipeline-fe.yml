@@ -28,6 +28,14 @@ on:
         description: "Branch allowed for Playwright execution"
         type: string
         default: "test,uat"
+      playwright_test_command_full:
+        description: "Optional full-suite Playwright command override"
+        type: string
+        default: ""
+      playwright_test_command_smoke:
+        description: "Optional smoke-suite Playwright command override"
+        type: string
+        default: ""
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
@@ -86,6 +94,14 @@ on:
         description: "Branch allowed for Playwright execution"
         type: string
         default: "test,uat"
+      playwright_test_command_full:
+        description: "Optional full-suite Playwright command override"
+        type: string
+        default: ""
+      playwright_test_command_smoke:
+        description: "Optional smoke-suite Playwright command override"
+        type: string
+        default: ""
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
@@ -254,6 +270,10 @@ jobs:
       enforce_e2e_k6: ${{ steps.resolve.outputs.enforce_e2e_k6 }}
       enforce_e2e_k6_on_branches: ${{ steps.resolve.outputs.enforce_e2e_k6_on_branches }}
       require_e2e_k6: ${{ steps.resolve.outputs.require_e2e_k6 }}
+      target_branch: ${{ steps.resolve.outputs.target_branch }}
+      e2e_tier: ${{ steps.resolve.outputs.e2e_tier }}
+      playwright_test_command: ${{ steps.resolve.outputs.playwright_test_command }}
+      playwright_quality_gate_label: ${{ steps.resolve.outputs.playwright_quality_gate_label }}
     steps:
       - name: Resolve QA inputs
         id: resolve
@@ -265,6 +285,8 @@ jobs:
           IN_PLAYWRIGHT_BROWSERS: ${{ inputs.playwright_browsers }}
           IN_E2E_BASE_URL: ${{ inputs.e2e_base_url }}
           IN_PLAYWRIGHT_RUN_ONLY_ON_BRANCH: ${{ inputs.playwright_run_only_on_branch }}
+          IN_PLAYWRIGHT_TEST_COMMAND_FULL: ${{ inputs.playwright_test_command_full }}
+          IN_PLAYWRIGHT_TEST_COMMAND_SMOKE: ${{ inputs.playwright_test_command_smoke }}
           IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
           IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
           IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
@@ -330,6 +352,33 @@ jobs:
             TARGET_BRANCH="${IN_BASE_REF}"
           fi
 
+          E2E_TIER="skip"
+          case "${TARGET_BRANCH}" in
+            test)
+              E2E_TIER="full"
+              ;;
+            uat)
+              E2E_TIER="smoke"
+              ;;
+          esac
+
+          PLAYWRIGHT_TEST_COMMAND_FULL="${IN_PLAYWRIGHT_TEST_COMMAND_FULL}"
+          if [ -z "${PLAYWRIGHT_TEST_COMMAND_FULL}" ]; then
+            PLAYWRIGHT_TEST_COMMAND_FULL="npm run test:e2e"
+          fi
+
+          PLAYWRIGHT_TEST_COMMAND_SMOKE="${IN_PLAYWRIGHT_TEST_COMMAND_SMOKE}"
+          if [ -z "${PLAYWRIGHT_TEST_COMMAND_SMOKE}" ]; then
+            PLAYWRIGHT_TEST_COMMAND_SMOKE="${PLAYWRIGHT_TEST_COMMAND_FULL}"
+          fi
+
+          PLAYWRIGHT_TEST_COMMAND="${PLAYWRIGHT_TEST_COMMAND_FULL}"
+          PLAYWRIGHT_QUALITY_GATE_LABEL="Playwright Full E2E"
+          if [ "${E2E_TIER}" = "smoke" ]; then
+            PLAYWRIGHT_TEST_COMMAND="${PLAYWRIGHT_TEST_COMMAND_SMOKE}"
+            PLAYWRIGHT_QUALITY_GATE_LABEL="Playwright Smoke E2E"
+          fi
+
           IS_ENFORCED_BRANCH="false"
           IFS=',' read -ra ENFORCE_BRANCHES <<< "${ENFORCE_E2E_K6_ON_BRANCHES}"
           for raw_branch in "${ENFORCE_BRANCHES[@]}"; do
@@ -356,6 +405,10 @@ jobs:
           echo "enforce_e2e_k6=${ENFORCE_E2E_K6}" >> "$GITHUB_OUTPUT"
           echo "enforce_e2e_k6_on_branches=${ENFORCE_E2E_K6_ON_BRANCHES}" >> "$GITHUB_OUTPUT"
           echo "require_e2e_k6=${REQUIRE_E2E_K6}" >> "$GITHUB_OUTPUT"
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "e2e_tier=${E2E_TIER}" >> "$GITHUB_OUTPUT"
+          echo "playwright_test_command=${PLAYWRIGHT_TEST_COMMAND}" >> "$GITHUB_OUTPUT"
+          echo "playwright_quality_gate_label=${PLAYWRIGHT_QUALITY_GATE_LABEL}" >> "$GITHUB_OUTPUT"
 
   active-systems:
     name: "Detect Active Systems"
@@ -509,6 +562,7 @@ jobs:
       system-name: ${{ matrix.system.name }}
       browser-list: ${{ needs.qa-controls.outputs.playwright_browsers }}
       e2e-base-url: ${{ needs.qa-controls.outputs.e2e_base_url }}
+      test-command: ${{ needs.qa-controls.outputs.e2e_tier == 'smoke' && (matrix.system.playwright_test_command_smoke || matrix.system.playwright_test_command || needs.qa-controls.outputs.playwright_test_command) || (matrix.system.playwright_test_command_full || matrix.system.playwright_test_command || needs.qa-controls.outputs.playwright_test_command) }}
       run-only-on-branch: ${{ needs.qa-controls.outputs.playwright_run_only_on_branch }}
       parallel-mode: matrix
       max-parallel: 3
@@ -955,6 +1009,7 @@ jobs:
       system-name: ${{ matrix.system.name }}
       browser-list: ${{ needs.qa-controls.outputs.playwright_browsers }}
       e2e-base-url: ${{ needs.qa-controls.outputs.e2e_base_url != '' && needs.qa-controls.outputs.e2e_base_url || fromJson(needs.prepare-promotion-payload.outputs.deployment_urls_json)[matrix.system.name] }}
+      test-command: ${{ needs.qa-controls.outputs.e2e_tier == 'smoke' && (matrix.system.playwright_test_command_smoke || matrix.system.playwright_test_command || needs.qa-controls.outputs.playwright_test_command) || (matrix.system.playwright_test_command_full || matrix.system.playwright_test_command || needs.qa-controls.outputs.playwright_test_command) }}
       run-only-on-branch: ${{ needs.qa-controls.outputs.playwright_run_only_on_branch }}
       parallel-mode: matrix
       max-parallel: 3
