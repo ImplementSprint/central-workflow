@@ -53,6 +53,11 @@ on:
         description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
         default: true
+      maestro_e2e_tier:
+        description: "Override Maestro execution tier (auto|skip|smoke|full)"
+        type: choice
+        options: [auto, skip, smoke, full]
+        default: auto
       maestro_test_command_full:
         description: "Optional full-suite Maestro Android command override"
         type: string
@@ -127,6 +132,10 @@ on:
         description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
         default: true
+      maestro_e2e_tier:
+        description: "Override Maestro execution tier (auto|skip|smoke|full)"
+        type: string
+        default: auto
       maestro_test_command_full:
         description: "Optional full-suite Maestro Android command override"
         type: string
@@ -325,6 +334,7 @@ jobs:
           IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
           IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
           IN_K6_RUN_ONLY_ON_BRANCH: ${{ inputs.k6_run_only_on_branch }}
+          IN_MAESTRO_E2E_TIER: ${{ inputs.maestro_e2e_tier }}
           IN_MAESTRO_TEST_COMMAND_FULL: ${{ inputs.maestro_test_command_full }}
           IN_MAESTRO_TEST_COMMAND_SMOKE: ${{ inputs.maestro_test_command_smoke }}
           IN_MAESTRO_IOS_TEST_COMMAND_FULL: ${{ inputs.maestro_ios_test_command_full }}
@@ -358,38 +368,63 @@ jobs:
           E2E_TIER="skip"
           ENABLE_MAESTRO="false"
           ENABLE_MAESTRO_IOS="false"
+          MAESTRO_TIER_OVERRIDE="${IN_MAESTRO_E2E_TIER}"
 
-          case "${TARGET_BRANCH}" in
-            test)
+          if [ -z "${MAESTRO_TIER_OVERRIDE}" ]; then
+            MAESTRO_TIER_OVERRIDE="auto"
+          fi
+
+          case "${MAESTRO_TIER_OVERRIDE}" in
+            auto)
+              case "${TARGET_BRANCH}" in
+                test)
+                  E2E_TIER="smoke"
+                  ENABLE_MAESTRO="true"
+                  ENABLE_MAESTRO_IOS="false"
+                  ;;
+                uat)
+                  E2E_TIER="smoke"
+                  ENABLE_MAESTRO="true"
+                  ENABLE_MAESTRO_IOS="true"
+                  ;;
+              esac
+              ;;
+            skip)
+              ;;
+            smoke)
+              E2E_TIER="smoke"
+              ENABLE_MAESTRO="true"
+              ENABLE_MAESTRO_IOS="true"
+              ;;
+            full)
               E2E_TIER="full"
               ENABLE_MAESTRO="true"
               ENABLE_MAESTRO_IOS="true"
               ;;
-            uat)
-              E2E_TIER="smoke"
-              ENABLE_MAESTRO="true"
-              ENABLE_MAESTRO_IOS="true"
+            *)
+              echo "❌ Unsupported maestro_e2e_tier value: ${MAESTRO_TIER_OVERRIDE}"
+              exit 1
               ;;
           esac
 
           MAESTRO_ANDROID_FULL="${IN_MAESTRO_TEST_COMMAND_FULL}"
           if [ -z "${MAESTRO_ANDROID_FULL}" ]; then
-            MAESTRO_ANDROID_FULL="maestro test .maestro"
+            MAESTRO_ANDROID_FULL="maestro test .maestro --exclude-tags ios"
           fi
 
           MAESTRO_ANDROID_SMOKE="${IN_MAESTRO_TEST_COMMAND_SMOKE}"
           if [ -z "${MAESTRO_ANDROID_SMOKE}" ]; then
-            MAESTRO_ANDROID_SMOKE="${MAESTRO_ANDROID_FULL}"
+            MAESTRO_ANDROID_SMOKE="maestro test .maestro --include-tags smoke --exclude-tags ios"
           fi
 
           MAESTRO_IOS_FULL="${IN_MAESTRO_IOS_TEST_COMMAND_FULL}"
           if [ -z "${MAESTRO_IOS_FULL}" ]; then
-            MAESTRO_IOS_FULL="maestro test .maestro"
+            MAESTRO_IOS_FULL="maestro test .maestro --exclude-tags android"
           fi
 
           MAESTRO_IOS_SMOKE="${IN_MAESTRO_IOS_TEST_COMMAND_SMOKE}"
           if [ -z "${MAESTRO_IOS_SMOKE}" ]; then
-            MAESTRO_IOS_SMOKE="${MAESTRO_IOS_FULL}"
+            MAESTRO_IOS_SMOKE="maestro test .maestro --include-tags smoke --exclude-tags android"
           fi
 
           if [ "${E2E_TIER}" = "smoke" ]; then

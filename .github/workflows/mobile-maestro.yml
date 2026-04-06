@@ -259,6 +259,13 @@ jobs:
           mkdir -p "${LOG_DIR}"
           : > "${LOG_DIR}/maestro-run.log"
 
+      - name: Prepare Maestro Android artifacts directory
+        run: |
+          ARTIFACT_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}/build/maestro/android"
+
+          rm -rf "${ARTIFACT_DIR}"
+          mkdir -p "${ARTIFACT_DIR}"
+
       - name: Create Android Maestro executor script
         run: |
           LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
@@ -353,8 +360,31 @@ jobs:
           echo "📦 Installing APK: ${APP_APK}"
           adb install -r "${APP_APK}"
 
+          RESOLVED_PACKAGE_ID=""
+          if command -v aapt >/dev/null 2>&1; then
+            RESOLVED_PACKAGE_ID="$(aapt dump badging "${APP_APK}" 2>/dev/null | awk -F"'" '/package: name=/{print $2; exit}')"
+          fi
+
+          if [ -n "${RESOLVED_PACKAGE_ID}" ]; then
+            echo "ℹ️ Resolved Android package id from APK: ${RESOLVED_PACKAGE_ID}"
+            if adb shell pm list packages | tr -d '\r' | grep -q "^package:${RESOLVED_PACKAGE_ID}$"; then
+              echo "✅ Installed package confirmed on emulator: ${RESOLVED_PACKAGE_ID}"
+            else
+              echo "❌ Installed package not found on emulator after APK install: ${RESOLVED_PACKAGE_ID}"
+              adb shell pm list packages | head -n 50 || true
+              exit 1
+            fi
+          else
+            echo "⚠️ Could not resolve package id from APK via aapt; relying on Maestro launch diagnostics."
+          fi
+
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND:-maestro test .maestro}"
+          REPORT_DIR="${LOG_DIR}/build/maestro/android"
+          JUNIT_REPORT="${REPORT_DIR}/junit.xml"
+          TEST_OUTPUT_DIR="${REPORT_DIR}/output"
+
+          mkdir -p "${REPORT_DIR}" "${TEST_OUTPUT_DIR}"
 
           case "${MAESTRO_CMD}" in
             *"maestro test .maestro"*)
@@ -368,19 +398,29 @@ jobs:
               ;;
           esac
 
-          FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
-          if [ -n "${FLOW_APP_ID}" ]; then
-            if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
-              echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
-              adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-            else
-              echo "❌ Flow appId not installed on emulator: ${FLOW_APP_ID}"
-              echo "📦 Installed package sample:"
-              adb shell pm list packages | head -n 30 || true
-              exit 1
-            fi
-          else
-            echo "⚠️ No appId found in Maestro flow files."
+          case "${MAESTRO_CMD}" in
+            *"--format"*) ;;
+            *)
+              MAESTRO_CMD="${MAESTRO_CMD} --format junit"
+              ;;
+          esac
+
+          case "${MAESTRO_CMD}" in
+            *"--output"*) ;;
+            *)
+              MAESTRO_CMD="${MAESTRO_CMD} --output '${JUNIT_REPORT}'"
+              ;;
+          esac
+
+          case "${MAESTRO_CMD}" in
+            *"--test-output-dir"*) ;;
+            *)
+              MAESTRO_CMD="${MAESTRO_CMD} --test-output-dir '${TEST_OUTPUT_DIR}'"
+              ;;
+          esac
+
+          if [ -n "${RESOLVED_PACKAGE_ID}" ]; then
+            adb shell monkey -p "${RESOLVED_PACKAGE_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
           fi
 
           echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
@@ -420,6 +460,15 @@ jobs:
         with:
           name: ${{ inputs.system-name }}-maestro-android-log
           path: ${{ inputs.working-directory == '.' && format('{0}/maestro-run.log', github.workspace) || format('{0}/{1}/maestro-run.log', github.workspace, inputs.working-directory) }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Maestro Android artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.system-name }}-maestro-android-artifacts
+          path: ${{ inputs.working-directory == '.' && format('{0}/build/maestro/android', github.workspace) || format('{0}/{1}/build/maestro/android', github.workspace, inputs.working-directory) }}
           if-no-files-found: warn
           retention-days: 14
 

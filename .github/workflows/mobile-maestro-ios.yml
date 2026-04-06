@@ -332,6 +332,13 @@ jobs:
           mkdir -p "${LOG_DIR}"
           : > "${LOG_DIR}/maestro-ios-run.log"
 
+      - name: Prepare Maestro iOS artifacts directory
+        run: |
+          ARTIFACT_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}/build/maestro/ios"
+
+          rm -rf "${ARTIFACT_DIR}"
+          mkdir -p "${ARTIFACT_DIR}"
+
       - name: Run Maestro tests on iOS simulator
         id: maestro-ios-run
         env:
@@ -346,7 +353,11 @@ jobs:
           LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
 
           LOG_FILE="${LOG_DIR}/maestro-ios-run.log"
+          REPORT_DIR="${LOG_DIR}/build/maestro/ios"
+          JUNIT_REPORT="${REPORT_DIR}/junit.xml"
+          TEST_OUTPUT_DIR="${REPORT_DIR}/output"
           : > "${LOG_FILE}"
+          mkdir -p "${REPORT_DIR}" "${TEST_OUTPUT_DIR}"
 
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND}"
 
@@ -362,9 +373,33 @@ jobs:
               ;;
           esac
 
-          FLOW_APP_ID=$(grep -RhoE '^[[:space:]]*appId:[[:space:]]*[^[:space:]]+' .maestro 2>/dev/null | head -n 1 | sed -E 's/^[[:space:]]*appId:[[:space:]]*//')
-          if [ -n "${FLOW_APP_ID}" ] && [ -n "${RESOLVED_BUNDLE_ID}" ] && [ "${FLOW_APP_ID}" != "${RESOLVED_BUNDLE_ID}" ]; then
-            echo "⚠️ Flow appId (${FLOW_APP_ID}) differs from built bundle id (${RESOLVED_BUNDLE_ID})."
+          case "${MAESTRO_CMD}" in
+            *"--format"*) ;;
+            *)
+              MAESTRO_CMD="${MAESTRO_CMD} --format junit"
+              ;;
+          esac
+
+          case "${MAESTRO_CMD}" in
+            *"--output"*) ;;
+            *)
+              MAESTRO_CMD="${MAESTRO_CMD} --output '${JUNIT_REPORT}'"
+              ;;
+          esac
+
+          case "${MAESTRO_CMD}" in
+            *"--test-output-dir"*) ;;
+            *)
+              MAESTRO_CMD="${MAESTRO_CMD} --test-output-dir '${TEST_OUTPUT_DIR}'"
+              ;;
+          esac
+
+          if xcrun simctl get_app_container "${SIM_UDID}" "${RESOLVED_BUNDLE_ID}" app >/dev/null 2>&1; then
+            echo "✅ Installed iOS bundle confirmed on simulator: ${RESOLVED_BUNDLE_ID}"
+          else
+            echo "❌ Installed iOS bundle not found on simulator: ${RESOLVED_BUNDLE_ID}"
+            xcrun simctl listapps "${SIM_UDID}" || true
+            exit 1
           fi
 
           xcrun simctl launch "${SIM_UDID}" "${RESOLVED_BUNDLE_ID}" >/dev/null 2>&1 || true
@@ -386,6 +421,15 @@ jobs:
         with:
           name: ${{ inputs.system-name }}-maestro-ios-log
           path: ${{ inputs.working-directory == '.' && format('{0}/maestro-ios-run.log', github.workspace) || format('{0}/{1}/maestro-ios-run.log', github.workspace, inputs.working-directory) }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Maestro iOS artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.system-name }}-maestro-ios-artifacts
+          path: ${{ inputs.working-directory == '.' && format('{0}/build/maestro/ios', github.workspace) || format('{0}/{1}/build/maestro/ios', github.workspace, inputs.working-directory) }}
           if-no-files-found: warn
           retention-days: 14
 
