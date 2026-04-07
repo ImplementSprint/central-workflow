@@ -155,21 +155,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if [ "${MODE}" = "test" ]; then
-            git tag -a "${TAG}" -m "TEST version ${TAG}"
-          elif [ "${MODE}" = "uat" ]; then
-            git tag -a "${TAG}" -m "UAT version ${TAG}"
-          else
-            git tag -a "${TAG}" -m "MAIN release ${TAG}"
-          fi
-
-          # Atomic push — if tag already exists on remote, push fails and we
-          # read the existing tag instead of silently skipping.
-          if git push origin "${TAG}" 2>/dev/null; then
-            echo "✅ Created and pushed tag: ${TAG}"
-          else
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
             echo "ℹ️ Tag already exists on remote: ${TAG} — using existing tag."
-            git tag -d "${TAG}" 2>/dev/null || true
+          else
+            # Guard against local tag collisions on reruns before creating.
+            if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+              git tag -d "${TAG}" >/dev/null 2>&1 || true
+            fi
+
+            if [ "${MODE}" = "test" ]; then
+              git tag -a "${TAG}" -m "TEST version ${TAG}"
+            elif [ "${MODE}" = "uat" ]; then
+              git tag -a "${TAG}" -m "UAT version ${TAG}"
+            else
+              git tag -a "${TAG}" -m "MAIN release ${TAG}"
+            fi
+
+            if git push origin "${TAG}" 2>/dev/null; then
+              echo "✅ Created and pushed tag: ${TAG}"
+            else
+              echo "❌ Failed to push tag: ${TAG}"
+              exit 1
+            fi
           fi
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
