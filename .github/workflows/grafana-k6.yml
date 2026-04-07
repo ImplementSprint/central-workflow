@@ -169,7 +169,7 @@ jobs:
           set -euo pipefail
 
           EXPECTED_STATUSES_VALUE="${EXPECTED_STATUSES:-}"
-          if [ -z "${EXPECTED_STATUSES_VALUE}" ] && [ -n "${BASE_URL}" ] && echo "${BASE_URL}" | grep -Eiq '\\.vercel\\.app(/|$)'; then
+          if [ -n "${BASE_URL}" ] && echo "${BASE_URL}" | grep -Eiq '\\.vercel\\.app(/|$)'; then
             EXPECTED_STATUSES_VALUE="200,401,403"
             echo "ℹ️ Vercel preview URL detected; using EXPECTED_STATUSES=${EXPECTED_STATUSES_VALUE}."
           fi
