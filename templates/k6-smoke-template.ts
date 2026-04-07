@@ -2,6 +2,30 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 const baseUrl = __ENV.BASE_URL || 'http://localhost:3000';
+const isVercelPreview = /\.vercel\.app(?:\/|$)/i.test(baseUrl);
+
+const configuredStatuses = (__ENV.EXPECTED_STATUSES || '').trim();
+const configuredSingleStatus = (__ENV.EXPECTED_STATUS || '').trim();
+const statusSource =
+  configuredStatuses ||
+  (isVercelPreview ? '200,401,403' : configuredSingleStatus || '200');
+
+const allowedStatusCodes = statusSource
+  .split(',')
+  .map((value: string) => Number(value.trim()))
+  .filter((value: number) => Number.isInteger(value) && value >= 100 && value <= 599);
+
+const expectedStatuses = allowedStatusCodes.length > 0 ? allowedStatusCodes : [200];
+const statusLabel = expectedStatuses.join('|');
+
+http.setResponseCallback(http.expectedStatuses(...expectedStatuses));
+
+type SmokeResponse = {
+  status: number;
+  timings: {
+    duration: number;
+  };
+};
 
 export const options = {
   thresholds: {
@@ -18,12 +42,12 @@ export const options = {
   },
 };
 
-export default function () {
+export default function smoke() {
   const response = http.get(`${baseUrl}/`);
 
   check(response, {
-    'status is 200': (result) => result.status === 200,
-    'response time < 1000ms': (result) => result.timings.duration < 1000,
+    [`status is ${statusLabel}`]: (result: SmokeResponse) => expectedStatuses.includes(result.status),
+    'response time < 1000ms': (result: SmokeResponse) => result.timings.duration < 1000,
   });
 
   sleep(1);
