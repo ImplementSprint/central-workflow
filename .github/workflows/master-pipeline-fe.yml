@@ -543,6 +543,7 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.exclusions=**/tests/performance/**
 
   version-test:
     name: "Version Tag — TEST (${{ matrix.system.name }})"
