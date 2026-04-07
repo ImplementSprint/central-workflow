@@ -361,6 +361,26 @@ jobs:
 
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND}"
 
+          append_maestro_arg() {
+            local arg="$1"
+
+            case "${MAESTRO_CMD}" in
+              "npm run "*|"npm exec "*|"pnpm run "*|"pnpm exec "*)
+                case "${MAESTRO_CMD}" in
+                  *" -- "*)
+                    MAESTRO_CMD="${MAESTRO_CMD} ${arg}"
+                    ;;
+                  *)
+                    MAESTRO_CMD="${MAESTRO_CMD} -- ${arg}"
+                    ;;
+                esac
+                ;;
+              *)
+                MAESTRO_CMD="${MAESTRO_CMD} ${arg}"
+                ;;
+            esac
+          }
+
           case "${MAESTRO_CMD}" in
             *"maestro test .maestro"*)
               case "${MAESTRO_CMD}" in
@@ -376,21 +396,21 @@ jobs:
           case "${MAESTRO_CMD}" in
             *"--format"*) ;;
             *)
-              MAESTRO_CMD="${MAESTRO_CMD} --format junit"
+              append_maestro_arg "--format junit"
               ;;
           esac
 
           case "${MAESTRO_CMD}" in
             *"--output"*) ;;
             *)
-              MAESTRO_CMD="${MAESTRO_CMD} --output '${JUNIT_REPORT}'"
+              append_maestro_arg "--output '${JUNIT_REPORT}'"
               ;;
           esac
 
           case "${MAESTRO_CMD}" in
             *"--test-output-dir"*) ;;
             *)
-              MAESTRO_CMD="${MAESTRO_CMD} --test-output-dir '${TEST_OUTPUT_DIR}'"
+              append_maestro_arg "--test-output-dir '${TEST_OUTPUT_DIR}'"
               ;;
           esac
 
