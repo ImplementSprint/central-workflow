@@ -73,15 +73,15 @@ jobs:
           echo "╚══════════════════════════════════════════════╝"
 
           if [ -z "${REPLIT_DEPLOY_URL}" ]; then
-            echo "⚠️ REPLIT_DEPLOY_URL secret not set. Skipping Replit deploy."
+            echo "❌ REPLIT_DEPLOY_URL secret not set. Replit deploy is required for this pipeline."
             DEPLOY_URL="${RUN_URL}"
             echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
             echo "## Replit Deployment" >> "$GITHUB_STEP_SUMMARY"
             echo "- System: ${{ inputs.system-name }}" >> "$GITHUB_STEP_SUMMARY"
             echo "- Environment: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Status: Skipped (missing REPLIT_DEPLOY_URL secret)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Status: Failed (missing REPLIT_DEPLOY_URL secret)" >> "$GITHUB_STEP_SUMMARY"
             echo "- Deployment URL: [${DEPLOY_URL}](${DEPLOY_URL})" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            exit 1
           fi
 
           # Build payload — include environment for production deploys
@@ -106,9 +106,16 @@ jobs:
               DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             fi
           else
-            echo "⚠️ Replit deploy returned HTTP ${HTTP_CODE}"
+            echo "❌ Replit deploy returned HTTP ${HTTP_CODE}"
             echo "Response body: ${BODY}"
             DEPLOY_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+            echo "## Replit Deployment" >> "$GITHUB_STEP_SUMMARY"
+            echo "- System: ${{ inputs.system-name }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Environment: ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Status: Failed (HTTP ${HTTP_CODE})" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Deployment URL: [${DEPLOY_URL}](${DEPLOY_URL})" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
           echo "deployment_url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
