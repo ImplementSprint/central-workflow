@@ -9,7 +9,7 @@ You do not need access to central workflow internals. Follow these rules through
 
 - Use approved stacks only:
 	- Frontend: React with Next.js and TypeScript
-	- Backend: Node.js with NestJS and TypeScript
+	- Backend: Node.js with NestJS or Node.js (Express/Fastify) and TypeScript
 	- Mobile: Expo (TypeScript), React Native, or Kotlin/Android
 	- Database: Supabase
 - Follow central API contracts (OpenAPI/Swagger).
@@ -72,11 +72,14 @@ You do not need access to central workflow internals. Follow these rules through
 - Configure one of these repository variables:
 	- `BACKEND_SINGLE_SYSTEMS_JSON`
 	- `BACKEND_MULTI_SYSTEMS_JSON`
+- Include `backend_stack` per system in backend systems JSON.
+	- Allowed values: `nestjs`, `nodejs`
+	- Legacy repos without `backend_stack` default to `nestjs`
 - Configure required secrets for Sonar and promotion PR automation.
 
 ### 3.2 Code and Test Requirements
 
-- NestJS + TypeScript strict mode is mandatory.
+- TypeScript strict mode is mandatory for all backend stacks.
 - Keep these quality checks runnable in repo scripts:
 	- lint
 	- typecheck

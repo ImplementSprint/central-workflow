@@ -125,9 +125,29 @@ jobs:
           echo "${SYSTEMS_JSON}" | jq -e 'length > 0' >/dev/null
           echo "${SYSTEMS_JSON}" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0) and (.image|type=="string" and length>0))' >/dev/null
 
+          INVALID_BACKEND_STACKS=$(echo "${SYSTEMS_JSON}" | jq -r '
+            [ .[]
+              | {
+                  name: (.name // "unnamed-system"),
+                  stack: ((.backend_stack // .stack // .framework // "nestjs") | ascii_downcase | gsub("[ _]"; "-"))
+                }
+              | select(.stack != "nestjs" and .stack != "nodejs")
+              | "\(.name):\(.stack)"
+            ]
+            | join(", ")
+          ')
+
+          if [ -n "${INVALID_BACKEND_STACKS}" ]; then
+            echo "❌ Unsupported backend_stack values detected: ${INVALID_BACKEND_STACKS}. Allowed values: nestjs, nodejs."
+            exit 1
+          fi
+
           SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c '
             map(
               . + {
+                backend_stack: (
+                  ((.backend_stack // .stack // .framework // "nestjs") | ascii_downcase | gsub("[ _]"; "-"))
+                ),
                 version_stream: (
                   ((.version_stream // .name // .dir // "backend") | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-+|-+$)"; ""))
                   | if length > 0 then . else "backend" end
@@ -253,6 +273,7 @@ jobs:
     with:
       working-directory: ${{ matrix.service.dir }}
       system-name: ${{ matrix.service.name }}
+      backend-stack: ${{ matrix.service.backend_stack }}
     secrets: inherit
 
   backend-security:

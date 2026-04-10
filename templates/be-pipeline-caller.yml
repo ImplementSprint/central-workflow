@@ -1,5 +1,10 @@
 name: "BE Pipeline Caller"
 
+# Configure BACKEND_SINGLE_SYSTEMS_JSON or BACKEND_MULTI_SYSTEMS_JSON in
+# repository variables and include backend_stack per system.
+# Example:
+# {"name":"my-node-api","dir":".","image":"ghcr.io/org/my-node-api","backend_stack":"nodejs"}
+
 on:
   push:
     branches: [test, uat, main]
