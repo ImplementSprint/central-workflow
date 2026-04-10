@@ -39,6 +39,9 @@ Remote-sourced templates:
 Advanced setup:
 - [mobile-release-signing-advanced.md](mobile-release-signing-advanced.md)
 
+Migration and adoption:
+- [migration-existing-repository.md](migration-existing-repository.md)
+
 ## Provider Source Paths
 
 Use these source paths to obtain credentials:
@@ -85,3 +88,4 @@ Promotion intent is linear:
 
 - Current workflow refs are documented exactly as observed at verification time.
 - Canonical variable names are enforced in this docs set, even if some template READMEs still show older naming.
+- Existing repositories with active CI/CD should use the migration runbook before replacing workflow callers.
