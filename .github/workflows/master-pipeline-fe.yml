@@ -1282,7 +1282,7 @@ jobs:
     if: >-
       always() &&
       github.event_name == 'push' &&
-      github.repository != 'ImplementSprint/CICD-Fe-Multi' && github.repository != 'ImplementSprint/central-workflow' &&
+      github.repository != 'ImplementSprint/greenovate-fe' && github.repository != 'ImplementSprint/central-workflow' &&
       (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main') &&
       (
         (github.ref == 'refs/heads/uat' && (needs.deploy-preview.result == 'failure' || needs.production-gate.result == 'failure')) ||
