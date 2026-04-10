@@ -30,7 +30,7 @@ on:
         required: false
         type: string
         default: ""
-        description: "Optional target base URL passed as BASE_URL"
+        description: "Optional target base URL passed as BASE_URL and K6_BASE_URL"
       upload-artifacts:
         required: false
         type: boolean
@@ -182,9 +182,9 @@ jobs:
             echo "▶ Running k6 script: ${SCRIPT_PATH}" | tee -a k6-output.log
             if [ -n "${BASE_URL}" ]; then
               if [ -n "${EXPECTED_STATUSES_VALUE}" ]; then
-                k6 run --out cloud -e BASE_URL="${BASE_URL}" -e EXPECTED_STATUSES="${EXPECTED_STATUSES_VALUE}" "${SCRIPT_PATH}" | tee -a k6-output.log
+                k6 run --out cloud -e BASE_URL="${BASE_URL}" -e K6_BASE_URL="${BASE_URL}" -e EXPECTED_STATUSES="${EXPECTED_STATUSES_VALUE}" "${SCRIPT_PATH}" | tee -a k6-output.log
               else
-                k6 run --out cloud -e BASE_URL="${BASE_URL}" "${SCRIPT_PATH}" | tee -a k6-output.log
+                k6 run --out cloud -e BASE_URL="${BASE_URL}" -e K6_BASE_URL="${BASE_URL}" "${SCRIPT_PATH}" | tee -a k6-output.log
               fi
             else
               k6 run --out cloud "${SCRIPT_PATH}" | tee -a k6-output.log
