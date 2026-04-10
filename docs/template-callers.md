@@ -179,3 +179,15 @@ GitHub repository settings:
 3. Confirm `test`, `uat`, and `main` branches exist.
 4. Push to `test` and verify orchestrator start + systems detection.
 5. Run `workflow_dispatch` once for manual validation of optional flags.
+
+## Upgrading Existing Repositories
+
+If your repository already has its own CI/CD workflows, follow [migration-existing-repository.md](migration-existing-repository.md) before replacing caller files.
+
+Safe first validation defaults for migration (`workflow_dispatch`):
+
+- FE caller: `run_deploy=false`, `run_promotion=false`, `dry_run=true`, `enable_grafana_k6=false`.
+- BE caller: `run_deploy=false`, `run_promotion=false`, `dry_run=true`, `enable_k6=false`.
+- Mobile caller: `run_deploy=false`, `run_promotion=false`, `dry_run=true`, `enable_grafana_k6=false`.
+
+These settings validate orchestration and configuration without deployment side effects.
