@@ -40,6 +40,10 @@ on:
         description: "Optional base URL for k6"
         type: string
         default: ""
+      k6_target_system_name:
+        description: "Optional system name for k6 target URL selection"
+        type: string
+        default: ""
       k6_run_only_on_branch:
         description: "Branch allowed for k6 execution"
         type: string
@@ -96,6 +100,10 @@ on:
         default: "tests/performance"
       k6_base_url:
         description: "Optional base URL for k6"
+        type: string
+        default: ""
+      k6_target_system_name:
+        description: "Optional system name for k6 target URL selection"
         type: string
         default: ""
       k6_run_only_on_branch:
@@ -229,6 +237,7 @@ jobs:
       enable_grafana_k6: ${{ steps.resolve.outputs.enable_grafana_k6 }}
       k6_script_path: ${{ steps.resolve.outputs.k6_script_path }}
       k6_base_url: ${{ steps.resolve.outputs.k6_base_url }}
+      k6_target_system_name: ${{ steps.resolve.outputs.k6_target_system_name }}
       k6_run_only_on_branch: ${{ steps.resolve.outputs.k6_run_only_on_branch }}
       enforce_e2e_k6: ${{ steps.resolve.outputs.enforce_e2e_k6 }}
       enforce_e2e_k6_on_branches: ${{ steps.resolve.outputs.enforce_e2e_k6_on_branches }}
@@ -247,6 +256,7 @@ jobs:
           IN_ENABLE_GRAFANA_K6: ${{ inputs.enable_grafana_k6 }}
           IN_K6_SCRIPT_PATH: ${{ inputs.k6_script_path }}
           IN_K6_BASE_URL: ${{ inputs.k6_base_url }}
+          IN_K6_TARGET_SYSTEM_NAME: ${{ inputs.k6_target_system_name }}
           IN_K6_RUN_ONLY_ON_BRANCH: ${{ inputs.k6_run_only_on_branch }}
           IN_ENFORCE_E2E_K6: ${{ inputs.enforce_e2e_k6 }}
           IN_ENFORCE_E2E_K6_ON_BRANCHES: ${{ inputs.enforce_e2e_k6_on_branches }}
@@ -299,6 +309,8 @@ jobs:
             K6_RUN_ONLY_ON_BRANCH="${IN_K6_RUN_ONLY_ON_BRANCH}"
           fi
 
+          K6_TARGET_SYSTEM_NAME="$(echo "${IN_K6_TARGET_SYSTEM_NAME}" | xargs)"
+
           ENFORCE_E2E_K6_ON_BRANCHES="test,uat"
           if [ -n "${IN_ENFORCE_E2E_K6_ON_BRANCHES}" ]; then
             ENFORCE_E2E_K6_ON_BRANCHES="${IN_ENFORCE_E2E_K6_ON_BRANCHES}"
@@ -331,6 +343,7 @@ jobs:
           echo "enable_grafana_k6=${ENABLE_GRAFANA_K6}" >> "$GITHUB_OUTPUT"
           echo "k6_script_path=${K6_SCRIPT_PATH}" >> "$GITHUB_OUTPUT"
           echo "k6_base_url=${IN_K6_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "k6_target_system_name=${K6_TARGET_SYSTEM_NAME}" >> "$GITHUB_OUTPUT"
           echo "k6_run_only_on_branch=${K6_RUN_ONLY_ON_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "enforce_e2e_k6=${ENFORCE_E2E_K6}" >> "$GITHUB_OUTPUT"
           echo "enforce_e2e_k6_on_branches=${ENFORCE_E2E_K6_ON_BRANCHES}" >> "$GITHUB_OUTPUT"
@@ -980,19 +993,65 @@ jobs:
     timeout-minutes: 30
     outputs:
       target_base_url: ${{ steps.resolve.outputs.target_base_url }}
+      target_source: ${{ steps.resolve.outputs.target_source }}
+      target_system_name: ${{ steps.resolve.outputs.target_system_name }}
     steps:
       - name: Resolve target URL
         id: resolve
         env:
           INPUT_K6_BASE_URL: ${{ needs.qa-controls.outputs.k6_base_url }}
+          INPUT_K6_TARGET_SYSTEM_NAME: ${{ needs.qa-controls.outputs.k6_target_system_name }}
+          ACTIVE_SYSTEMS_JSON: ${{ needs.active-systems.outputs.active_systems_json }}
           DEPLOYMENT_URLS_JSON: ${{ needs.prepare-promotion-payload.outputs.deployment_urls_json }}
         run: |
           TARGET_BASE_URL="${INPUT_K6_BASE_URL}"
+          TARGET_SOURCE="explicit_k6_base_url"
+          TARGET_SYSTEM_NAME=""
+
           if [ -z "${TARGET_BASE_URL}" ]; then
-            TARGET_BASE_URL=$(echo "${DEPLOYMENT_URLS_JSON}" | jq -r 'to_entries | .[0].value // ""')
+            TARGET_SOURCE="unresolved"
+
+            if [ -n "${INPUT_K6_TARGET_SYSTEM_NAME}" ]; then
+              TARGET_SYSTEM_NAME="${INPUT_K6_TARGET_SYSTEM_NAME}"
+              TARGET_BASE_URL=$(echo "${DEPLOYMENT_URLS_JSON}" | jq -r --arg name "${TARGET_SYSTEM_NAME}" '.[$name] // ""')
+
+              if [ -z "${TARGET_BASE_URL}" ]; then
+                AVAILABLE_KEYS=$(echo "${DEPLOYMENT_URLS_JSON}" | jq -r 'keys | join(", ")')
+                echo "❌ k6_target_system_name '${TARGET_SYSTEM_NAME}' not found in deployment URLs."
+                echo "Available systems: ${AVAILABLE_KEYS}"
+                exit 1
+              fi
+
+              TARGET_SOURCE="explicit_k6_target_system_name"
+            fi
+
+            if [ -z "${TARGET_BASE_URL}" ]; then
+              ROOT_SYSTEM_NAME=$(echo "${ACTIVE_SYSTEMS_JSON}" | jq -r '.[] | select((.dir // "") == "." or (.dir // "") == "./") | .name' | head -n 1)
+              if [ -n "${ROOT_SYSTEM_NAME}" ]; then
+                TARGET_BASE_URL=$(echo "${DEPLOYMENT_URLS_JSON}" | jq -r --arg name "${ROOT_SYSTEM_NAME}" '.[$name] // ""')
+                if [ -n "${TARGET_BASE_URL}" ]; then
+                  TARGET_SOURCE="root_dir_system"
+                  TARGET_SYSTEM_NAME="${ROOT_SYSTEM_NAME}"
+                fi
+              fi
+            fi
+
+            if [ -z "${TARGET_BASE_URL}" ]; then
+              TARGET_BASE_URL=$(echo "${DEPLOYMENT_URLS_JSON}" | jq -r 'to_entries | .[0].value // ""')
+              if [ -n "${TARGET_BASE_URL}" ]; then
+                TARGET_SOURCE="deployment_urls_first_entry"
+              fi
+            fi
+          fi
+
+          if [ -z "${TARGET_BASE_URL}" ]; then
+            echo "❌ Unable to resolve k6 target base URL."
+            exit 1
           fi
 
           echo "target_base_url=${TARGET_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "target_source=${TARGET_SOURCE}" >> "$GITHUB_OUTPUT"
+          echo "target_system_name=${TARGET_SYSTEM_NAME}" >> "$GITHUB_OUTPUT"
 
   grafana-k6-postdeploy:
     name: "Grafana k6 — Post-Deploy"
@@ -1003,6 +1062,7 @@ jobs:
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped') &&
       needs.qa-controls.outputs.enable_grafana_k6 == 'true' &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
+      needs.resolve-k6-target-postdeploy.result == 'success' &&
       needs.prepare-promotion-payload.result == 'success'
     uses: ./.github/workflows/grafana-k6.yml
     with:
