@@ -595,6 +595,7 @@ jobs:
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
       java-version: ${{ inputs.java-version }}
+      project-type: "expo"
       android-build-command: ${{ inputs.android-build-command }}
       maestro-test-command: ${{ inputs.maestro-test-command }}
       skip-build: ${{ needs.android-build.result == 'success' }}
