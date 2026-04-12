@@ -275,6 +275,7 @@ jobs:
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
       java-version: ${{ inputs.java-version }}
+      project-type: "react-native"
       maestro-test-command: ${{ inputs.maestro-test-command }}
       skip-build: true
       build-artifact-name: ${{ format('{0}-android-build', inputs.system-name) }}

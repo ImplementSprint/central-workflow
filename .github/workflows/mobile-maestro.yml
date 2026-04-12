@@ -22,6 +22,11 @@ on:
         type: string
         default: "17"
         description: "JDK version"
+      project-type:
+        required: false
+        type: string
+        default: "auto"
+        description: "Project type (auto|react-native|expo|kotlin)"
       android-build-command:
         required: false
         type: string
@@ -59,22 +64,55 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v5
 
-      - name: Detect package manager
-        id: detect-pm
+      - name: Detect project toolchain
+        id: detect-toolchain
         run: |
-          if [ -f "yarn.lock" ]; then
-            echo "pm=yarn" >> "$GITHUB_OUTPUT"
-          elif [ -f "pnpm-lock.yaml" ]; then
-            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
-          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
-            echo "pm=npm" >> "$GITHUB_OUTPUT"
-          else
-            echo "❌ package.json is required for Maestro runs."
-            exit 1
+          STACK="${{ inputs.project-type }}"
+          if [ -z "${STACK}" ]; then
+            STACK="auto"
           fi
 
+          if [ "${STACK}" = "auto" ]; then
+            if [ -f "package.json" ]; then
+              STACK="node-mobile"
+            else
+              STACK="kotlin"
+            fi
+          fi
+
+          case "${STACK}" in
+            react-native|expo|node-mobile)
+              STACK="node-mobile"
+              ;;
+            kotlin|android-kotlin|native-kotlin)
+              STACK="kotlin"
+              ;;
+            *)
+              echo "❌ Unsupported project-type '${STACK}'. Allowed values: auto, react-native, expo, kotlin."
+              exit 1
+              ;;
+          esac
+
+          PM="none"
+          if [ "${STACK}" = "node-mobile" ]; then
+            if [ -f "yarn.lock" ]; then
+              PM="yarn"
+            elif [ -f "pnpm-lock.yaml" ]; then
+              PM="pnpm"
+            elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "package.json" ]; then
+              PM="npm"
+            else
+              echo "❌ package.json or lockfile is required for React Native/Expo Maestro runs."
+              exit 1
+            fi
+          fi
+
+          echo "stack=${STACK}" >> "$GITHUB_OUTPUT"
+          echo "package_manager=${PM}" >> "$GITHUB_OUTPUT"
+          echo "✅ Detected stack=${STACK}, package_manager=${PM}"
+
       - name: Setup Node.js ${{ inputs.node-version }} (npm)
-        if: ${{ steps.detect-pm.outputs.pm == 'npm' }}
+        if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' && steps.detect-toolchain.outputs.package_manager == 'npm' }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
@@ -83,7 +121,7 @@ jobs:
             **/package-lock.json
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
-        if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
+        if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' && steps.detect-toolchain.outputs.package_manager == 'yarn' }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
@@ -92,7 +130,7 @@ jobs:
             **/yarn.lock
 
       - name: Setup Node.js ${{ inputs.node-version }} (pnpm)
-        if: ${{ steps.detect-pm.outputs.pm == 'pnpm' }}
+        if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' && steps.detect-toolchain.outputs.package_manager == 'pnpm' }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
@@ -101,8 +139,9 @@ jobs:
             **/pnpm-lock.yaml
 
       - name: Install Dependencies
+        if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' }}
         env:
-          PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+          PACKAGE_MANAGER: ${{ steps.detect-toolchain.outputs.package_manager }}
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
@@ -174,7 +213,7 @@ jobs:
           fi
 
       - name: Ensure Android Native Project
-        if: ${{ !inputs.skip-build }}
+        if: ${{ !inputs.skip-build && steps.detect-toolchain.outputs.stack == 'node-mobile' }}
         run: |
           if [ ! -d "android" ]; then
             CI=1 npx expo prebuild --platform android
@@ -183,14 +222,23 @@ jobs:
       - name: Ensure Kotlin Version Fallback
         if: ${{ !inputs.skip-build }}
         run: |
+          TARGET_PROPS=""
           if [ -f "android/gradle.properties" ]; then
-            if grep -q '^kotlinVersion=' android/gradle.properties; then
-              CURRENT_VERSION=$(grep '^kotlinVersion=' android/gradle.properties | head -n 1 | cut -d'=' -f2-)
+            TARGET_PROPS="android/gradle.properties"
+          elif [ -f "gradle.properties" ]; then
+            TARGET_PROPS="gradle.properties"
+          fi
+
+          if [ -n "${TARGET_PROPS}" ]; then
+            if grep -q '^kotlinVersion=' "${TARGET_PROPS}"; then
+              CURRENT_VERSION=$(grep '^kotlinVersion=' "${TARGET_PROPS}" | head -n 1 | cut -d'=' -f2-)
               echo "ℹ️ Preserving project kotlinVersion=${CURRENT_VERSION}"
             else
-              echo 'kotlinVersion=2.0.21' >> android/gradle.properties
+              echo 'kotlinVersion=2.0.21' >> "${TARGET_PROPS}"
               echo "✅ Added fallback kotlinVersion=2.0.21"
             fi
+          else
+            echo "ℹ️ No gradle.properties file found for kotlinVersion fallback."
           fi
 
       - name: Setup JDK ${{ inputs.java-version }}
@@ -204,15 +252,36 @@ jobs:
         run: ${{ inputs.android-build-command }}
 
       - name: Ensure Android app binary exists
+        env:
+          SKIP_BUILD: ${{ inputs.skip-build }}
+          ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          find_apk_candidate() {
+            CANDIDATE=""
+
+            if [ -d "android/app/build/outputs/apk" ]; then
+              CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            fi
+
+            if [ -z "${CANDIDATE}" ] && [ -d "app/build/outputs/apk" ]; then
+              CANDIDATE=$(find app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            fi
+
+            if [ -z "${CANDIDATE}" ]; then
+              CANDIDATE=$(find . -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            fi
+
+            echo "${CANDIDATE}"
+          }
 
           if [ -f "${EXPECTED_APK}" ]; then
             echo "✅ Found app APK at expected path."
             exit 0
           fi
 
-          CANDIDATE=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+          CANDIDATE=$(find_apk_candidate)
 
           if [ -n "${CANDIDATE}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
@@ -221,15 +290,21 @@ jobs:
             exit 0
           fi
 
+          if [ "${SKIP_BUILD}" = "true" ]; then
+            echo "❌ skip-build mode expected a pre-built artifact, but no APK was found after normalization."
+            echo "Ensure build-artifact-name points to a valid Android artifact payload from the build stage."
+            exit 1
+          fi
+
           echo "ℹ️ APK candidate missing. Triggering fallback build command once..."
-          ${{ inputs.android-build-command }}
+          ${ANDROID_BUILD_COMMAND}
 
           if [ -f "${EXPECTED_APK}" ]; then
             echo "✅ Fallback build produced expected APK."
             exit 0
           fi
 
-          CANDIDATE_AFTER=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+          CANDIDATE_AFTER=$(find_apk_candidate)
           if [ -n "${CANDIDATE_AFTER}" ]; then
             mkdir -p "$(dirname "${EXPECTED_APK}")"
             cp "${CANDIDATE_AFTER}" "${EXPECTED_APK}"
@@ -239,11 +314,15 @@ jobs:
 
           echo "❌ Unable to find or produce Android app APK for Maestro."
           if [ -d "android/app/build/outputs/apk" ]; then
-            echo "📁 APK output tree:"
+            echo "📁 android/app APK output tree:"
             find android/app/build/outputs/apk -maxdepth 4 -type f | sort
-          else
-            echo "📁 APK output directory does not exist: android/app/build/outputs/apk"
           fi
+
+          if [ -d "app/build/outputs/apk" ]; then
+            echo "📁 app APK output tree:"
+            find app/build/outputs/apk -maxdepth 4 -type f | sort
+          fi
+
           exit 1
 
       - name: Reset ADB state before emulator startup
@@ -342,7 +421,19 @@ jobs:
 
           APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "${APP_APK}" ]; then
-            APP_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            APP_APK=""
+
+            if [ -d "android/app/build/outputs/apk" ]; then
+              APP_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            fi
+
+            if [ -z "${APP_APK}" ] && [ -d "app/build/outputs/apk" ]; then
+              APP_APK=$(find app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            fi
+
+            if [ -z "${APP_APK}" ]; then
+              APP_APK=$(find . -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
+            fi
           fi
 
           if [ -z "${APP_APK}" ] || [ ! -f "${APP_APK}" ]; then

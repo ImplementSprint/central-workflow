@@ -417,15 +417,15 @@ jobs:
       deploy-environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || 'uat' }}
     secrets: inherit
 
-  replit-deploy:
-    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'PROD' }} Replit Deploy — ${{ matrix.service.name }}"
+  render-deploy:
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'UAT' || 'PROD' }} Render Deploy — ${{ matrix.service.name }}"
     needs: [active-systems, docker-build-main]
     if: >
       always() &&
       inputs.run_deploy == true &&
       (
-        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'main')) ||
-        (github.ref_name == 'test' || github.ref_name == 'main')
+        (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat' || github.base_ref == 'main')) ||
+        (github.ref_name == 'test' || github.ref_name == 'uat' || github.ref_name == 'main')
       ) &&
       ((github.event_name != 'workflow_dispatch' && github.event_name != 'workflow_call') || inputs.dry_run != true) &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
@@ -434,16 +434,17 @@ jobs:
       fail-fast: false
       matrix:
         service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
-    uses: ./.github/workflows/replit-deploy.yml
+    uses: ./.github/workflows/render-deploy.yml
     with:
       system-name: ${{ matrix.service.name }}
-      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || 'production' }}
+      environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'uat' || 'production' }}
       branch: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
+      require-api-center-check: true
     secrets: inherit
 
   grafana-k6:
     name: "Backend Grafana k6 — ${{ matrix.service.name }}"
-    needs: [active-systems, backend-build, backend-security, backend-sonar, replit-deploy]
+    needs: [active-systems, backend-build, backend-security, backend-sonar, render-deploy]
     if: >
       always() &&
       inputs.enable_k6 == true &&
@@ -451,7 +452,7 @@ jobs:
       (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') &&
       (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
       (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') &&
-      (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped')
+      (needs.render-deploy.result == 'success' || needs.render-deploy.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -527,13 +528,13 @@ jobs:
 
   prepare-promotion-payload:
     name: "Prepare Promotion Payload"
-    needs: [active-systems, deploy-preview, replit-deploy, grafana-k6, version-test, version-uat]
+    needs: [active-systems, deploy-preview, render-deploy, grafana-k6, version-test, version-uat]
     if: >-
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (github.ref_name == 'test' || github.ref_name == 'uat') &&
       (needs.deploy-preview.result == 'success' || needs.deploy-preview.result == 'skipped') &&
-      (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') &&
+      (needs.render-deploy.result == 'success' || needs.render-deploy.result == 'skipped') &&
       (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') &&
       ((github.ref_name == 'test' && (needs.version-test.result == 'success' || needs.version-test.result == 'skipped')) || (github.ref_name == 'uat' && (needs.version-uat.result == 'success' || needs.version-uat.result == 'skipped')))
     runs-on: ubuntu-latest
@@ -703,18 +704,18 @@ jobs:
 
   pipeline-summary:
     name: "Pipeline Summary"
-    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, version-main, replit-deploy]
+    needs: [systems-config, active-systems, backend-build, backend-security, backend-sonar, grafana-k6, version-main, render-deploy]
     if: always()
     uses: ./.github/workflows/pipeline-summary.yml
     with:
       pipeline-kind: ${{ needs.systems-config.outputs.pipeline_mode }}
       systems-json: ${{ needs.active-systems.outputs.active_systems_json }}
       results-json: '{}'
-      overall-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && (needs.version-main.result == 'success' || needs.version-main.result == 'skipped') && (needs.replit-deploy.result == 'success' || needs.replit-deploy.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled' || needs.version-main.result == 'cancelled' || needs.replit-deploy.result == 'cancelled') && 'cancelled' || 'failure' }}
+      overall-result: ${{ (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') && (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') && (needs.backend-sonar.result == 'success' || needs.backend-sonar.result == 'skipped') && (needs.grafana-k6.result == 'success' || needs.grafana-k6.result == 'skipped') && (needs.version-main.result == 'success' || needs.version-main.result == 'skipped') && (needs.render-deploy.result == 'success' || needs.render-deploy.result == 'skipped') && 'success' || (needs.backend-build.result == 'cancelled' || needs.backend-security.result == 'cancelled' || needs.backend-sonar.result == 'cancelled' || needs.grafana-k6.result == 'cancelled' || needs.version-main.result == 'cancelled' || needs.render-deploy.result == 'cancelled') && 'cancelled' || 'failure' }}
 
   notify:
     name: "Notify Backend Pipeline"
-    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, grafana-k6, replit-deploy, prepare-promotion-payload]
+    needs: [systems-config, active-systems, pipeline-summary, backend-build, backend-security, backend-sonar, grafana-k6, render-deploy, prepare-promotion-payload]
     if: always()
     uses: ./.github/workflows/notifications.yml
     with:
