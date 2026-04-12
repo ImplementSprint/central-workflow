@@ -88,4 +88,4 @@ Promotion intent is linear:
 
 - Current workflow refs are documented exactly as observed at verification time.
 - Canonical variable names are enforced in this docs set, even if some template READMEs still show older naming.
-- Existing repositories with active CI/CD should use the migration runbook before replacing workflow callers.
+- Repositories without workflow files should use the migration runbook for first-time caller onboarding.

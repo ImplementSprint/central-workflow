@@ -180,9 +180,9 @@ GitHub repository settings:
 4. Push to `test` and verify orchestrator start + systems detection.
 5. Run `workflow_dispatch` once for manual validation of optional flags.
 
-## Upgrading Existing Repositories
+## Migrating Repositories Without Workflows Yet
 
-If your repository already has its own CI/CD workflows, follow [migration-existing-repository.md](migration-existing-repository.md) before replacing caller files.
+If your repository does not have CI/CD workflow files yet, follow [migration-existing-repository.md](migration-existing-repository.md) for first-time caller onboarding.
 
 Safe first validation defaults for migration (`workflow_dispatch`):
 
