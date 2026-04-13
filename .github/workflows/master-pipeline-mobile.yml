@@ -507,15 +507,15 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
-      enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
-      enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
-      enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
-      enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
-      enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
+      enable-lint: ${{ inputs.enable_lint != false && inputs.enable_lint != 'false' && matrix.system.enable_lint != false && matrix.system.enable_lint != 'false' }}
+      enable-security-scan: ${{ inputs.enable_security_scan != false && inputs.enable_security_scan != 'false' && matrix.system.enable_security_scan != false && matrix.system.enable_security_scan != 'false' }}
+      enable-governance: ${{ inputs.enable_governance != false && inputs.enable_governance != 'false' && matrix.system.enable_governance != false && matrix.system.enable_governance != 'false' }}
+      enable-android-build: ${{ matrix.system.enable_android_build != false && matrix.system.enable_android_build != 'false' }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build != false && matrix.system.enable_ios_build != 'false' }}
+      enable-maestro: ${{ inputs.enable_maestro != false && inputs.enable_maestro != 'false' && matrix.system.enable_maestro != false && matrix.system.enable_maestro != 'false' }}
       android-build-command: ${{ matrix.system.android_build_command || 'cd android && ./gradlew :app:assembleDebug' }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
+      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false' && matrix.system.enable_maestro_ios != false && matrix.system.enable_maestro_ios != 'false' }}
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
     secrets: inherit
@@ -607,14 +607,14 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
-      enable-lint: ${{ inputs.enable_lint != false && (matrix.system.enable_lint == true || matrix.system.enable_lint == null) }}
-      enable-security-scan: ${{ inputs.enable_security_scan != false && (matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == null) }}
-      enable-governance: ${{ inputs.enable_governance != false && (matrix.system.enable_governance == true || matrix.system.enable_governance == null) }}
-      enable-android-build: ${{ matrix.system.enable_android_build == true || (matrix.system.enable_android_build == null && (matrix.system.enable_gradle == true || matrix.system.enable_gradle == null)) }}
-      enable-ios-build: ${{ matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == null }}
-      enable-maestro: ${{ inputs.enable_maestro != false && (matrix.system.enable_maestro == true || matrix.system.enable_maestro == null) }}
+      enable-lint: ${{ inputs.enable_lint != false && inputs.enable_lint != 'false' && matrix.system.enable_lint != false && matrix.system.enable_lint != 'false' }}
+      enable-security-scan: ${{ inputs.enable_security_scan != false && inputs.enable_security_scan != 'false' && matrix.system.enable_security_scan != false && matrix.system.enable_security_scan != 'false' }}
+      enable-governance: ${{ inputs.enable_governance != false && inputs.enable_governance != 'false' && matrix.system.enable_governance != false && matrix.system.enable_governance != 'false' }}
+      enable-android-build: ${{ matrix.system.enable_android_build != false && matrix.system.enable_android_build != 'false' }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build != false && matrix.system.enable_ios_build != 'false' }}
+      enable-maestro: ${{ inputs.enable_maestro != false && inputs.enable_maestro != 'false' && matrix.system.enable_maestro != false && matrix.system.enable_maestro != 'false' }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && (matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == null) }}
+      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false' && matrix.system.enable_maestro_ios != false && matrix.system.enable_maestro_ios != 'false' }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
 
   mobile-react-native-release:
