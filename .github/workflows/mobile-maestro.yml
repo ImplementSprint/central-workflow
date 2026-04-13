@@ -361,6 +361,21 @@ jobs:
           adb -s "${SERIAL}" shell input keyevent 82 || true
           echo "✅ Emulator boot completed"
 
+          echo "⏳ Waiting for Android package manager service..."
+          PKG_READY=false
+          for PKG_ATTEMPT in $(seq 1 30); do
+            if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1; then
+              PKG_READY=true
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "${PKG_READY}" != "true" ]; then
+            echo "❌ Android package manager service was not ready after boot."
+            exit 1
+          fi
+
           APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "${APP_APK}" ]; then
             APP_APK=$(find android/app/build/outputs/apk -type f -name "*.apk" ! -name "*-androidTest.apk" | sort | head -n 1)
@@ -382,6 +397,12 @@ jobs:
             echo "⚠️ APK install attempt ${INSTALL_ATTEMPT} failed; retrying after adb reconnect."
             adb reconnect offline || true
             adb -s "${SERIAL}" wait-for-device || true
+            for PKG_ATTEMPT in $(seq 1 10); do
+              if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
             sleep 2
           done
 

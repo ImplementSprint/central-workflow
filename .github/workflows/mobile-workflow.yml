@@ -213,7 +213,7 @@ jobs:
   # ── Stage 1B: Lint (parallel with tests) ────────────────────────
   mobile-lint:
     name: "Mobile — Lint Check"
-    if: ${{ inputs.enable-lint }}
+    if: ${{ inputs.enable-lint == true || inputs.enable-lint == 'true' }}
     uses: ./.github/workflows/lint-check.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -223,7 +223,7 @@ jobs:
   # ── Stage 1C: Security Scan (parallel with tests) ──────────────
   mobile-security:
     name: "Mobile — Security Scan"
-    if: ${{ inputs.enable-security-scan }}
+    if: ${{ inputs.enable-security-scan == true || inputs.enable-security-scan == 'true' }}
     uses: ./.github/workflows/security-scan.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -238,7 +238,7 @@ jobs:
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
-      inputs.enable-android-build &&
+      (inputs.enable-android-build == true || inputs.enable-android-build == 'true') &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -389,7 +389,7 @@ jobs:
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security]
     if: |
       always() &&
-      inputs.enable-ios-build &&
+      (inputs.enable-ios-build == true || inputs.enable-ios-build == 'true') &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: macos-15
     timeout-minutes: 60
@@ -617,7 +617,7 @@ jobs:
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
     if: |
       always() &&
-      inputs.enable-maestro &&
+      (inputs.enable-maestro == true || inputs.enable-maestro == 'true') &&
       needs.android-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
       !contains(needs.mobile-unit-tests.result, 'failure') &&
@@ -640,7 +640,7 @@ jobs:
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&
-      inputs.enable-maestro-ios &&
+      (inputs.enable-maestro-ios == true || inputs.enable-maestro-ios == 'true') &&
       needs.ios-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
       !contains(needs.mobile-unit-tests.result, 'failure') &&
