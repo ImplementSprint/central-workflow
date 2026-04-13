@@ -18,9 +18,10 @@ Create:
 
 ## Local Development Setup
 
-This template combines two systems:
-- Expo/TypeScript root app (`.`)
-- Kotlin Android app (`kotlin/`)
+This template is stack-first and multi-app ready:
+- Expo apps in `expo/apps/*`
+- React Native apps in `react-native/apps/*`
+- Kotlin apps in `kotlin/apps/*`
 
 Root commands:
 ```bash
@@ -57,29 +58,40 @@ Recommended value:
 ```json
 [
   {
-    "name": "mobile-expo",
-    "dir": ".",
+    "name": "mobile-expo-starter",
+    "dir": "expo/apps/mobile-expo-starter",
     "mobile_stack": "expo",
     "enable_android_build": true,
     "enable_ios_build": true,
-    "version_stream": "mobile-expo"
+    "enable_maestro": true,
+    "enable_maestro_ios": true,
+    "version_stream": "mobile-expo-starter"
   },
   {
-    "name": "mobile-kotlin",
-    "dir": "kotlin",
-    "mobile_stack": "kotlin",
-    "gradle_task": "assembleRelease bundleRelease",
+    "name": "mobile-rn-starter",
+    "dir": "react-native/apps/mobile-rn-starter",
+    "mobile_stack": "react-native",
     "enable_android_build": true,
-    "enable_ios_build": false,
-    "version_stream": "mobile-kotlin"
+    "enable_ios_build": true,
+    "enable_maestro": true,
+    "enable_maestro_ios": true,
+    "version_stream": "mobile-rn-starter"
+  },
+  {
+    "name": "mobile-kotlin-starter",
+    "dir": "kotlin/apps/mobile-kotlin-starter",
+    "mobile_stack": "kotlin",
+    "gradle_task": "assembleDebug",
+    "enable_maestro": true,
+    "version_stream": "mobile-kotlin-starter"
   }
 ]
 ```
 
 How to fill each field:
 - `name`: stable system label per mobile app lane.
-- `dir`: repository-relative path (`.` for Expo root, `kotlin` for Kotlin module).
-- `mobile_stack`: stack selector (`expo` or `kotlin`).
+- `dir`: repository-relative app path under stack folders.
+- `mobile_stack`: stack selector (`expo`, `react-native`, `kotlin`).
 - `gradle_task`: Kotlin release task(s) to run.
 - `enable_android_build` and `enable_ios_build`: platform lane switches.
 - `version_stream`: release/version channel label per system.
@@ -105,11 +117,19 @@ Where to get values:
 
 ## First Run Checklist
 
-1. Configure both local systems (Expo root and Kotlin subfolder).
+1. Configure app folders under each stack (`expo/apps`, `react-native/apps`, `kotlin/apps`).
 2. Add `MOBILE_MULTI_SYSTEMS_JSON`.
 3. Add Sonar secrets.
-4. Push to `test` and confirm both systems are discovered.
-5. Validate Android/iOS behavior per each system definition.
+4. Push to `test` and confirm each configured app is discovered.
+5. Validate Android/iOS behavior per app definition.
+
+Stack-specific workflows in this template:
+- `.github/workflows/mobile-expo-stack-caller.yml`
+- `.github/workflows/mobile-react-native-stack-caller.yml`
+- `.github/workflows/mobile-kotlin-stack-caller.yml`
+
+These stack workflows are dispatch-only for targeted runs.
+Default branch automation stays on `.github/workflows/mobile-pipeline-caller.yml`.
 
 ## Common Failure Modes
 

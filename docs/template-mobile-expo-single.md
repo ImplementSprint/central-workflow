@@ -103,10 +103,10 @@ Where to get each value:
 ## Current Maestro Behavior in This Template
 
 Current workflow defaults in template caller:
-- `enable_maestro: false`
-- `enable_maestro_ios: false`
+- `enable_maestro: true`
+- `enable_maestro_ios: true`
 
-That means Maestro lanes are disabled unless you enable them via manual dispatch input or caller changes.
+Maestro lanes are enabled by default for standard branch runs (`test`, `uat`, `main`).
 
 ## First Run Checklist
 
@@ -116,7 +116,7 @@ That means Maestro lanes are disabled unless you enable them via manual dispatch
 4. Add Sonar secrets.
 5. Push to `test`.
 6. Validate build lanes.
-7. If enabling Maestro, run `npm run maestro:validate` first.
+7. Run `npm run maestro:validate` before promotion to ensure flow files are valid.
 
 ## Common Failure Modes
 

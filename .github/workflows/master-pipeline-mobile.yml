@@ -13,6 +13,11 @@ on:
         type: choice
         options: [auto, single, multi]
         default: auto
+      stack_filter:
+        description: "Optional stack filter (all|expo|react-native|kotlin)"
+        type: choice
+        options: [all, expo, react-native, kotlin]
+        default: all
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
@@ -71,6 +76,10 @@ on:
         description: "Pipeline mode (auto|single|multi)"
         type: string
         default: auto
+      stack_filter:
+        description: "Optional stack filter (all|expo|react-native|kotlin)"
+        type: string
+        default: all
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
@@ -329,6 +338,7 @@ jobs:
         id: select
         env:
           SYSTEMS_JSON: ${{ needs.systems-config.outputs.systems_json }}
+          STACK_FILTER_INPUT: ${{ inputs.stack_filter }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "workflow_call" ]; then
             ACTIVE="${SYSTEMS_JSON}"
@@ -370,6 +380,33 @@ jobs:
                 ))
               ')
             fi
+          fi
+
+          STACK_FILTER="${STACK_FILTER_INPUT}"
+          if [ -z "${STACK_FILTER}" ]; then
+            STACK_FILTER="all"
+          fi
+          STACK_FILTER=$(echo "${STACK_FILTER}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[ _]+/-/g')
+
+          case "${STACK_FILTER}" in
+            all|expo|react-native|kotlin)
+              ;;
+            *)
+              echo "❌ Invalid stack_filter '${STACK_FILTER}'. Allowed values: all, expo, react-native, kotlin."
+              exit 1
+              ;;
+          esac
+
+          if [ "${STACK_FILTER}" != "all" ]; then
+            ACTIVE=$(echo "${ACTIVE}" | jq -c --arg filter "${STACK_FILTER}" '
+              def normalize_stack:
+                ((.mobile_stack // .stack // .framework // "") | ascii_downcase | gsub("[ _]"; "-")) as $raw
+                | if $raw == "rn" then "react-native"
+                  elif ($raw == "kotlin" or $raw == "android-kotlin" or $raw == "native-kotlin") then "kotlin"
+                  else $raw
+                  end;
+              map(select((normalize_stack) == $filter))
+            ')
           fi
 
           ACTIVE_COUNT=$(echo "${ACTIVE}" | jq 'length')

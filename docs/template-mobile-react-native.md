@@ -4,7 +4,7 @@ Template repository:
 - `ImplementSprint/template-repo-react-native`
 
 Current caller workflow ref (documented exactly):
-- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main`
+- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@maestro`
 
 ## Required Branches
 
@@ -96,11 +96,11 @@ Where to get values:
 
 ## Current Maestro Behavior in This Template
 
-Current workflow config sets:
-- `enable_maestro: false`
-- `enable_maestro_ios: false`
+Current workflow config defaults:
+- `enable_maestro: true`
+- `enable_maestro_ios: true`
 
-So Maestro is off by default for this caller configuration.
+Maestro is on by default for this template caller configuration.
 
 ## First Run Checklist
 
@@ -109,7 +109,7 @@ So Maestro is off by default for this caller configuration.
 3. Set `MOBILE_SINGLE_SYSTEMS_JSON`.
 4. Add Sonar secrets.
 5. Push to `test` and confirm lane selection.
-6. Enable Maestro only after `.maestro` flows are validated.
+6. Validate `.maestro` flow files before first release promotion.
 
 ## Common Failure Modes
 

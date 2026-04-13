@@ -141,7 +141,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
 [
   {
     "name": "mobile-expo",
-    "dir": "apps/mobile-expo",
+    "dir": "expo/apps/mobile-expo",
     "mobile_stack": "expo",
     "enable_grafana_k6": false,
     "k6_script_path": "tests/performance",
@@ -159,7 +159,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
   },
   {
     "name": "mobile-kotlin",
-    "dir": "apps/mobile-kotlin",
+    "dir": "kotlin/apps/mobile-kotlin",
     "mobile_stack": "kotlin",
     "enable_grafana_k6": false,
     "k6_script_path": "tests/performance",
@@ -173,7 +173,7 @@ Variable name: `MOBILE_MULTI_SYSTEMS_JSON`
   },
   {
     "name": "mobile-react-native",
-    "dir": "apps/mobile-rn",
+    "dir": "react-native/apps/mobile-rn",
     "mobile_stack": "react-native",
     "enable_grafana_k6": false,
     "k6_script_path": "tests/performance",
@@ -255,7 +255,7 @@ Use this prompt in Copilot Chat (or another coding assistant) inside your target
 
 - If one deployable mobile app: use single mode + one system JSON.
 - If two independently deployable apps/targets: use multi mode + array JSON.
-- Do not split templates by stack; split by topology (single vs multi).
+- For multi templates, use stack-first folders (`expo/apps`, `react-native/apps`, `kotlin/apps`) and add one JSON entry per app.
 
 ## 4) k6 quality gate note
 

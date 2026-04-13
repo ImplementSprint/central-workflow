@@ -13,6 +13,7 @@ on:
     branches: [test, uat, main]
   pull_request:
     branches: [test, uat, main]
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       pipeline_mode:
@@ -60,6 +61,18 @@ on:
         description: "Run promotion PR jobs"
         type: boolean
         default: true
+      enable_instrumented_tests:
+        description: "Run emulator-backed Android instrumentation tests"
+        type: boolean
+        default: true
+      enable_maestro:
+        description: "Run Android Maestro E2E tests"
+        type: boolean
+        default: true
+      maestro_test_command:
+        description: "Maestro command (central workflow)"
+        type: string
+        default: "maestro test .maestro"
       dry_run:
         description: "Preview-only mode (skip release publish)"
         type: boolean
@@ -91,6 +104,9 @@ jobs:
       enable_security_scan: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_security_scan || 'true') || true }}
       enable_sonar: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_sonar || 'true') || true }}
       enable_governance: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_governance || 'true') || true }}
+      enable_instrumented_tests: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_instrumented_tests || 'true') || true }}
+      enable_maestro: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.enable_maestro || 'true') || true }}
+      maestro-test-command: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.maestro_test_command || 'maestro test .maestro' }}
       run_deploy: ${{ github.ref_name == 'main' && (github.event_name != 'workflow_dispatch' || fromJSON(github.event.inputs.run_deploy || 'false')) }}
       run_promotion: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.run_promotion || 'true') || github.event_name == 'push' }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.dry_run || 'false') || false }}
