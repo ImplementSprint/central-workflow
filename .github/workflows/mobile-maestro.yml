@@ -201,9 +201,21 @@ jobs:
 
       - name: Build Android app binary
         if: ${{ !inputs.skip-build }}
-        run: ${{ inputs.android-build-command }}
+        env:
+          CUSTOM_ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
+
+          bash -lc "${CUSTOM_ANDROID_BUILD_COMMAND}"
 
       - name: Ensure Android app binary exists
+        env:
+          CUSTOM_ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
@@ -222,7 +234,13 @@ jobs:
           fi
 
           echo "ℹ️ APK candidate missing. Triggering fallback build command once..."
-          ${{ inputs.android-build-command }}
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
+          bash -lc "${CUSTOM_ANDROID_BUILD_COMMAND}"
 
           if [ -f "${EXPECTED_APK}" ]; then
             echo "✅ Fallback build produced expected APK."
@@ -297,7 +315,7 @@ jobs:
           BOOT_RETRIES=0
           MAX_BOOT_RETRIES=360
           OFFLINE_RESETS=0
-          MAX_OFFLINE_RESETS=3
+          MAX_OFFLINE_RESETS=8
 
           while true; do
             BOOT_RETRIES=$((BOOT_RETRIES + 1))
@@ -306,10 +324,13 @@ jobs:
             if [ "${STATE}" = "offline" ]; then
               OFFLINE_RESETS=$((OFFLINE_RESETS + 1))
               echo "⚠️ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
+              adb reconnect offline || true
               adb kill-server || true
               sleep 2
               adb start-server || true
               adb -s "${SERIAL}" wait-for-device || true
+            else
+              OFFLINE_RESETS=0
             fi
 
             if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then
@@ -351,7 +372,23 @@ jobs:
           fi
 
           echo "📦 Installing APK: ${APP_APK}"
-          adb install -r "${APP_APK}"
+          INSTALL_OK=false
+          for INSTALL_ATTEMPT in 1 2 3; do
+            if adb -s "${SERIAL}" install -r "${APP_APK}"; then
+              INSTALL_OK=true
+              break
+            fi
+
+            echo "⚠️ APK install attempt ${INSTALL_ATTEMPT} failed; retrying after adb reconnect."
+            adb reconnect offline || true
+            adb -s "${SERIAL}" wait-for-device || true
+            sleep 2
+          done
+
+          if [ "${INSTALL_OK}" != "true" ]; then
+            echo "❌ Failed to install APK after retries."
+            exit 1
+          fi
 
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND:-maestro test .maestro}"

@@ -94,10 +94,34 @@ jobs:
             npm ci --ignore-scripts
           fi
 
-      - name: Select Xcode 26.2
+      - name: Select Xcode toolchain
         run: |
           sw_vers
-          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+          CANDIDATES=(
+            "/Applications/Xcode_16.4.app/Contents/Developer"
+            "/Applications/Xcode_16.3.app/Contents/Developer"
+            "/Applications/Xcode_16.2.app/Contents/Developer"
+            "/Applications/Xcode_26.2.app/Contents/Developer"
+            "/Applications/Xcode.app/Contents/Developer"
+          )
+
+          SELECTED=""
+          for CANDIDATE in "${CANDIDATES[@]}"; do
+            if [ -d "${CANDIDATE}" ]; then
+              SELECTED="${CANDIDATE}"
+              break
+            fi
+          done
+
+          if [ -z "${SELECTED}" ]; then
+            echo "❌ No supported Xcode installation found."
+            ls -1 /Applications | grep -i Xcode || true
+            exit 1
+          fi
+
+          echo "ℹ️ Selecting Xcode at ${SELECTED}"
+          sudo xcode-select -s "${SELECTED}"
           xcodebuild -version
 
       - name: Ensure iOS Native Project
