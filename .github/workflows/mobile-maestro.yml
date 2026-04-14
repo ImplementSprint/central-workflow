@@ -446,10 +446,16 @@ jobs:
           echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
 
           echo "▶️ Running Maestro tests..."
+          MAX_MAESTRO_SECONDS="${MAESTRO_TIMEOUT_SECONDS:-900}"
           set +e
-          bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
+          timeout --signal=TERM --kill-after=30s "${MAX_MAESTRO_SECONDS}" bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
           MAESTRO_STATUS=$?
           set -e
+
+          if [ "${MAESTRO_STATUS}" -eq 124 ]; then
+            echo "❌ Maestro command timed out after ${MAX_MAESTRO_SECONDS}s." >> "${LOG_FILE}"
+          fi
+
           cat "${LOG_FILE}"
           echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
           exit 0
