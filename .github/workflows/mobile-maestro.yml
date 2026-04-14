@@ -361,18 +361,19 @@ jobs:
           adb -s "${SERIAL}" shell input keyevent 82 || true
           echo "✅ Emulator boot completed"
 
-          echo "⏳ Waiting for Android package manager service..."
-          PKG_READY=false
-          for PKG_ATTEMPT in $(seq 1 30); do
-            if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1; then
-              PKG_READY=true
+          echo "⏳ Waiting for Android package and settings services..."
+          SERVICES_READY=false
+          for SERVICE_ATTEMPT in $(seq 1 60); do
+            if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1 && \
+               adb -s "${SERIAL}" shell settings get global airplane_mode_on >/dev/null 2>&1; then
+              SERVICES_READY=true
               break
             fi
             sleep 2
           done
 
-          if [ "${PKG_READY}" != "true" ]; then
-            echo "❌ Android package manager service was not ready after boot."
+          if [ "${SERVICES_READY}" != "true" ]; then
+            echo "❌ Android package/settings services were not ready after boot."
             exit 1
           fi
 
@@ -388,7 +389,7 @@ jobs:
 
           echo "📦 Installing APK: ${APP_APK}"
           INSTALL_OK=false
-          for INSTALL_ATTEMPT in 1 2 3; do
+          for INSTALL_ATTEMPT in 1 2 3 4 5; do
             if adb -s "${SERIAL}" install -r "${APP_APK}"; then
               INSTALL_OK=true
               break
@@ -397,13 +398,14 @@ jobs:
             echo "⚠️ APK install attempt ${INSTALL_ATTEMPT} failed; retrying after adb reconnect."
             adb reconnect offline || true
             adb -s "${SERIAL}" wait-for-device || true
-            for PKG_ATTEMPT in $(seq 1 10); do
-              if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1; then
+            for SERVICE_ATTEMPT in $(seq 1 20); do
+              if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1 && \
+                 adb -s "${SERIAL}" shell settings get global airplane_mode_on >/dev/null 2>&1; then
                 break
               fi
-              sleep 2
+              sleep 3
             done
-            sleep 2
+            sleep 5
           done
 
           if [ "${INSTALL_OK}" != "true" ]; then
