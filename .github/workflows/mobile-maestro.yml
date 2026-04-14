@@ -547,8 +547,22 @@ jobs:
           sed -i "s|__ADB_BIN__|${{ steps.adb.outputs.adb_bin }}|g" "${SCRIPT_PATH}"
           chmod +x "${SCRIPT_PATH}"
 
-      - name: Run Maestro tests on Android emulator
-        id: maestro-android-run
+      - name: Enable KVM permissions for Android emulator
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          if [ ! -e /dev/kvm ]; then
+            echo "⚠️ /dev/kvm is unavailable on this runner. Emulator may run in software mode."
+            exit 0
+          fi
+
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
+      - name: Run Maestro tests on Android emulator (attempt 1)
+        id: maestro-android-run-attempt-1
+        continue-on-error: true
         env:
           MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
         uses: reactivecircus/android-emulator-runner@v2
@@ -557,11 +571,55 @@ jobs:
           arch: x86_64
           profile: pixel_5
           force-avd-creation: true
-          disable-linux-hw-accel: true
-          emulator-boot-timeout: 420
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -accel off -noaudio -no-boot-anim -wipe-data
+          disable-linux-hw-accel: auto
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -wipe-data
           disable-animations: false
           script: bash "${{ inputs.working-directory == '.' && format('{0}/.maestro-android-exec.sh', github.workspace) || format('{0}/{1}/.maestro-android-exec.sh', github.workspace, inputs.working-directory) }}"
+
+      - name: Run Maestro tests on Android emulator (attempt 2)
+        if: ${{ steps.maestro-android-run-attempt-1.outcome == 'failure' }}
+        id: maestro-android-run-attempt-2
+        continue-on-error: true
+        env:
+          MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: true
+          disable-linux-hw-accel: auto
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -wipe-data
+          disable-animations: false
+          script: bash "${{ inputs.working-directory == '.' && format('{0}/.maestro-android-exec.sh', github.workspace) || format('{0}/{1}/.maestro-android-exec.sh', github.workspace, inputs.working-directory) }}"
+
+      - name: Resolve Android Maestro result
+        id: maestro-android-run
+        if: ${{ always() }}
+        run: |
+          STATUS_1="${{ steps.maestro-android-run-attempt-1.outputs.maestro_status }}"
+          STATUS_2="${{ steps.maestro-android-run-attempt-2.outputs.maestro_status }}"
+
+          if [ "${{ steps.maestro-android-run-attempt-1.outcome }}" = "success" ]; then
+            if [ -z "${STATUS_1}" ]; then
+              STATUS_1=1
+            fi
+            echo "maestro_status=${STATUS_1}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ steps.maestro-android-run-attempt-2.outcome }}" = "success" ]; then
+            if [ -z "${STATUS_2}" ]; then
+              STATUS_2=1
+            fi
+            echo "maestro_status=${STATUS_2}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "maestro_status=1" >> "$GITHUB_OUTPUT"
+          echo "❌ Emulator infrastructure failed across two attempts."
 
       - name: Upload Maestro Android run log
         if: ${{ always() }}
