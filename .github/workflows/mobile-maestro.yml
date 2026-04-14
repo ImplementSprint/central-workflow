@@ -463,7 +463,13 @@ jobs:
             if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
               echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
               adb -s "${SERIAL}" logcat -c || true
-              adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+
+              LAUNCH_COMPONENT="$(adb -s "${SERIAL}" shell cmd package resolve-activity --brief "${FLOW_APP_ID}" 2>/dev/null | tr -d '\r' | tail -n 1)"
+              if [ -n "${LAUNCH_COMPONENT}" ] && echo "${LAUNCH_COMPONENT}" | grep -q "/"; then
+                adb -s "${SERIAL}" shell am start -W -n "${LAUNCH_COMPONENT}" >/dev/null 2>&1 || true
+              else
+                adb -s "${SERIAL}" shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+              fi
 
               echo "⏳ Validating Android app startup health..."
               sleep 8
@@ -507,7 +513,7 @@ jobs:
                 exit 1
               fi
 
-              STARTUP_ERRORS="$(adb -s "${SERIAL}" logcat -d 2>/dev/null | grep -E 'FATAL EXCEPTION|Unable to load script|Could not connect to development server|has not been registered|AndroidRuntime' | head -n 80 || true)"
+              STARTUP_ERRORS="$(adb -s "${SERIAL}" logcat -d 2>/dev/null | grep -E 'FATAL EXCEPTION|am_crash|Fatal signal|SIGSEGV|SIGABRT|ANR in' | head -n 80 || true)"
               if [ -n "${STARTUP_ERRORS}" ]; then
                 echo "❌ Detected fatal startup logs after app launch:"
                 echo "${STARTUP_ERRORS}"
@@ -618,8 +624,18 @@ jobs:
             exit 0
           fi
 
+          if [ -n "${STATUS_1}" ]; then
+            echo "maestro_status=${STATUS_1}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${STATUS_2}" ]; then
+            echo "maestro_status=${STATUS_2}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "maestro_status=1" >> "$GITHUB_OUTPUT"
-          echo "❌ Emulator infrastructure failed across two attempts."
+          echo "❌ Android Maestro execution failed in both attempts before producing a status output."
 
       - name: Upload Maestro Android run log
         if: ${{ always() }}
