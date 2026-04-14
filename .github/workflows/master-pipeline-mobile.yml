@@ -543,7 +543,7 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       enable-android-release-build: true
-      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build != false && matrix.system.enable_ios_release_build != 'false' }}
       android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
     secrets: inherit
@@ -640,7 +640,7 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       enable-android-release-build: true
-      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == null }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build != false && matrix.system.enable_ios_release_build != 'false' }}
       android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
     secrets: inherit
