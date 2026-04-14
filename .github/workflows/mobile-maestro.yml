@@ -462,7 +462,46 @@ jobs:
           if [ -n "${FLOW_APP_ID}" ]; then
             if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
               echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
+              adb -s "${SERIAL}" logcat -c || true
               adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+
+              echo "⏳ Validating Android app startup health..."
+              sleep 8
+
+              PROCESS_OK=false
+              for PROCESS_ATTEMPT in $(seq 1 10); do
+                if adb -s "${SERIAL}" shell pidof "${FLOW_APP_ID}" >/dev/null 2>&1; then
+                  PROCESS_OK=true
+                  break
+                fi
+                sleep 2
+              done
+
+              if [ "${PROCESS_OK}" != "true" ]; then
+                echo "❌ App process did not start for package: ${FLOW_APP_ID}"
+                adb -s "${SERIAL}" shell ps -A | grep -F "${FLOW_APP_ID}" || true
+                adb -s "${SERIAL}" logcat -d | tail -200 || true
+                exit 1
+              fi
+
+              FOCUS_INFO="$(adb -s "${SERIAL}" shell dumpsys window windows 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -n 6 || true)"
+              echo "ℹ️ Focus diagnostics:"
+              echo "${FOCUS_INFO}"
+
+              if ! echo "${FOCUS_INFO}" | grep -q "${FLOW_APP_ID}"; then
+                echo "❌ Expected app package is not in focused window: ${FLOW_APP_ID}"
+                adb -s "${SERIAL}" shell dumpsys activity activities | grep -E 'mResumedActivity|ResumedActivity|topResumedActivity' || true
+                exit 1
+              fi
+
+              STARTUP_ERRORS="$(adb -s "${SERIAL}" logcat -d 2>/dev/null | grep -E 'FATAL EXCEPTION|Unable to load script|Could not connect to development server|has not been registered|AndroidRuntime' | head -n 80 || true)"
+              if [ -n "${STARTUP_ERRORS}" ]; then
+                echo "❌ Detected fatal startup logs after app launch:"
+                echo "${STARTUP_ERRORS}"
+                exit 1
+              fi
+
+              echo "✅ Android app startup health check passed"
             else
               echo "❌ Flow appId not installed on emulator: ${FLOW_APP_ID}"
               echo "📦 Installed package sample:"
