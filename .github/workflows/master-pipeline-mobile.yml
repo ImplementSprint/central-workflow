@@ -507,15 +507,15 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
-      enable-lint: ${{ inputs.enable_lint != false && inputs.enable_lint != 'false' && matrix.system.enable_lint != false && matrix.system.enable_lint != 'false' }}
-      enable-security-scan: ${{ inputs.enable_security_scan != false && inputs.enable_security_scan != 'false' && matrix.system.enable_security_scan != false && matrix.system.enable_security_scan != 'false' }}
-      enable-governance: ${{ inputs.enable_governance != false && inputs.enable_governance != 'false' && matrix.system.enable_governance != false && matrix.system.enable_governance != 'false' }}
-      enable-android-build: ${{ matrix.system.enable_android_build != false && matrix.system.enable_android_build != 'false' }}
-      enable-ios-build: ${{ matrix.system.enable_ios_build != false && matrix.system.enable_ios_build != 'false' }}
-      enable-maestro: ${{ inputs.enable_maestro != false && inputs.enable_maestro != 'false' && matrix.system.enable_maestro != false && matrix.system.enable_maestro != 'false' }}
+      enable-lint: ${{ (inputs.enable_lint != false && inputs.enable_lint != 'false') && (matrix.system.enable_lint == null || matrix.system.enable_lint == '' || matrix.system.enable_lint == true || matrix.system.enable_lint == 'true') }}
+      enable-security-scan: ${{ (inputs.enable_security_scan != false && inputs.enable_security_scan != 'false') && (matrix.system.enable_security_scan == null || matrix.system.enable_security_scan == '' || matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == 'true') }}
+      enable-governance: ${{ (inputs.enable_governance != false && inputs.enable_governance != 'false') && (matrix.system.enable_governance == null || matrix.system.enable_governance == '' || matrix.system.enable_governance == true || matrix.system.enable_governance == 'true') }}
+      enable-android-build: ${{ matrix.system.enable_android_build == null || matrix.system.enable_android_build == '' || matrix.system.enable_android_build == true || matrix.system.enable_android_build == 'true' }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build == null || matrix.system.enable_ios_build == '' || matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == 'true' }}
+      enable-maestro: ${{ (inputs.enable_maestro != false && inputs.enable_maestro != 'false') && (matrix.system.enable_maestro == null || matrix.system.enable_maestro == '' || matrix.system.enable_maestro == true || matrix.system.enable_maestro == 'true') }}
       android-build-command: ${{ matrix.system.android_build_command || 'cd android && ./gradlew :app:assembleDebug' }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false' && matrix.system.enable_maestro_ios != false && matrix.system.enable_maestro_ios != 'false' }}
+      enable-maestro-ios: ${{ (inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false') && (matrix.system.enable_maestro_ios == null || matrix.system.enable_maestro_ios == '' || matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == 'true') }}
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
@@ -546,7 +546,7 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       enable-android-release-build: true
-      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build != false && matrix.system.enable_ios_release_build != 'false' }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == null || matrix.system.enable_ios_release_build == '' || matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == 'true' }}
       android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
@@ -613,14 +613,14 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       coverage-threshold: ${{ matrix.system.coverage_threshold || 80 }}
-      enable-lint: ${{ inputs.enable_lint != false && inputs.enable_lint != 'false' && matrix.system.enable_lint != false && matrix.system.enable_lint != 'false' }}
-      enable-security-scan: ${{ inputs.enable_security_scan != false && inputs.enable_security_scan != 'false' && matrix.system.enable_security_scan != false && matrix.system.enable_security_scan != 'false' }}
-      enable-governance: ${{ inputs.enable_governance != false && inputs.enable_governance != 'false' && matrix.system.enable_governance != false && matrix.system.enable_governance != 'false' }}
-      enable-android-build: ${{ matrix.system.enable_android_build != false && matrix.system.enable_android_build != 'false' }}
-      enable-ios-build: ${{ matrix.system.enable_ios_build != false && matrix.system.enable_ios_build != 'false' }}
-      enable-maestro: ${{ inputs.enable_maestro != false && inputs.enable_maestro != 'false' && matrix.system.enable_maestro != false && matrix.system.enable_maestro != 'false' }}
+      enable-lint: ${{ (inputs.enable_lint != false && inputs.enable_lint != 'false') && (matrix.system.enable_lint == null || matrix.system.enable_lint == '' || matrix.system.enable_lint == true || matrix.system.enable_lint == 'true') }}
+      enable-security-scan: ${{ (inputs.enable_security_scan != false && inputs.enable_security_scan != 'false') && (matrix.system.enable_security_scan == null || matrix.system.enable_security_scan == '' || matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == 'true') }}
+      enable-governance: ${{ (inputs.enable_governance != false && inputs.enable_governance != 'false') && (matrix.system.enable_governance == null || matrix.system.enable_governance == '' || matrix.system.enable_governance == true || matrix.system.enable_governance == 'true') }}
+      enable-android-build: ${{ matrix.system.enable_android_build == null || matrix.system.enable_android_build == '' || matrix.system.enable_android_build == true || matrix.system.enable_android_build == 'true' }}
+      enable-ios-build: ${{ matrix.system.enable_ios_build == null || matrix.system.enable_ios_build == '' || matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == 'true' }}
+      enable-maestro: ${{ (inputs.enable_maestro != false && inputs.enable_maestro != 'false') && (matrix.system.enable_maestro == null || matrix.system.enable_maestro == '' || matrix.system.enable_maestro == true || matrix.system.enable_maestro == 'true') }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false' && matrix.system.enable_maestro_ios != false && matrix.system.enable_maestro_ios != 'false' }}
+      enable-maestro-ios: ${{ (inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false') && (matrix.system.enable_maestro_ios == null || matrix.system.enable_maestro_ios == '' || matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == 'true') }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
       ios-xcode-version: ${{ matrix.system.ios_xcode_version || '16.4' }}
@@ -649,7 +649,7 @@ jobs:
       node-version: ${{ matrix.system.node_version || 24 }}
       java-version: ${{ matrix.system.java_version || '17' }}
       enable-android-release-build: true
-      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build != false && matrix.system.enable_ios_release_build != 'false' }}
+      enable-ios-release-build: ${{ matrix.system.enable_ios_release_build == null || matrix.system.enable_ios_release_build == '' || matrix.system.enable_ios_release_build == true || matrix.system.enable_ios_release_build == 'true' }}
       android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
