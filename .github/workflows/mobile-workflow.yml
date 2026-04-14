@@ -71,7 +71,7 @@ on:
       android-build-command:
         required: false
         type: string
-        default: "cd android && ./gradlew :app:assembleDebug"
+        default: "cd android && ./gradlew :app:assembleDebug -PbundleInDebug=true"
         description: "Command used to produce the Android app binary for Maestro"
       maestro-test-command:
         required: false
@@ -585,18 +585,29 @@ jobs:
           fi
 
           echo "ℹ️ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
-          xcodebuild \
-            ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
-            -scheme "${SCHEME}" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ios/build \
-            CODE_SIGNING_ALLOWED=NO \
-            CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
-            GCC_TREAT_WARNINGS_AS_ERRORS=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
-            clean build
+          PRIMARY_DESTINATION='platform=iOS Simulator,name=iPhone 16,OS=latest'
+          FALLBACK_DESTINATION='generic/platform=iOS Simulator'
+
+          run_build() {
+            local destination="$1"
+            xcodebuild \
+              ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
+              -scheme "${SCHEME}" \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              -destination "${destination}" \
+              -derivedDataPath ios/build \
+              CODE_SIGNING_ALLOWED=NO \
+              CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
+              GCC_TREAT_WARNINGS_AS_ERRORS=NO \
+              SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
+              clean build
+          }
+
+          if ! run_build "${PRIMARY_DESTINATION}"; then
+            echo "⚠️ Primary iOS simulator destination failed; retrying with generic simulator destination."
+            run_build "${FALLBACK_DESTINATION}"
+          fi
 
       - name: Normalize iOS app bundle path for Maestro
         run: |

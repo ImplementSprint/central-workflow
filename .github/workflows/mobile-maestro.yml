@@ -264,11 +264,30 @@ jobs:
           fi
           exit 1
 
+      - name: Resolve adb binary
+        id: adb
+        run: |
+          ADB_BIN="$(command -v adb || true)"
+
+          if [ -z "${ADB_BIN}" ] && [ -x "/usr/local/lib/android/sdk/platform-tools/adb" ]; then
+            ADB_BIN="/usr/local/lib/android/sdk/platform-tools/adb"
+            echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+          fi
+
+          if [ -z "${ADB_BIN}" ]; then
+            echo "❌ adb was not found on PATH and no fallback binary was detected."
+            exit 1
+          fi
+
+          echo "adb_bin=${ADB_BIN}" >> "$GITHUB_OUTPUT"
+          echo "✅ Using adb binary: ${ADB_BIN}"
+
       - name: Reset ADB state before emulator startup
         run: |
-          adb kill-server || true
+          ADB_BIN="${{ steps.adb.outputs.adb_bin }}"
+          "${ADB_BIN}" kill-server || true
           pkill -f "emulator" || true
-          adb start-server || true
+          "${ADB_BIN}" start-server || true
 
       - name: Prepare Maestro Android run log
         run: |
@@ -291,6 +310,17 @@ jobs:
 
           cd "${LOG_DIR}"
           export PATH="$HOME/.maestro/bin:$PATH"
+
+          ADB_BIN="__ADB_BIN__"
+          if [ -n "${ADB_BIN}" ] && [ -x "${ADB_BIN}" ]; then
+            export PATH="$(dirname "${ADB_BIN}"):$PATH"
+          fi
+
+          if ! command -v adb >/dev/null 2>&1; then
+            echo "❌ adb is not available on PATH for Maestro Android execution."
+            exit 1
+          fi
+
           : > "${LOG_FILE}"
 
           echo "⏳ Waiting for Android emulator boot completion..."
@@ -462,6 +492,7 @@ jobs:
           BASH
 
           sed -i "s|__LOG_DIR__|${LOG_DIR}|g" "${SCRIPT_PATH}"
+          sed -i "s|__ADB_BIN__|${{ steps.adb.outputs.adb_bin }}|g" "${SCRIPT_PATH}"
           chmod +x "${SCRIPT_PATH}"
 
       - name: Run Maestro tests on Android emulator

@@ -218,18 +218,29 @@ jobs:
           FORCE_BUNDLING: "1"
           SKIP_BUNDLING: ""
         run: |
-          xcodebuild \
-            ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
-            -scheme "${SCHEME}" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ios/build \
-            CODE_SIGNING_ALLOWED=NO \
-            CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
-            GCC_TREAT_WARNINGS_AS_ERRORS=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
-            clean build
+          PRIMARY_DESTINATION='platform=iOS Simulator,name=iPhone 16,OS=latest'
+          FALLBACK_DESTINATION='generic/platform=iOS Simulator'
+
+          run_build() {
+            local destination="$1"
+            xcodebuild \
+              ${CONTAINER_FLAG} "${CONTAINER_PATH}" \
+              -scheme "${SCHEME}" \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              -destination "${destination}" \
+              -derivedDataPath ios/build \
+              CODE_SIGNING_ALLOWED=NO \
+              CLANG_WARN_NULLABILITY_COMPLETENESS=NO \
+              GCC_TREAT_WARNINGS_AS_ERRORS=NO \
+              SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
+              clean build
+          }
+
+          if ! run_build "${PRIMARY_DESTINATION}"; then
+            echo "⚠️ Primary iOS simulator destination failed; retrying with generic simulator destination."
+            run_build "${FALLBACK_DESTINATION}"
+          fi
 
           APP_PATH=$(find ios/build/Build/Products -type d -name "*.app" | head -n 1)
           if [ -z "${APP_PATH}" ]; then
