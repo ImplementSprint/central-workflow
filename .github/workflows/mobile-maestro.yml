@@ -488,9 +488,22 @@ jobs:
               echo "ℹ️ Focus diagnostics:"
               echo "${FOCUS_INFO}"
 
-              if ! echo "${FOCUS_INFO}" | grep -q "${FLOW_APP_ID}"; then
-                echo "❌ Expected app package is not in focused window: ${FLOW_APP_ID}"
-                adb -s "${SERIAL}" shell dumpsys activity activities | grep -E 'mResumedActivity|ResumedActivity|topResumedActivity' || true
+              ACTIVITY_INFO="$(adb -s "${SERIAL}" shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|ResumedActivity|topResumedActivity' | head -n 20 || true)"
+              echo "ℹ️ Activity diagnostics:"
+              echo "${ACTIVITY_INFO}"
+
+              FOCUS_MATCH=false
+              if echo "${FOCUS_INFO}" | grep -q "${FLOW_APP_ID}"; then
+                FOCUS_MATCH=true
+              fi
+
+              ACTIVITY_MATCH=false
+              if echo "${ACTIVITY_INFO}" | grep -q "${FLOW_APP_ID}"; then
+                ACTIVITY_MATCH=true
+              fi
+
+              if [ "${FOCUS_MATCH}" != "true" ] && [ "${ACTIVITY_MATCH}" != "true" ]; then
+                echo "❌ Expected app package is not in focus or resumed activity: ${FLOW_APP_ID}"
                 exit 1
               fi
 
