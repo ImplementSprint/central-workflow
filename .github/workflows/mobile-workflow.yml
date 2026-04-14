@@ -88,6 +88,21 @@ on:
         type: string
         default: "maestro test .maestro"
         description: "Maestro iOS test command"
+      ios-runner:
+        required: false
+        type: string
+        default: "macos-15"
+        description: "GitHub macOS runner label for iOS jobs"
+      ios-xcode-version:
+        required: false
+        type: string
+        default: "16.2"
+        description: "Preferred Xcode version to select (e.g. 16.2)"
+      ios-xcode-fallbacks:
+        required: false
+        type: string
+        default: "16.3,16.4,26.2"
+        description: "Comma-separated fallback Xcode versions"
 
 
 permissions:
@@ -213,7 +228,7 @@ jobs:
   # ── Stage 1B: Lint (parallel with tests) ────────────────────────
   mobile-lint:
     name: "Mobile — Lint Check"
-    if: ${{ inputs.enable-lint == true || inputs.enable-lint == 'true' }}
+    if: ${{ inputs.enable-lint != false && inputs.enable-lint != 'false' }}
     uses: ./.github/workflows/lint-check.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -223,7 +238,7 @@ jobs:
   # ── Stage 1C: Security Scan (parallel with tests) ──────────────
   mobile-security:
     name: "Mobile — Security Scan"
-    if: ${{ inputs.enable-security-scan == true || inputs.enable-security-scan == 'true' }}
+    if: ${{ inputs.enable-security-scan != false && inputs.enable-security-scan != 'false' }}
     uses: ./.github/workflows/security-scan.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -391,7 +406,7 @@ jobs:
       always() &&
       (inputs.enable-ios-build == true || inputs.enable-ios-build == 'true') &&
       !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    runs-on: macos-15
+    runs-on: ${{ inputs.ios-runner }}
     timeout-minutes: 60
     defaults:
       run:
@@ -459,13 +474,23 @@ jobs:
         run: |
           sw_vers
 
-          CANDIDATES=(
-            "/Applications/Xcode_16.4.app/Contents/Developer"
-            "/Applications/Xcode_16.3.app/Contents/Developer"
-            "/Applications/Xcode_16.2.app/Contents/Developer"
-            "/Applications/Xcode_26.2.app/Contents/Developer"
-            "/Applications/Xcode.app/Contents/Developer"
-          )
+          REQUESTED_XCODE="${{ inputs.ios-xcode-version }}"
+          FALLBACK_XCODE_CSV="${{ inputs.ios-xcode-fallbacks }}"
+
+          CANDIDATES=()
+          if [ -n "${REQUESTED_XCODE}" ]; then
+            CANDIDATES+=("/Applications/Xcode_${REQUESTED_XCODE}.app/Contents/Developer")
+          fi
+
+          IFS=',' read -ra FALLBACKS <<< "${FALLBACK_XCODE_CSV}"
+          for ITEM in "${FALLBACKS[@]}"; do
+            VERSION="$(echo "${ITEM}" | xargs)"
+            if [ -n "${VERSION}" ]; then
+              CANDIDATES+=("/Applications/Xcode_${VERSION}.app/Contents/Developer")
+            fi
+          done
+
+          CANDIDATES+=("/Applications/Xcode.app/Contents/Developer")
 
           SELECTED=""
           for CANDIDATE in "${CANDIDATES[@]}"; do
@@ -481,6 +506,8 @@ jobs:
             exit 1
           fi
 
+          echo "ℹ️ Requested Xcode: ${REQUESTED_XCODE}"
+          echo "ℹ️ Fallback Xcode list: ${FALLBACK_XCODE_CSV}"
           echo "ℹ️ Selecting Xcode at ${SELECTED}"
           sudo xcode-select -s "${SELECTED}"
           xcodebuild -version
@@ -651,6 +678,9 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+      ios-runner: ${{ inputs.ios-runner }}
+      ios-xcode-version: ${{ inputs.ios-xcode-version }}
+      ios-xcode-fallbacks: ${{ inputs.ios-xcode-fallbacks }}
       ios-build-command: ${{ inputs.ios-build-command }}
       maestro-test-command: ${{ inputs.maestro-ios-test-command }}
       skip-build: ${{ needs.ios-build.result == 'success' }}

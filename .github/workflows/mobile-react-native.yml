@@ -77,6 +77,21 @@ on:
         type: string
         default: "maestro test .maestro"
         description: "Maestro iOS test command"
+      ios-runner:
+        required: false
+        type: string
+        default: "macos-15"
+        description: "GitHub macOS runner label for iOS jobs"
+      ios-xcode-version:
+        required: false
+        type: string
+        default: "16.4"
+        description: "Preferred Xcode version to select (e.g. 16.4)"
+      ios-xcode-fallbacks:
+        required: false
+        type: string
+        default: "16.3,16.2,26.2"
+        description: "Comma-separated fallback Xcode versions"
 
 permissions:
   contents: read
@@ -208,7 +223,7 @@ jobs:
 
   mobile-lint:
     name: "Mobile — Lint Check"
-    if: ${{ inputs.enable-lint == true || inputs.enable-lint == 'true' }}
+    if: ${{ inputs.enable-lint != false && inputs.enable-lint != 'false' }}
     uses: ./.github/workflows/lint-check.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -217,7 +232,7 @@ jobs:
 
   mobile-security:
     name: "Mobile — Security Scan"
-    if: ${{ inputs.enable-security-scan == true || inputs.enable-security-scan == 'true' }}
+    if: ${{ inputs.enable-security-scan != false && inputs.enable-security-scan != 'false' }}
     uses: ./.github/workflows/security-scan.yml
     with:
       working-directory: ${{ inputs.system-dir }}
@@ -259,6 +274,9 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+      ios-runner: ${{ inputs.ios-runner }}
+      ios-xcode-version: ${{ inputs.ios-xcode-version }}
+      ios-xcode-fallbacks: ${{ inputs.ios-xcode-fallbacks }}
       upload-artifact: true
 
   mobile-maestro:
@@ -292,6 +310,9 @@ jobs:
       working-directory: ${{ inputs.system-dir }}
       system-name: ${{ inputs.system-name }}
       node-version: ${{ inputs.node-version }}
+      ios-runner: ${{ inputs.ios-runner }}
+      ios-xcode-version: ${{ inputs.ios-xcode-version }}
+      ios-xcode-fallbacks: ${{ inputs.ios-xcode-fallbacks }}
       maestro-test-command: ${{ inputs.maestro-ios-test-command }}
       skip-build: true
       build-artifact-name: ${{ format('{0}-ios-simulator-build', inputs.system-name) }}
