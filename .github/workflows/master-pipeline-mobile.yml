@@ -652,6 +652,7 @@ jobs:
       always() &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       inputs.enable_sonar != false &&
+      vars.ENABLE_SONAR_CI != 'false' &&
       (needs.mobile-expo.result == 'success' || needs.mobile-expo.result == 'skipped') &&
       (needs.mobile-kotlin.result == 'success' || needs.mobile-kotlin.result == 'skipped') &&
       (needs.mobile-react-native.result == 'success' || needs.mobile-react-native.result == 'skipped')
