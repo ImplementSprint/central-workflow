@@ -25,7 +25,7 @@ on:
       android-build-command:
         required: false
         type: string
-        default: "cd android && ./gradlew assembleDebug -PbundleInDebug=true --no-daemon --stacktrace --warning-mode all"
+        default: "./gradlew assembleDebug -PbundleInDebug=true --no-daemon --stacktrace --warning-mode all"
         description: "Command used to produce the Android app binary"
       coverage-threshold:
         required: false
