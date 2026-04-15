@@ -311,7 +311,20 @@ jobs:
 
           if [ -n "${CUSTOM_ANDROID_BUILD_COMMAND}" ]; then
             echo "ℹ️ Running custom Android build command."
-            bash -c "${CUSTOM_ANDROID_BUILD_COMMAND}"
+
+            if [ -f "./gradlew" ]; then
+              chmod +x ./gradlew
+            fi
+            if [ -f "android/gradlew" ]; then
+              chmod +x android/gradlew
+            fi
+
+            GRADLE_WRAPPER_PATH="${{ steps.gradle.outputs.gradle_dir }}/gradlew"
+            if [ -f "${GRADLE_WRAPPER_PATH}" ]; then
+              chmod +x "${GRADLE_WRAPPER_PATH}"
+            fi
+
+            bash -lc "${CUSTOM_ANDROID_BUILD_COMMAND}"
             exit 0
           fi
 

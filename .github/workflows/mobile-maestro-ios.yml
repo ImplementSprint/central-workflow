@@ -37,6 +37,21 @@ on:
         type: string
         default: ""
         description: "GitHub artifact name containing pre-built iOS simulator output (.app.zip)"
+      ios-runner:
+        required: false
+        type: string
+        default: "macos-15"
+        description: "GitHub macOS runner label for iOS jobs"
+      ios-xcode-version:
+        required: false
+        type: string
+        default: "16.4"
+        description: "Preferred Xcode version to select (e.g. 16.4)"
+      ios-xcode-fallbacks:
+        required: false
+        type: string
+        default: "16.3,16.2,26.2"
+        description: "Comma-separated fallback Xcode versions"
 
 
 permissions:
@@ -45,7 +60,7 @@ permissions:
 jobs:
   maestro-ios-e2e:
     name: "Maestro iOS E2E"
-    runs-on: macos-15
+    runs-on: ${{ inputs.ios-runner }}
     timeout-minutes: 60
     defaults:
       run:
@@ -137,10 +152,46 @@ jobs:
           export PATH="$HOME/.maestro/bin:$PATH"
           maestro --version
 
-      - name: Select Xcode 26.2
+      - name: Select Xcode toolchain
         run: |
           sw_vers
-          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+          REQUESTED_XCODE="${{ inputs.ios-xcode-version }}"
+          FALLBACK_XCODE_CSV="${{ inputs.ios-xcode-fallbacks }}"
+
+          CANDIDATES=()
+          if [ -n "${REQUESTED_XCODE}" ]; then
+            CANDIDATES+=("/Applications/Xcode_${REQUESTED_XCODE}.app/Contents/Developer")
+          fi
+
+          IFS=',' read -ra FALLBACKS <<< "${FALLBACK_XCODE_CSV}"
+          for ITEM in "${FALLBACKS[@]}"; do
+            VERSION="$(echo "${ITEM}" | xargs)"
+            if [ -n "${VERSION}" ]; then
+              CANDIDATES+=("/Applications/Xcode_${VERSION}.app/Contents/Developer")
+            fi
+          done
+
+          CANDIDATES+=("/Applications/Xcode.app/Contents/Developer")
+
+          SELECTED=""
+          for CANDIDATE in "${CANDIDATES[@]}"; do
+            if [ -d "${CANDIDATE}" ]; then
+              SELECTED="${CANDIDATE}"
+              break
+            fi
+          done
+
+          if [ -z "${SELECTED}" ]; then
+            echo "❌ No supported Xcode installation found."
+            ls -1 /Applications | grep -i Xcode || true
+            exit 1
+          fi
+
+          echo "ℹ️ Requested Xcode: ${REQUESTED_XCODE}"
+          echo "ℹ️ Fallback Xcode list: ${FALLBACK_XCODE_CSV}"
+          echo "ℹ️ Selecting Xcode at ${SELECTED}"
+          sudo xcode-select -s "${SELECTED}"
           xcodebuild -version
 
       - name: Download pre-built iOS artifact

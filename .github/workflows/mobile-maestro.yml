@@ -249,12 +249,22 @@ jobs:
 
       - name: Build Android app binary
         if: ${{ !inputs.skip-build }}
-        run: ${{ inputs.android-build-command }}
+        env:
+          CUSTOM_ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
+
+          bash -lc "${CUSTOM_ANDROID_BUILD_COMMAND}"
 
       - name: Ensure Android app binary exists
         env:
           SKIP_BUILD: ${{ inputs.skip-build }}
-          ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
+          CUSTOM_ANDROID_BUILD_COMMAND: ${{ inputs.android-build-command }}
         run: |
           EXPECTED_APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
@@ -297,7 +307,13 @@ jobs:
           fi
 
           echo "ℹ️ APK candidate missing. Triggering fallback build command once..."
-          ${ANDROID_BUILD_COMMAND}
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          fi
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          fi
+          bash -lc "${CUSTOM_ANDROID_BUILD_COMMAND}"
 
           if [ -f "${EXPECTED_APK}" ]; then
             echo "✅ Fallback build produced expected APK."
@@ -325,11 +341,30 @@ jobs:
 
           exit 1
 
+      - name: Resolve adb binary
+        id: adb
+        run: |
+          ADB_BIN="$(command -v adb || true)"
+
+          if [ -z "${ADB_BIN}" ] && [ -x "/usr/local/lib/android/sdk/platform-tools/adb" ]; then
+            ADB_BIN="/usr/local/lib/android/sdk/platform-tools/adb"
+            echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+          fi
+
+          if [ -z "${ADB_BIN}" ]; then
+            echo "❌ adb was not found on PATH and no fallback binary was detected."
+            exit 1
+          fi
+
+          echo "adb_bin=${ADB_BIN}" >> "$GITHUB_OUTPUT"
+          echo "✅ Using adb binary: ${ADB_BIN}"
+
       - name: Reset ADB state before emulator startup
         run: |
-          adb kill-server || true
+          ADB_BIN="${{ steps.adb.outputs.adb_bin }}"
+          "${ADB_BIN}" kill-server || true
           pkill -f "emulator" || true
-          adb start-server || true
+          "${ADB_BIN}" start-server || true
 
       - name: Prepare Maestro Android run log
         run: |
@@ -352,6 +387,17 @@ jobs:
 
           cd "${LOG_DIR}"
           export PATH="$HOME/.maestro/bin:$PATH"
+
+          ADB_BIN="__ADB_BIN__"
+          if [ -n "${ADB_BIN}" ] && [ -x "${ADB_BIN}" ]; then
+            export PATH="$(dirname "${ADB_BIN}"):$PATH"
+          fi
+
+          if ! command -v adb >/dev/null 2>&1; then
+            echo "❌ adb is not available on PATH for Maestro Android execution."
+            exit 1
+          fi
+
           : > "${LOG_FILE}"
 
           echo "⏳ Waiting for Android emulator boot completion..."
@@ -376,7 +422,7 @@ jobs:
           BOOT_RETRIES=0
           MAX_BOOT_RETRIES=360
           OFFLINE_RESETS=0
-          MAX_OFFLINE_RESETS=3
+          MAX_OFFLINE_RESETS=8
 
           while true; do
             BOOT_RETRIES=$((BOOT_RETRIES + 1))
@@ -385,10 +431,13 @@ jobs:
             if [ "${STATE}" = "offline" ]; then
               OFFLINE_RESETS=$((OFFLINE_RESETS + 1))
               echo "⚠️ Emulator is offline (attempt ${OFFLINE_RESETS}/${MAX_OFFLINE_RESETS}); resetting adb."
+              adb reconnect offline || true
               adb kill-server || true
               sleep 2
               adb start-server || true
               adb -s "${SERIAL}" wait-for-device || true
+            else
+              OFFLINE_RESETS=0
             fi
 
             if [ "${OFFLINE_RESETS}" -ge "${MAX_OFFLINE_RESETS}" ]; then
@@ -419,6 +468,22 @@ jobs:
           adb -s "${SERIAL}" shell input keyevent 82 || true
           echo "✅ Emulator boot completed"
 
+          echo "⏳ Waiting for Android package and settings services..."
+          SERVICES_READY=false
+          for SERVICE_ATTEMPT in $(seq 1 60); do
+            if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1 && \
+               adb -s "${SERIAL}" shell settings get global airplane_mode_on >/dev/null 2>&1; then
+              SERVICES_READY=true
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "${SERVICES_READY}" != "true" ]; then
+            echo "❌ Android package/settings services were not ready after boot."
+            exit 1
+          fi
+
           APP_APK="android/app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "${APP_APK}" ]; then
             APP_APK=""
@@ -442,7 +507,30 @@ jobs:
           fi
 
           echo "📦 Installing APK: ${APP_APK}"
-          adb install -r "${APP_APK}"
+          INSTALL_OK=false
+          for INSTALL_ATTEMPT in 1 2 3 4 5; do
+            if adb -s "${SERIAL}" install -r "${APP_APK}"; then
+              INSTALL_OK=true
+              break
+            fi
+
+            echo "⚠️ APK install attempt ${INSTALL_ATTEMPT} failed; retrying after adb reconnect."
+            adb reconnect offline || true
+            adb -s "${SERIAL}" wait-for-device || true
+            for SERVICE_ATTEMPT in $(seq 1 20); do
+              if adb -s "${SERIAL}" shell cmd package list packages >/dev/null 2>&1 && \
+                 adb -s "${SERIAL}" shell settings get global airplane_mode_on >/dev/null 2>&1; then
+                break
+              fi
+              sleep 3
+            done
+            sleep 5
+          done
+
+          if [ "${INSTALL_OK}" != "true" ]; then
+            echo "❌ Failed to install APK after retries."
+            exit 1
+          fi
 
           export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
           MAESTRO_CMD="${MAESTRO_TEST_COMMAND:-maestro test .maestro}"
@@ -463,7 +551,65 @@ jobs:
           if [ -n "${FLOW_APP_ID}" ]; then
             if adb shell pm list packages | tr -d '\r' | grep -q "^package:${FLOW_APP_ID}$"; then
               echo "✅ Flow appId is installed: ${FLOW_APP_ID}"
-              adb shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+              adb -s "${SERIAL}" logcat -c || true
+
+              LAUNCH_COMPONENT="$(adb -s "${SERIAL}" shell cmd package resolve-activity --brief "${FLOW_APP_ID}" 2>/dev/null | tr -d '\r' | tail -n 1)"
+              if [ -n "${LAUNCH_COMPONENT}" ] && echo "${LAUNCH_COMPONENT}" | grep -q "/"; then
+                adb -s "${SERIAL}" shell am start -W -n "${LAUNCH_COMPONENT}" >/dev/null 2>&1 || true
+              else
+                adb -s "${SERIAL}" shell monkey -p "${FLOW_APP_ID}" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+              fi
+
+              echo "⏳ Validating Android app startup health..."
+              sleep 8
+
+              PROCESS_OK=false
+              for PROCESS_ATTEMPT in $(seq 1 10); do
+                if adb -s "${SERIAL}" shell pidof "${FLOW_APP_ID}" >/dev/null 2>&1; then
+                  PROCESS_OK=true
+                  break
+                fi
+                sleep 2
+              done
+
+              if [ "${PROCESS_OK}" != "true" ]; then
+                echo "❌ App process did not start for package: ${FLOW_APP_ID}"
+                adb -s "${SERIAL}" shell ps -A | grep -F "${FLOW_APP_ID}" || true
+                adb -s "${SERIAL}" logcat -d | tail -200 || true
+                exit 1
+              fi
+
+              FOCUS_INFO="$(adb -s "${SERIAL}" shell dumpsys window windows 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -n 6 || true)"
+              echo "ℹ️ Focus diagnostics:"
+              echo "${FOCUS_INFO}"
+
+              ACTIVITY_INFO="$(adb -s "${SERIAL}" shell dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|ResumedActivity|topResumedActivity' | head -n 20 || true)"
+              echo "ℹ️ Activity diagnostics:"
+              echo "${ACTIVITY_INFO}"
+
+              FOCUS_MATCH=false
+              if echo "${FOCUS_INFO}" | grep -q "${FLOW_APP_ID}"; then
+                FOCUS_MATCH=true
+              fi
+
+              ACTIVITY_MATCH=false
+              if echo "${ACTIVITY_INFO}" | grep -q "${FLOW_APP_ID}"; then
+                ACTIVITY_MATCH=true
+              fi
+
+              if [ "${FOCUS_MATCH}" != "true" ] && [ "${ACTIVITY_MATCH}" != "true" ]; then
+                echo "❌ Expected app package is not in focus or resumed activity: ${FLOW_APP_ID}"
+                exit 1
+              fi
+
+              STARTUP_ERRORS="$(adb -s "${SERIAL}" logcat -d 2>/dev/null | grep -E 'FATAL EXCEPTION|am_crash|Fatal signal|SIGSEGV|SIGABRT|ANR in' | head -n 80 || true)"
+              if [ -n "${STARTUP_ERRORS}" ]; then
+                echo "❌ Detected fatal startup logs after app launch:"
+                echo "${STARTUP_ERRORS}"
+                exit 1
+              fi
+
+              echo "✅ Android app startup health check passed"
             else
               echo "❌ Flow appId not installed on emulator: ${FLOW_APP_ID}"
               echo "📦 Installed package sample:"
@@ -477,20 +623,41 @@ jobs:
           echo "ℹ️ Maestro command: ${MAESTRO_CMD}"
 
           echo "▶️ Running Maestro tests..."
+          MAX_MAESTRO_SECONDS="${MAESTRO_TIMEOUT_SECONDS:-900}"
           set +e
-          bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
+          timeout --signal=TERM --kill-after=30s "${MAX_MAESTRO_SECONDS}" bash -lc "${MAESTRO_CMD}" > "${LOG_FILE}" 2>&1
           MAESTRO_STATUS=$?
           set -e
+
+          if [ "${MAESTRO_STATUS}" -eq 124 ]; then
+            echo "❌ Maestro command timed out after ${MAX_MAESTRO_SECONDS}s." >> "${LOG_FILE}"
+          fi
+
           cat "${LOG_FILE}"
           echo "maestro_status=${MAESTRO_STATUS}" >> "$GITHUB_OUTPUT"
           exit 0
           BASH
 
           sed -i "s|__LOG_DIR__|${LOG_DIR}|g" "${SCRIPT_PATH}"
+          sed -i "s|__ADB_BIN__|${{ steps.adb.outputs.adb_bin }}|g" "${SCRIPT_PATH}"
           chmod +x "${SCRIPT_PATH}"
 
-      - name: Run Maestro tests on Android emulator
-        id: maestro-android-run
+      - name: Enable KVM permissions for Android emulator
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          if [ ! -e /dev/kvm ]; then
+            echo "⚠️ /dev/kvm is unavailable on this runner. Emulator may run in software mode."
+            exit 0
+          fi
+
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
+      - name: Run Maestro tests on Android emulator (attempt 1)
+        id: maestro-android-run-attempt-1
+        continue-on-error: true
         env:
           MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
         uses: reactivecircus/android-emulator-runner@v2
@@ -499,11 +666,65 @@ jobs:
           arch: x86_64
           profile: pixel_5
           force-avd-creation: true
-          disable-linux-hw-accel: true
-          emulator-boot-timeout: 420
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -accel off -noaudio -no-boot-anim -wipe-data
+          disable-linux-hw-accel: auto
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -wipe-data
           disable-animations: false
           script: bash "${{ inputs.working-directory == '.' && format('{0}/.maestro-android-exec.sh', github.workspace) || format('{0}/{1}/.maestro-android-exec.sh', github.workspace, inputs.working-directory) }}"
+
+      - name: Run Maestro tests on Android emulator (attempt 2)
+        if: ${{ steps.maestro-android-run-attempt-1.outcome == 'failure' }}
+        id: maestro-android-run-attempt-2
+        continue-on-error: true
+        env:
+          MAESTRO_TEST_COMMAND: ${{ inputs.maestro-test-command }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: true
+          disable-linux-hw-accel: auto
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -wipe-data
+          disable-animations: false
+          script: bash "${{ inputs.working-directory == '.' && format('{0}/.maestro-android-exec.sh', github.workspace) || format('{0}/{1}/.maestro-android-exec.sh', github.workspace, inputs.working-directory) }}"
+
+      - name: Resolve Android Maestro result
+        id: maestro-android-run
+        if: ${{ always() }}
+        run: |
+          STATUS_1="${{ steps.maestro-android-run-attempt-1.outputs.maestro_status }}"
+          STATUS_2="${{ steps.maestro-android-run-attempt-2.outputs.maestro_status }}"
+
+          if [ "${{ steps.maestro-android-run-attempt-1.outcome }}" = "success" ]; then
+            if [ -z "${STATUS_1}" ]; then
+              STATUS_1=1
+            fi
+            echo "maestro_status=${STATUS_1}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ steps.maestro-android-run-attempt-2.outcome }}" = "success" ]; then
+            if [ -z "${STATUS_2}" ]; then
+              STATUS_2=1
+            fi
+            echo "maestro_status=${STATUS_2}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${STATUS_1}" ]; then
+            echo "maestro_status=${STATUS_1}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${STATUS_2}" ]; then
+            echo "maestro_status=${STATUS_2}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "maestro_status=1" >> "$GITHUB_OUTPUT"
+          echo "❌ Android Maestro execution failed in both attempts before producing a status output."
 
       - name: Upload Maestro Android run log
         if: ${{ always() }}
