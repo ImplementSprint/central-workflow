@@ -391,7 +391,7 @@ jobs:
           RESOLVED_BUNDLE_ID: ${{ steps.ios-bundle-id.outputs.bundle_id }}
         run: |
           export PATH="$HOME/.maestro/bin:$PATH"
-          export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
+          export MAESTRO_DRIVER_STARTUP_TIMEOUT=420000
           export MAESTRO_IOS_DEVICE_ID="${SIM_UDID}"
 
           LOG_DIR="${{ inputs.working-directory == '.' && github.workspace || format('{0}/{1}', github.workspace, inputs.working-directory) }}"
