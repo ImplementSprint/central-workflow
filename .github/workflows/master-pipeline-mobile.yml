@@ -753,7 +753,13 @@ jobs:
           if [ "${ENABLE_GRAFANA_K6}" != "true" ]; then
             K6_SYSTEMS='[]'
           else
-            K6_SYSTEMS=$(echo "${ACTIVE_SYSTEMS_JSON}" | jq -c 'map(select((.enable_grafana_k6 // true) != false and (.enable_k6 // true) != false))')
+            K6_SYSTEMS=$(echo "${ACTIVE_SYSTEMS_JSON}" | jq -c 'map(
+              select(
+                (.enable_grafana_k6 // true) != false and
+                (.enable_k6 // true) != false and
+                (((.mobile_stack // .stack // .framework // "") | ascii_downcase | gsub("[ _]"; "-")) as $stack | ($stack != "kotlin" and $stack != "android-kotlin" and $stack != "native-kotlin"))
+              )
+            )')
           fi
 
           K6_COUNT=$(echo "${K6_SYSTEMS}" | jq 'length')

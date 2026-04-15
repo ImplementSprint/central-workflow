@@ -118,7 +118,7 @@ permissions:
 jobs:
   call-orchestrator:
     # Pin to a release tag — update when upgrading central-workflow
-    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@maestro
+    uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main
     with:
       pipeline_mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pipeline_mode || 'auto' }}
       stack_filter: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.stack_filter || 'all' }}
