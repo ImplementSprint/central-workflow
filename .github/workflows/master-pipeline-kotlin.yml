@@ -219,7 +219,15 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
 
-      - name: Run connected instrumentation suite
+      - name: Reset adb before instrumentation run
+        run: |
+          adb kill-server || true
+          adb start-server
+          adb devices || true
+
+      - name: Run connected instrumentation suite (attempt 1)
+        id: instrumented_attempt_1
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
@@ -228,7 +236,43 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -wipe-data
-          script: ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
+          script: |
+            adb start-server
+            adb wait-for-device
+            ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
+
+      - name: Capture first-attempt diagnostics
+        if: ${{ steps.instrumented_attempt_1.outcome != 'success' }}
+        run: |
+          echo "=== adb devices ==="
+          adb devices || true
+          echo "=== sys.boot_completed ==="
+          adb shell getprop sys.boot_completed || true
+          echo "=== logcat tail ==="
+          adb logcat -d | tail -200 || true
+
+      - name: Run connected instrumentation suite (attempt 2)
+        id: instrumented_attempt_2
+        if: ${{ steps.instrumented_attempt_1.outcome != 'success' }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -wipe-data
+          script: |
+            adb kill-server || true
+            adb start-server
+            adb wait-for-device
+            ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
+
+      - name: Fail if instrumentation retries exhausted
+        if: ${{ steps.instrumented_attempt_1.outcome != 'success' && steps.instrumented_attempt_2.outcome != 'success' }}
+        run: |
+          echo "Instrumentation tests failed after two emulator attempts."
+          exit 1
 
       - name: Upload instrumentation reports
         if: always()
