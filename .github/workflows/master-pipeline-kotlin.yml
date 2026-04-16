@@ -242,14 +242,14 @@ jobs:
             ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
 
       - name: Capture first-attempt diagnostics
-        if: ${{ steps.instrumented_attempt_1.outcome != 'success' }}
+        if: ${{ steps.instrumented_attempt_1.outcome == 'failure' }}
         run: |
           echo "=== adb devices ==="
-          adb devices || true
+          timeout 20s adb devices || true
           echo "=== sys.boot_completed ==="
-          adb shell getprop sys.boot_completed || true
+          timeout 20s adb shell getprop sys.boot_completed || true
           echo "=== logcat tail ==="
-          adb logcat -d | tail -200 || true
+          timeout 30s bash -lc 'adb logcat -d | tail -200' || true
 
       - name: Run connected instrumentation suite (attempt 2)
         id: instrumented_attempt_2
