@@ -471,6 +471,7 @@ jobs:
           fi
 
       - name: Select Xcode toolchain
+        id: xcode
         run: |
           sw_vers
 
@@ -526,10 +527,13 @@ jobs:
           echo "ℹ️ Requested Xcode: ${REQUESTED_XCODE}"
           echo "ℹ️ Fallback Xcode list: ${FALLBACK_XCODE_CSV}"
           echo "ℹ️ Selecting Xcode at ${SELECTED}"
+          echo "developer_dir=${SELECTED}" >> "$GITHUB_OUTPUT"
           sudo xcode-select -s "${SELECTED}"
           xcodebuild -version
 
       - name: Ensure iOS Native Project
+        env:
+          DEVELOPER_DIR: ${{ steps.xcode.outputs.developer_dir }}
         run: |
           if [ ! -d "ios" ]; then
             CI=1 npx expo prebuild --platform ios
@@ -537,6 +541,8 @@ jobs:
 
       - name: Install CocoaPods Dependencies
         if: ${{ hashFiles(format('{0}/ios/Podfile', inputs.system-dir)) != '' }}
+        env:
+          DEVELOPER_DIR: ${{ steps.xcode.outputs.developer_dir }}
         run: |
           if command -v npx >/dev/null 2>&1; then
             npx pod-install --project-directory=ios
@@ -548,6 +554,8 @@ jobs:
 
       - name: Resolve iOS scheme
         id: ios-scheme
+        env:
+          DEVELOPER_DIR: ${{ steps.xcode.outputs.developer_dir }}
         run: |
           WORKSPACE_PATH=$(find ios -maxdepth 2 -type d -name "*.xcworkspace" ! -path "*/*.xcodeproj/*" | head -n 1)
           if [ -z "${WORKSPACE_PATH}" ]; then
@@ -587,6 +595,7 @@ jobs:
 
       - name: Build iOS app binary
         env:
+          DEVELOPER_DIR: ${{ steps.xcode.outputs.developer_dir }}
           CONTAINER_FLAG: ${{ steps.ios-scheme.outputs.container_flag }}
           CONTAINER_PATH: ${{ steps.ios-scheme.outputs.container_path }}
           SCHEME: ${{ steps.ios-scheme.outputs.scheme }}
