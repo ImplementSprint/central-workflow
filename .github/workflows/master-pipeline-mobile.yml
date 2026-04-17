@@ -519,8 +519,8 @@ jobs:
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
-      ios-xcode-version: ${{ matrix.system.ios_xcode_version || '16.4' }}
-      ios-xcode-fallbacks: ${{ matrix.system.ios_xcode_fallbacks || '16.3,16.2,26.2' }}
+      ios-xcode-version: '16.4'
+      ios-xcode-fallbacks: '16.3,16.2,26.2'
     secrets: inherit
 
   mobile-expo-release:
@@ -550,8 +550,8 @@ jobs:
       android-release-gradle-task: assembleRelease bundleRelease
       ios-release-export-enabled: ${{ matrix.system.ios_release_export_enabled == true }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
-      ios-xcode-version: ${{ matrix.system.ios_xcode_version || '16.4' }}
-      ios-xcode-fallbacks: ${{ matrix.system.ios_xcode_fallbacks || '16.3,16.2,26.2' }}
+      ios-xcode-version: '16.4'
+      ios-xcode-fallbacks: '16.3,16.2,26.2'
     secrets: inherit
 
   kotlin-governance:
