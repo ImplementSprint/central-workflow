@@ -250,7 +250,7 @@ jobs:
                       udid = (device.get('udid') or '').strip()
                       if not name or not udid:
                           continue
-                        if not UUID_PATTERN.match(udid):
+                      if not UUID_PATTERN.match(udid):
                           continue
                       lower = name.lower()
                       if 'placeholder' in lower or 'any ios device' in lower:
