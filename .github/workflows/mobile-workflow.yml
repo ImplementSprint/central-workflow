@@ -604,8 +604,11 @@ jobs:
           echo "ℹ️ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
           PRIMARY_SIMULATOR_ID=$(python3 - <<'PY'
           import json
+          import re
           import subprocess
           import sys
+
+          UUID_PATTERN = re.compile(r'^[0-9A-Fa-f-]{36}$')
 
           def pick_device(devices_by_runtime, iphone_only):
               for _, devices in devices_by_runtime.items():
@@ -613,6 +616,8 @@ jobs:
                       name = (device.get('name') or '').strip()
                       udid = (device.get('udid') or '').strip()
                       if not name or not udid:
+                          continue
+                        if not UUID_PATTERN.match(udid):
                           continue
                       lower = name.lower()
                       if 'placeholder' in lower or 'any ios device' in lower:
