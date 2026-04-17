@@ -602,41 +602,41 @@ jobs:
           fi
 
           echo "ℹ️ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
-            PRIMARY_SIMULATOR_ID=$(python3 - <<'PY'
-            import json
-            import subprocess
-            import sys
+          PRIMARY_SIMULATOR_ID=$(python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
 
-            def pick_device(devices_by_runtime, iphone_only):
+          def pick_device(devices_by_runtime, iphone_only):
               for _, devices in devices_by_runtime.items():
-                for device in devices:
-                  name = (device.get('name') or '').strip()
-                  udid = (device.get('udid') or '').strip()
-                  if not name or not udid:
-                    continue
-                  lower = name.lower()
-                  if 'placeholder' in lower or 'any ios device' in lower:
-                    continue
-                  if iphone_only and 'iphone' not in lower:
-                    continue
-                  return udid
+                  for device in devices:
+                      name = (device.get('name') or '').strip()
+                      udid = (device.get('udid') or '').strip()
+                      if not name or not udid:
+                          continue
+                      lower = name.lower()
+                      if 'placeholder' in lower or 'any ios device' in lower:
+                          continue
+                      if iphone_only and 'iphone' not in lower:
+                          continue
+                      return udid
               return ''
 
-            raw = subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json'], text=True)
-            payload = json.loads(raw)
-            devices_by_runtime = {
+          raw = subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json'], text=True)
+          payload = json.loads(raw)
+          devices_by_runtime = {
               runtime: devices
               for runtime, devices in (payload.get('devices') or {}).items()
               if 'iOS' in runtime
-            }
+          }
 
-            picked = pick_device(devices_by_runtime, iphone_only=True) or pick_device(devices_by_runtime, iphone_only=False)
-            if picked:
+          picked = pick_device(devices_by_runtime, iphone_only=True) or pick_device(devices_by_runtime, iphone_only=False)
+          if picked:
               print(picked)
               sys.exit(0)
-            sys.exit(1)
-            PY
-            )
+          sys.exit(1)
+          PY
+          )
           if [ -z "${PRIMARY_SIMULATOR_ID}" ]; then
             echo "❌ No available iOS simulator device found on runner."
             echo "ℹ️ Installed simulator runtimes:"
