@@ -585,7 +585,18 @@ jobs:
           fi
 
           echo "ℹ️ Running explicit xcodebuild for the default Maestro iOS simulator configuration."
-          PRIMARY_DESTINATION='platform=iOS Simulator,name=iPhone 16,OS=latest'
+          PRIMARY_SIMULATOR_ID=$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')
+          if [ -z "${PRIMARY_SIMULATOR_ID}" ]; then
+            echo "❌ No available iOS simulator device found on runner."
+            echo "ℹ️ Installed simulator runtimes:"
+            xcrun simctl list runtimes || true
+            echo "ℹ️ Available simulator devices:"
+            xcrun simctl list devices available || true
+            exit 1
+          fi
+
+          echo "ℹ️ Using simulator device id: ${PRIMARY_SIMULATOR_ID}"
+          PRIMARY_DESTINATION="id=${PRIMARY_SIMULATOR_ID}"
           FALLBACK_DESTINATION='generic/platform=iOS Simulator'
 
           run_build() {
