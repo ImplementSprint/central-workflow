@@ -132,12 +132,29 @@ jobs:
           CANDIDATES+=("/Applications/Xcode.app/Contents/Developer")
 
           SELECTED=""
+          FIRST_EXISTING=""
           for CANDIDATE in "${CANDIDATES[@]}"; do
             if [ -d "${CANDIDATE}" ]; then
-              SELECTED="${CANDIDATE}"
-              break
+              if [ -z "${FIRST_EXISTING}" ]; then
+                FIRST_EXISTING="${CANDIDATE}"
+              fi
+
+              echo "ℹ️ Probing Xcode at ${CANDIDATE} for available iPhone simulators"
+              sudo xcode-select -s "${CANDIDATE}"
+
+              if xcrun simctl list devices available | grep -q "iPhone"; then
+                SELECTED="${CANDIDATE}"
+                break
+              fi
             fi
           done
+
+          if [ -z "${SELECTED}" ]; then
+            if [ -n "${FIRST_EXISTING}" ]; then
+              echo "⚠️ No Xcode candidate reported an available iPhone simulator. Falling back to first installed Xcode."
+              SELECTED="${FIRST_EXISTING}"
+            fi
+          fi
 
           if [ -z "${SELECTED}" ]; then
             echo "❌ No supported Xcode installation found."
