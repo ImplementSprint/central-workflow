@@ -96,12 +96,12 @@ on:
       ios-xcode-version:
         required: false
         type: string
-        default: "16.2"
-        description: "Preferred Xcode version to select (e.g. 16.2)"
+        default: "16.4"
+        description: "Preferred Xcode version to select (e.g. 16.4)"
       ios-xcode-fallbacks:
         required: false
         type: string
-        default: "16.3,16.4,26.2"
+        default: "16.3,16.2,26.2"
         description: "Comma-separated fallback Xcode versions"
 
 
