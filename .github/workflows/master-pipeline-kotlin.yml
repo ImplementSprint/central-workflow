@@ -243,9 +243,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -wipe-data
           script: |
-            adb start-server
-            adb wait-for-device
-            ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
+              adb start-server
+              adb wait-for-device
+              adb shell input keyevent 82 &
+              sleep 30
+              ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
 
       - name: Capture first-attempt diagnostics
         if: ${{ steps.instrumented_attempt_1.outcome == 'failure' }}
@@ -269,10 +271,11 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -wipe-data
           script: |
-            adb kill-server || true
-            adb start-server
-            adb wait-for-device
-            ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
+              adb start-server
+              adb wait-for-device
+              adb shell input keyevent 82 &
+              sleep 30
+              ./gradlew :app:connectedDebugAndroidTest :app:jacocoAndroidTestReport --no-daemon --stacktrace
 
       - name: Fail if instrumentation retries exhausted
         if: ${{ steps.instrumented_attempt_1.outcome != 'success' && steps.instrumented_attempt_2.outcome != 'success' }}
