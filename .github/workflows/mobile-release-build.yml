@@ -117,6 +117,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   branch-guard:
@@ -171,6 +172,9 @@ jobs:
           cache: "npm"
           cache-dependency-path: |
             **/package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
@@ -193,6 +197,8 @@ jobs:
       - name: Install Dependencies
         env:
           PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable
@@ -327,6 +333,9 @@ jobs:
           cache: "npm"
           cache-dependency-path: |
             **/package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect-pm.outputs.pm == 'yarn' }}
@@ -349,6 +358,8 @@ jobs:
       - name: Install Dependencies
         env:
           PACKAGE_MANAGER: ${{ steps.detect-pm.outputs.pm }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable

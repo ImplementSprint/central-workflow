@@ -34,6 +34,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   check-migration:
@@ -53,8 +54,14 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ inputs.node-version }}
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Install Dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm ci --ignore-scripts
 
       - name: Detect and Run Migration Check

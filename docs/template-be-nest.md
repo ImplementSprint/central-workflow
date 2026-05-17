@@ -43,17 +43,36 @@ Required:
 - `ALLOWED_ORIGINS`
 
 Optional:
-- `API_CENTER_BASE_URL`
-- `API_CENTER_API_KEY`
+- `APICENTER_URL` (or `API_CENTER_BASE_URL` for legacy compatibility)
+- `APICENTER_TRIBE_ID` (recommended explicit service ID)
+- `APICENTER_TRIBE_SECRET` (or service-specific secret name such as `PAYMENT_SERVICE_SECRET`)
 
 Where to get values:
 - Supabase values: Supabase Dashboard -> Project Settings -> API
-- API Center values: internal platform/API Center owners
+- APICenter URL and tribe secret values: internal platform/API Center owners
 - `ALLOWED_ORIGINS`: your frontend app URLs (comma-separated)
 
 Security notes:
-- Treat `SUPABASE_SERVICE_ROLE_KEY` and `API_CENTER_API_KEY` as high sensitivity.
+- Treat `SUPABASE_SERVICE_ROLE_KEY` and `APICENTER_TRIBE_SECRET` as high sensitivity.
 - Store high-sensitivity values in secrets manager only.
+
+## APICenter SDK Integration (required for Node/Nest callers)
+
+Install and use the shared SDK package from GitHub Packages instead of raw HTTP calls to gateway routes.
+
+Configure `.npmrc` in the caller repository first:
+
+```ini
+@implementsprint:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+always-auth=true
+```
+
+```bash
+npm install @implementsprint/sdk
+```
+
+The SDK source of truth is the `api-shared-services` repository. Commit the `.npmrc` placeholder, but never commit a literal token value. GitHub Actions supplies `${GITHUB_TOKEN}` during dependency installation.
 
 ## GitHub Repository Variables (Canonical)
 
@@ -88,6 +107,9 @@ Required with default workflow settings:
 - `SONAR_PROJECT_KEY`
 - `K6_CLOUD_TOKEN`
 - `K6_CLOUD_PROJECT_ID`
+
+Required if the repository installs `@implementsprint/sdk`:
+- The GitHub package must grant this repository access, or the workflow `GITHUB_TOKEN` will still receive `401 Unauthorized`.
 
 Recommended:
 - `GH_PR_TOKEN`

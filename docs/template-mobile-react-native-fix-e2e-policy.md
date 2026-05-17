@@ -4,7 +4,7 @@ Template repository:
 - `ImplementSprint/template-repo-mobile-react-native-fix-e2e-policy`
 
 Current caller workflow ref (documented exactly):
-- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@fix/e2e-policy`
+- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main`
 
 ## Required Branches
 

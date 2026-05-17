@@ -6,8 +6,8 @@ Remote source:
 Verification date:
 - 2026-04-10
 
-Current caller workflow ref (documented exactly from remote default branch):
-- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@maestro`
+Current caller workflow ref:
+- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main`
 
 ## Required Branches
 

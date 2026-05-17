@@ -69,6 +69,40 @@ jobs:
 
           echo "✅ Mobile caller template validated."
 
+  validate-frontend-caller:
+    name: "Validate Frontend Caller Template"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Assert frontend caller template contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          assert_contains() {
+            local file="$1"
+            local expected="$2"
+            if ! grep -Fq "$expected" "$file"; then
+              echo "❌ Expected '$expected' in $file"
+              exit 1
+            fi
+          }
+
+          CALLER="templates/fe-pipeline-caller.yml"
+
+          assert_contains "$CALLER" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@main"
+          assert_contains "$CALLER" "pipeline_mode"
+          assert_contains "$CALLER" "enable_playwright"
+          assert_contains "$CALLER" "enable_grafana_k6"
+          assert_contains "$CALLER" "k6_script_path"
+          assert_contains "$CALLER" "run_deploy"
+          assert_contains "$CALLER" "run_promotion"
+
+          echo "✅ Frontend caller template validated."
+
   simulate-mobile-config-matrix:
     name: "Simulate Mobile Config Matrix"
     runs-on: ubuntu-latest
@@ -204,7 +238,7 @@ jobs:
 
           CALLER="templates/be-pipeline-caller.yml"
 
-          assert_contains "$CALLER" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-be.yml@v1"
+          assert_contains "$CALLER" "uses: ImplementSprint/central-workflow/.github/workflows/master-pipeline-be.yml@main"
           assert_contains "$CALLER" "pipeline_mode"
           assert_contains "$CALLER" "enable_security_scan"
           assert_contains "$CALLER" "enable_sonar"

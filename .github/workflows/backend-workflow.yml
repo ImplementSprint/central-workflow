@@ -55,6 +55,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   # ── Stage 1A: Unit Tests (NestJS/Jest) ─────────────────────────

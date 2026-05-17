@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   standards-check:
@@ -40,8 +41,14 @@ jobs:
           cache: "npm"
           cache-dependency-path: |
             **/package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Install Dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm ci --ignore-scripts
 
       - name: Validate React + Strict TypeScript Standard (Next.js or Vite)

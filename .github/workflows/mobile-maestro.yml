@@ -51,6 +51,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   maestro-e2e:
@@ -119,6 +120,9 @@ jobs:
           cache: "npm"
           cache-dependency-path: |
             **/package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Setup Node.js ${{ inputs.node-version }} (yarn)
         if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' && steps.detect-toolchain.outputs.package_manager == 'yarn' }}
@@ -142,6 +146,8 @@ jobs:
         if: ${{ steps.detect-toolchain.outputs.stack == 'node-mobile' }}
         env:
           PACKAGE_MANAGER: ${{ steps.detect-toolchain.outputs.package_manager }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${PACKAGE_MANAGER}" = "yarn" ]; then
             corepack enable

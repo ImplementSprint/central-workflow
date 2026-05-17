@@ -71,7 +71,10 @@ Supabase:
 - `SUPABASE_SERVICE_ROLE_KEY` is high sensitivity and must stay in secrets manager only
 
 Internal API Center:
-- `API_CENTER_BASE_URL` and `API_CENTER_API_KEY` are organization-managed values
+- `APICENTER_URL` (or `API_CENTER_BASE_URL` for legacy callers) and `APICENTER_TRIBE_SECRET` are organization-managed values
+- Node/TypeScript callers use `@implementsprint/sdk` from GitHub Packages (source repo: `api-shared-services`)
+- Configure caller `.npmrc` with the `@implementsprint` scoped registry and the `${GITHUB_TOKEN}` placeholder before `npm install @implementsprint/sdk`
+- `GITHUB_TOKEN` is only for dependency installation; runtime API Center auth still uses AP Center tribe credentials and consumes/scope policy
 - Obtain from platform owners / API Center admin
 
 ## Branch Policy Baseline

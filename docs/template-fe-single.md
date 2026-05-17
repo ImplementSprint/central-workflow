@@ -4,7 +4,7 @@ Template repository:
 - `ImplementSprint/template-repo-fe-single`
 
 Current caller workflow ref (documented exactly):
-- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@fix/e2e-policy`
+- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-fe.yml@main`
 
 ## Required Branches
 
@@ -30,6 +30,18 @@ npm run build
 
 Local env vars:
 - No mandatory local `.env` variables are defined by this template baseline.
+
+## Optional API Center SDK Integration
+
+If this frontend installs `@implementsprint/sdk`, configure `.npmrc` in the repository root:
+
+```ini
+@implementsprint:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+always-auth=true
+```
+
+GitHub Actions supplies `${GITHUB_TOKEN}` during dependency installation. The GitHub package must grant this repository access before CI can install the SDK.
 
 ## GitHub Repository Variables (Canonical)
 

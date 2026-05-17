@@ -31,6 +31,18 @@ npm run build
 Local env vars:
 - No mandatory shared local `.env` variables are defined by template baseline.
 
+## Optional API Center SDK Integration
+
+If any frontend app installs `@implementsprint/sdk`, configure `.npmrc` at the repository root:
+
+```ini
+@implementsprint:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+always-auth=true
+```
+
+GitHub Actions supplies `${GITHUB_TOKEN}` during dependency installation. The GitHub package must grant this repository access before CI can install the SDK.
+
 ## GitHub Repository Variables (Canonical)
 
 Set in: Settings -> Secrets and variables -> Actions -> Variables

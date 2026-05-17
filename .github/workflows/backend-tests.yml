@@ -64,6 +64,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   # ── Unit Tests ───────────────────────────────────────────────────
@@ -87,8 +88,14 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Install Dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm ci --ignore-scripts
 
       - name: Display Selected Backend Stack
@@ -196,8 +203,14 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: "npm"
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@implementsprint"
+          always-auth: true
 
       - name: Install Dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm ci --ignore-scripts
 
       - name: Display Selected Backend Stack

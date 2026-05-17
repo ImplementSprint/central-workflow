@@ -4,7 +4,7 @@ Template repository:
 - `ImplementSprint/template-repo-mobile-single`
 
 Current caller workflow ref (documented exactly):
-- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@maestro`
+- `ImplementSprint/central-workflow/.github/workflows/master-pipeline-mobile.yml@main`
 
 ## Required Branches
 
@@ -43,6 +43,18 @@ Create `.env` from `.env.example`:
 
 Runtime config path:
 - `src/config/appConfig.ts`
+
+## Optional API Center SDK Integration
+
+If this mobile app installs `@implementsprint/sdk`, configure `.npmrc` in the repository root:
+
+```ini
+@implementsprint:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+always-auth=true
+```
+
+GitHub Actions supplies `${GITHUB_TOKEN}` during dependency installation. The GitHub package must grant this repository access before CI can install the SDK.
 
 ## App Identity Bootstrap
 
