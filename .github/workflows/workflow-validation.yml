@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/**"
       - "templates/**"
+      - "fixtures/consumer-callers/**"
+      - "docs/**"
       - "MOBILE_PIPELINE_PRESETS_AND_PROMPT.md"
       - "USER_STORIES_STATUS.md"
   workflow_dispatch:
@@ -28,9 +30,93 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Run actionlint
-        uses: docker://rhysd/actionlint:latest
+        uses: docker://rhysd/actionlint:1.7.12
         with:
           args: -color
+
+  validate-workflow-contract-docs:
+    name: "Validate Workflow Contract Docs"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Validate required workflow docs exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/workflow-contract-registry.md
+          test -f docs/release-reference-policy.md
+          test -f docs/tribe-github-packages-onboarding.md
+          test -f docs/central-workflow-improvement-decisions.md
+          test -f docs/superpowers/plans/2026-05-18-central-workflow-safety-improvements.md
+          test -f docs/superpowers/plans/2026-05-18-central-workflow-next-safety-phases.md
+          test -f docs/consumer-fixture-validation.md
+          test -f docs/v1-release-checklist.md
+          test -f docs/workflow-permission-review.md
+
+      - name: Validate central workflow refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE 'central-workflow/.+@(fix/e2e-policy|maestro)' templates docs .github/workflows; then
+            echo "Found stale central-workflow branch refs."
+            exit 1
+          fi
+
+      - name: Validate caller templates use main by default
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -RIn 'ImplementSprint/central-workflow/.github/workflows/.*@main' templates
+
+      - name: Validate no literal package tokens are documented
+        shell: bash
+        run: |
+          set -euo pipefail
+          ghp_prefix='ghp''_'
+          github_pat_prefix='github''_pat_'
+          npm_token_pattern='npm_''[A-Za-z0-9]'
+          if grep -RInE --exclude='workflow-validation.yml' --exclude-dir='superpowers' "$ghp_prefix|$github_pat_prefix|$npm_token_pattern" docs templates .github/workflows; then
+            echo "Found a literal token-like value in repo docs/templates/workflows."
+            exit 1
+          fi
+
+      - name: Validate GitHub Packages SDK guidance
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -RIn '@implementsprint:registry=https://npm.pkg.github.com' docs templates .github/workflows
+          grep -RIn 'GITHUB_TOKEN' docs templates .github/workflows
+          grep -RIn 'packages: read' .github/workflows
+
+  validate-consumer-fixtures:
+    name: "Validate Consumer Caller Fixtures"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Validate fixture copies match templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp templates/fe-pipeline-caller.yml fixtures/consumer-callers/frontend/.github/workflows/master-pipeline-fe.yml
+          cmp templates/be-pipeline-caller.yml fixtures/consumer-callers/backend/.github/workflows/master-pipeline-be.yml
+          cmp templates/mobile-pipeline-caller.yml fixtures/consumer-callers/mobile/.github/workflows/master-pipeline-mobile.yml
+          cmp templates/mobile-kotlin-caller.yml fixtures/consumer-callers/kotlin/.github/workflows/mobile-kotlin-caller.yml
+
+      - name: Validate fixture refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -RIn 'ImplementSprint/central-workflow/.github/workflows/.*@main' fixtures/consumer-callers
+          if grep -RInE 'central-workflow/.+@(fix/e2e-policy|maestro)' fixtures/consumer-callers; then
+            echo "Found stale central-workflow refs in consumer fixtures."
+            exit 1
+          fi
 
   validate-mobile-callers:
     name: "Validate Mobile Caller Templates"
