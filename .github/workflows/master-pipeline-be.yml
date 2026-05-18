@@ -477,7 +477,7 @@ jobs:
       working-directory: ${{ matrix.service.dir }}
       script-path: ${{ matrix.service.k6_script_path || inputs.k6_script_path }}
       target-base-url: ${{ matrix.service.k6_base_url || inputs.k6_base_url }}
-      run-only-on-branch: ${{ matrix.service.k6_run_only_on_branch || inputs.k6_run_only_on_branch }}
+      run-only-on-branch: ${{ fromJSON(format('{0}', inputs.enable_k6)) && (matrix.service.k6_run_only_on_branch || inputs.k6_run_only_on_branch) || '__k6_disabled__' }}
     secrets: inherit
 
   version-test:
