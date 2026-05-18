@@ -1,9 +1,21 @@
 name: "BE Pipeline Caller"
 
-# Configure BACKEND_SINGLE_SYSTEMS_JSON or BACKEND_MULTI_SYSTEMS_JSON in
-# repository variables and include backend_stack per system.
+# Configure BACKEND_MULTI_SYSTEMS_JSON for NestJS monorepo backends.
 # Example:
-# {"name":"my-node-api","dir":".","image":"ghcr.io/org/my-node-api","backend_stack":"nodejs"}
+# [
+#   {
+#     "name":"backend-api",
+#     "dir":".",
+#     "install_dir":".",
+#     "project":"api",
+#     "image":"ghcr.io/org/backend-api",
+#     "backend_stack":"nestjs",
+#     "version_stream":"api",
+#     "test_command":"npm run test:cov -- --selectProjects api",
+#     "dockerfile_path":"apps/api/Dockerfile",
+#     "k6_script_path":"tests/performance/api-smoke.js"
+#   }
+# ]
 
 on:
   push:

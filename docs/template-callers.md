@@ -64,7 +64,8 @@ Current orchestrator ref in template:
 - `ImplementSprint/central-workflow/.github/workflows/master-pipeline-be.yml@main`
 
 Required repository variables:
-- `BACKEND_SINGLE_SYSTEMS_JSON` or `BACKEND_MULTI_SYSTEMS_JSON`
+- `BACKEND_MULTI_SYSTEMS_JSON` for NestJS monorepo backends
+- `BACKEND_SINGLE_SYSTEMS_JSON` only for legacy single-runtime backends
 
 Required secrets with default caller settings:
 - `SONAR_TOKEN`
@@ -78,15 +79,37 @@ Recommended secret:
 
 Canonical BE system object examples:
 
-NestJS:
+NestJS monorepo:
 ```json
-{
-  "name": "backend-nest",
-  "dir": ".",
-  "image": "ghcr.io/org/backend-nest",
-  "backend_stack": "nestjs"
-}
+[
+  {
+    "name": "backend-api",
+    "dir": ".",
+    "install_dir": ".",
+    "project": "api",
+    "image": "ghcr.io/org/backend-api",
+    "backend_stack": "nestjs",
+    "version_stream": "api",
+    "test_command": "npm run test:cov -- --selectProjects api",
+    "dockerfile_path": "apps/api/Dockerfile",
+    "k6_script_path": "tests/performance/api-smoke.js"
+  },
+  {
+    "name": "backend-location-service",
+    "dir": ".",
+    "install_dir": ".",
+    "project": "location-service",
+    "image": "ghcr.io/org/backend-location-service",
+    "backend_stack": "nestjs",
+    "version_stream": "location-service",
+    "test_command": "npm run test:cov -- --selectProjects location-service",
+    "dockerfile_path": "apps/location-service/Dockerfile",
+    "k6_script_path": "tests/performance/location-service-smoke.js"
+  }
+]
 ```
+
+NestJS backend templates are monorepo workspaces by default. Use `BACKEND_MULTI_SYSTEMS_JSON` with one entry per deployable Nest app. The central workflow installs from `install_dir`, tests with `test_command`, builds containers from `dockerfile_path`, and versions each service through `version_stream`.
 
 Node:
 ```json

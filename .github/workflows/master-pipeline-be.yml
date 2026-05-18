@@ -152,7 +152,15 @@ jobs:
                 version_stream: (
                   ((.version_stream // .name // .dir // "backend") | ascii_downcase | gsub("[^a-z0-9]+"; "-") | gsub("(^-+|-+$)"; ""))
                   | if length > 0 then . else "backend" end
-                )
+                ),
+                project: (.project // .name),
+                install_dir: (.install_dir // .dir),
+                test_command: (.test_command // "npm run test:cov"),
+                build_command: (.build_command // "npm run build"),
+                dockerfile_path: (.dockerfile_path // "Dockerfile"),
+                k6_script_path: (.k6_script_path // ""),
+                k6_base_url: (.k6_base_url // ""),
+                k6_run_only_on_branch: (.k6_run_only_on_branch // "")
               }
             )
           ')
@@ -272,9 +280,10 @@ jobs:
       fail-fast: false
     uses: ./.github/workflows/backend-tests.yml
     with:
-      working-directory: ${{ matrix.service.dir }}
+      working-directory: ${{ matrix.service.install_dir }}
       system-name: ${{ matrix.service.name }}
       backend-stack: ${{ matrix.service.backend_stack }}
+      test-command: ${{ matrix.service.test_command }}
     secrets: inherit
 
   backend-security:
@@ -287,7 +296,7 @@ jobs:
         service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
     uses: ./.github/workflows/security-scan.yml
     with:
-      working-directory: ${{ matrix.service.dir }}
+      working-directory: ${{ matrix.service.install_dir }}
       system-name: ${{ matrix.service.name }}
     secrets: inherit
 
@@ -389,6 +398,7 @@ jobs:
     with:
       working-directory: ${{ matrix.service.dir }}
       image-name: ${{ matrix.service.image }}
+      dockerfile-path: ${{ matrix.service.dockerfile_path }}
       push-image: false
       scan-vulnerabilities: true
     secrets: inherit

@@ -72,30 +72,58 @@ always-auth=true
 npm install @implementsprint/sdk
 ```
 
-The SDK source of truth is the `api-shared-services` repository. Commit the `.npmrc` placeholder, but never commit a literal token value. GitHub Actions supplies `${GITHUB_TOKEN}` during dependency installation.
+The SDK source of truth is the `api-shared-services` repository. Commit the `.npmrc` placeholder, but never commit a literal token value. GitHub Actions supplies `${GITHUB_TOKEN}` during dependency installation. Dockerfiles that run `npm ci` for this package should consume the same token as a BuildKit secret named `GITHUB_TOKEN`; `docker-build.yml` passes that secret automatically.
 
 ## GitHub Repository Variables (Canonical)
 
 Set in: Settings -> Secrets and variables -> Actions -> Variables
 
 Required:
-- `BACKEND_SINGLE_SYSTEMS_JSON`
+- `BACKEND_MULTI_SYSTEMS_JSON`
 
 Recommended value:
 ```json
-{
-  "name": "backend-nest",
-  "dir": ".",
-  "image": "ghcr.io/org/backend-nest",
-  "backend_stack": "nestjs"
-}
+[
+  {
+    "name": "backend-api",
+    "dir": ".",
+    "install_dir": ".",
+    "project": "api",
+    "image": "ghcr.io/org/backend-api",
+    "backend_stack": "nestjs",
+    "version_stream": "api",
+    "test_command": "npm run test:cov -- --selectProjects api",
+    "dockerfile_path": "apps/api/Dockerfile",
+    "k6_script_path": "tests/performance/api-smoke.js"
+  },
+  {
+    "name": "backend-location-service",
+    "dir": ".",
+    "install_dir": ".",
+    "project": "location-service",
+    "image": "ghcr.io/org/backend-location-service",
+    "backend_stack": "nestjs",
+    "version_stream": "location-service",
+    "test_command": "npm run test:cov -- --selectProjects location-service",
+    "dockerfile_path": "apps/location-service/Dockerfile",
+    "k6_script_path": "tests/performance/location-service-smoke.js"
+  }
+]
 ```
 
 How to fill each field:
 - `name`: stable service label for reports/notifications.
-- `dir`: repository-relative service directory (`.` for root service).
+- `dir`: Docker build context; use `.` for NestJS monorepo services that share one package lock.
+- `install_dir`: directory where `npm ci` and test commands run; use `.` for NestJS monorepos.
+- `project`: Nest workspace project name.
 - `image`: target GHCR image path (`ghcr.io/<org>/<image>`).
 - `backend_stack`: fixed value `nestjs` for this template.
+- `version_stream`: independent tag stream for each deployable service.
+- `test_command`: service-specific test command.
+- `dockerfile_path`: Dockerfile path relative to `dir`.
+- `k6_script_path`: service-specific smoke script.
+
+NestJS backend templates are monorepo workspaces by default. Use `BACKEND_MULTI_SYSTEMS_JSON` with one entry per deployable Nest app. The central workflow installs from `install_dir`, tests with `test_command`, builds containers from `dockerfile_path`, passes `GITHUB_TOKEN` to Docker BuildKit as a secret for private package installs, and versions each service through `version_stream`.
 
 ## GitHub Repository Secrets
 
@@ -134,5 +162,7 @@ Where to get each value:
 
 - Missing Supabase values -> service starts with dependency errors.
 - Invalid `backend_stack` value -> orchestrator route mismatch.
+- Missing `install_dir` in a monorepo system -> workflow falls back to `dir`, which can break if `dir` points at an app folder without `package-lock.json`.
+- Missing `dockerfile_path` in a monorepo system -> Docker build looks for a root `Dockerfile` instead of the service Dockerfile.
 - Missing Sonar secrets with Sonar enabled -> preflight/scan failures.
 - Missing k6 secrets with k6 enabled -> k6 lane fails.
