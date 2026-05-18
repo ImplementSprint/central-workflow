@@ -87,7 +87,7 @@ NestJS monorepo:
     "dir": ".",
     "install_dir": ".",
     "project": "api",
-    "image": "ghcr.io/org/backend-api",
+    "image": "backend-api",
     "backend_stack": "nestjs",
     "version_stream": "api",
     "test_command": "npm run test:cov -- --selectProjects api",
@@ -99,7 +99,7 @@ NestJS monorepo:
     "dir": ".",
     "install_dir": ".",
     "project": "location-service",
-    "image": "ghcr.io/org/backend-location-service",
+    "image": "backend-location-service",
     "backend_stack": "nestjs",
     "version_stream": "location-service",
     "test_command": "npm run test:cov -- --selectProjects location-service",
@@ -116,7 +116,7 @@ Node:
 {
   "name": "backend-node",
   "dir": ".",
-  "image": "ghcr.io/org/backend-node",
+  "image": "backend-node",
   "backend_stack": "nodejs"
 }
 ```

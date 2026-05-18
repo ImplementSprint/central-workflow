@@ -8,7 +8,7 @@ name: "BE Pipeline Caller"
 #     "dir":".",
 #     "install_dir":".",
 #     "project":"api",
-#     "image":"ghcr.io/org/backend-api",
+#     "image":"backend-api",
 #     "backend_stack":"nestjs",
 #     "version_stream":"api",
 #     "test_command":"npm run test:cov -- --selectProjects api",

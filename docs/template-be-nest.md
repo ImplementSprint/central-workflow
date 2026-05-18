@@ -89,7 +89,7 @@ Recommended value:
     "dir": ".",
     "install_dir": ".",
     "project": "api",
-    "image": "ghcr.io/org/backend-api",
+    "image": "backend-api",
     "backend_stack": "nestjs",
     "version_stream": "api",
     "test_command": "npm run test:cov -- --selectProjects api",
@@ -101,7 +101,7 @@ Recommended value:
     "dir": ".",
     "install_dir": ".",
     "project": "location-service",
-    "image": "ghcr.io/org/backend-location-service",
+    "image": "backend-location-service",
     "backend_stack": "nestjs",
     "version_stream": "location-service",
     "test_command": "npm run test:cov -- --selectProjects location-service",
@@ -116,7 +116,7 @@ How to fill each field:
 - `dir`: Docker build context; use `.` for NestJS monorepo services that share one package lock.
 - `install_dir`: directory where `npm ci` and test commands run; use `.` for NestJS monorepos.
 - `project`: Nest workspace project name.
-- `image`: target GHCR image path (`ghcr.io/<org>/<image>`).
+- `image`: optional GHCR image name; the workflow prefixes `ghcr.io/<org>/`. If omitted, it defaults to `name`.
 - `backend_stack`: fixed value `nestjs` for this template.
 - `version_stream`: independent tag stream for each deployable service.
 - `test_command`: service-specific test command.

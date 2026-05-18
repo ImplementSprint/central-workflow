@@ -124,7 +124,7 @@ jobs:
           fi
 
           echo "${SYSTEMS_JSON}" | jq -e 'length > 0' >/dev/null
-          echo "${SYSTEMS_JSON}" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0) and (.image|type=="string" and length>0))' >/dev/null
+          echo "${SYSTEMS_JSON}" | jq -e 'all(.[]; (.name|type=="string" and length>0) and (.dir|type=="string" and length>0))' >/dev/null
 
           INVALID_BACKEND_STACKS=$(echo "${SYSTEMS_JSON}" | jq -r '
             [ .[]
@@ -154,6 +154,7 @@ jobs:
                   | if length > 0 then . else "backend" end
                 ),
                 project: (.project // .name),
+                image: (.image // .name),
                 install_dir: (.install_dir // .dir),
                 test_command: (.test_command // "npm run test:cov"),
                 build_command: (.build_command // "npm run build"),
