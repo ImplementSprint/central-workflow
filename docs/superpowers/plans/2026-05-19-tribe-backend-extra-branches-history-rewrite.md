@@ -858,8 +858,8 @@ Record every extra branch with the current known values:
 ```markdown
 | Repo | Branch | Original Commit | Final Commit | Classification | Rewrite Method | CI Run |
 | --- | --- | --- | --- | --- | --- | --- |
-| trini-thrive-be | Develop | c197c7c | recorded after Phase 5 push | feature-preserve | replay-unique-commits | recorded after Phase 6 |
-| trini-thrive-be | feat/hopecard-integration | b03db99 | recorded after Phase 5 push | feature-preserve | replay-unique-commits | recorded after Phase 6 |
+| trini-thrive-be | Develop | c197c7c | b27635b | feature-preserve | replay-unique-commits | 26060644800 success |
+| trini-thrive-be | feat/hopecard-integration | b03db99 | b27635b | feature-preserve | replay-unique-commits | 26060642336 success |
 ```
 
 - [ ] **Step 2: Record backup refs**
@@ -869,8 +869,8 @@ Record backup refs in this format after Phase 3 creates them:
 ```markdown
 | Repo | Branch | Backup Ref | Backup Commit |
 | --- | --- | --- | --- |
-| trini-thrive-be | Develop | refs/backup/extra-branch-rewrite/YYYYMMDD-HHMMSS/trini-thrive-be/Develop | c197c7c |
-| trini-thrive-be | feat/hopecard-integration | refs/backup/extra-branch-rewrite/YYYYMMDD-HHMMSS/trini-thrive-be/feat_hopecard-integration | b03db99 |
+| trini-thrive-be | Develop | refs/backup/extra-branch-rewrite/20260519-044740/trini-thrive-be/Develop | c197c7c |
+| trini-thrive-be | feat/hopecard-integration | refs/backup/extra-branch-rewrite/20260519-044740/trini-thrive-be/feat_hopecard-integration | b03db99 |
 ```
 
 - [ ] **Step 3: Record final verification summary**
@@ -880,8 +880,8 @@ Use this format after Phase 6 dispatches the runs:
 ```markdown
 | Repo | Branch | Workflow Run | Result |
 | --- | --- | --- | --- |
-| trini-thrive-be | Develop | recorded from `gh run list` | recorded after completion |
-| trini-thrive-be | feat/hopecard-integration | recorded from `gh run list` | recorded after completion |
+| trini-thrive-be | Develop | 26060644800 | success |
+| trini-thrive-be | feat/hopecard-integration | 26060642336 | success |
 ```
 
 - [ ] **Step 4: Commit central documentation**
@@ -908,23 +908,39 @@ The plan and execution record are pushed to central-workflow.
 
 | Repo | Branch | Original Commit | Final Commit | Classification | Rewrite Method | Reason |
 | --- | --- | --- | --- | --- | --- | --- |
-| `trini-thrive-be` | `Develop` | `c197c7c` | recorded after Phase 5 push | `feature-preserve` | `replay-unique-commits` | branch is 40 commits ahead of fixed main and includes Hopecard work |
-| `trini-thrive-be` | `feat/hopecard-integration` | `b03db99` | recorded after Phase 5 push | `feature-preserve` | `replay-unique-commits` | branch is 24 commits ahead of fixed main and includes Hopecard work |
+| `trini-thrive-be` | `Develop` | `c197c7c` | `b27635b` | `feature-preserve` | `replay-unique-commits` | branch was 40 commits ahead of fixed main; effective content matched `feat/hopecard-integration` except merge commits, so final rewritten head matches the feature branch |
+| `trini-thrive-be` | `feat/hopecard-integration` | `b03db99` | `b27635b` | `feature-preserve` | `replay-unique-commits` | branch was 24 commits ahead of fixed main and its reviewed Hopecard commits were replayed onto the fixed NestJS monorepo base |
 
 ## Backup Refs
 
 | Repo | Branch | Backup Ref | Backup Commit |
 | --- | --- | --- | --- |
-| `trini-thrive-be` | `Develop` | recorded after Phase 3 backup creation | `c197c7c` |
-| `trini-thrive-be` | `feat/hopecard-integration` | recorded after Phase 3 backup creation | `b03db99` |
+| `trini-thrive-be` | `Develop` | `refs/backup/extra-branch-rewrite/20260519-044740/trini-thrive-be/Develop` | `c197c7c` |
+| `trini-thrive-be` | `feat/hopecard-integration` | `refs/backup/extra-branch-rewrite/20260519-044740/trini-thrive-be/feat_hopecard-integration` | `b03db99` |
 
 ## CI Runs
 
 | Repo | Branch | Workflow Run | Result |
 | --- | --- | --- | --- |
-| `trini-thrive-be` | `Develop` | recorded after Phase 6 dispatch | recorded after completion |
-| `trini-thrive-be` | `feat/hopecard-integration` | recorded after Phase 6 dispatch | recorded after completion |
+| `trini-thrive-be` | `Develop` | [26060644800](https://github.com/ImplementSprint/trini-thrive-be/actions/runs/26060644800) | `success`, head `b27635bd976e6817594ee6adf04af7c4037a2fe1` |
+| `trini-thrive-be` | `feat/hopecard-integration` | [26060642336](https://github.com/ImplementSprint/trini-thrive-be/actions/runs/26060642336) | `success`, head `b27635bd976e6817594ee6adf04af7c4037a2fe1` |
 
 ## Execution Log
 
 2026-05-19 Plan formation: GitHub branch inventory found no extra branches in `campus-one-be`, `greenovate-be`, `paki-apps-be`, `sho-team-be`, or `smurf-village-be`. Only `trini-thrive-be` has extra branches: `Develop` at `c197c7c` and `feat/hopecard-integration` at `b03db99`.
+
+2026-05-19 Execution: refreshed all six tribe backend remotes. Corrected the inventory script behavior by excluding the remote `origin/HEAD` short-name row that appears as `origin`.
+
+2026-05-19 Execution: created local backup refs for the two Trini extra branches under `refs/backup/extra-branch-rewrite/20260519-044740/trini-thrive-be/`.
+
+2026-05-19 Execution: rebuilt `rewrite/feat_hopecard-integration` from fixed Trini `origin/main` (`71634eb`). Replayed the reviewed Hopecard commits oldest-to-newest while preserving author date, committer date, author identity, committer identity, and commit message. Conflict resolution kept the NestJS monorepo layout by moving Hopecard API modules under `apps/api/src/*`, shared helpers under `libs/common/src/*`, and keeping the fixed monorepo `package.json`, `tsconfig.json`, and workspace structure.
+
+2026-05-19 Execution: original `Develop` had no effective file diff beyond `origin/feat/hopecard-integration`; it only carried merge commits. `rewrite/Develop` was pointed to the same rewritten head as `rewrite/feat_hopecard-integration`.
+
+2026-05-19 Verification: replay metadata verification passed for both rewrite branches. Local `npm run lint -- --quiet` passed. `git diff --check HEAD` passed. Local `npm run typecheck` could not complete because local `npm install` cannot authenticate to GitHub Packages for `@implementsprint/sdk`; the GitHub Actions runs have the required token and completed successfully.
+
+2026-05-19 Push: force-with-lease updated `feat/hopecard-integration` from `b03db99` to `b27635b`, and `Develop` from `c197c7c` to `b27635b`.
+
+2026-05-19 CI: dispatched `BE Pipeline Caller` dry-runs with `dry_run=true`, `run_deploy=false`, `run_promotion=false`, security/Sonar enabled, and k6 enabled but branch-gated. Runs [26060642336](https://github.com/ImplementSprint/trini-thrive-be/actions/runs/26060642336) and [26060644800](https://github.com/ImplementSprint/trini-thrive-be/actions/runs/26060644800) both completed with `success`.
+
+2026-05-19 correction: the first replay made Hopecard domains modules inside `apps/api`, which was CI-valid but not true app-per-service microservice architecture. Follow-up plan `2026-05-19-trini-hopecard-microservice-split-correction.md` corrected this by moving Hopecard domains into five deployable Nest apps, updating `BACKEND_MULTI_SYSTEMS_JSON`, and force-with-lease updating both `feat/hopecard-integration` and `Develop` from `b27635b` to `cc107fa`. Corrected dry-runs [26061974613](https://github.com/ImplementSprint/trini-thrive-be/actions/runs/26061974613) and [26061976547](https://github.com/ImplementSprint/trini-thrive-be/actions/runs/26061976547) completed with `success`.
