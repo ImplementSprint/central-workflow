@@ -33,6 +33,10 @@ on:
       dry_run:
         type: boolean
         default: false
+      require_api_center_check:
+        type: boolean
+        default: true
+        description: "Require checks.apiCenter=true in Render health response"
     secrets:
       SONAR_TOKEN:
         required: false
@@ -473,7 +477,7 @@ jobs:
       system-name: ${{ matrix.service.name }}
       environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'uat' || 'production' }}
       branch: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
-      require-api-center-check: true
+      require-api-center-check: ${{ inputs.require_api_center_check }}
     secrets: inherit
 
   grafana-k6:
