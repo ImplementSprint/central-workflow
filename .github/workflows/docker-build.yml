@@ -139,6 +139,8 @@ jobs:
           cache-from: type=gha,scope=${{ steps.coords.outputs.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ steps.coords.outputs.cache_scope }}
           build-args: ${{ inputs.build-args }}
+          secrets: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           sbom: ${{ inputs.push-image && inputs.generate-sbom }}
           provenance: ${{ inputs.push-image && inputs.generate-provenance }}
 
