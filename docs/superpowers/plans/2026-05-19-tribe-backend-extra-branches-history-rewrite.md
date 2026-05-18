@@ -39,6 +39,8 @@ Use these rules exactly:
 
 - The canonical fixed base keeps the agreed history shape: the NestJS monorepo microservices conversion is the first fixed-base commit, and the fixed-base tip is the final hardening/fixes commit.
 - Extra feature branches are rebuilt on top of that fixed base. This means a preserved feature branch may have Hopecard or branch-specific commits after the two fixed-base commits, but it must not reintroduce the old non-monorepo backend structure.
+- Preserved branch-specific commits must keep the same timeline and the same commit message as the original branch commits. Replay them oldest-to-newest, preserve author date, preserve committer date, preserve author identity, preserve committer identity, and reuse the original commit message with `git commit -C`.
+- Rewritten commit hashes are expected to change because the parent history changes. Commit order, dates, author metadata, committer metadata, and messages are the continuity requirements.
 - Branches with no meaningful unique work are force-updated to the repo's current fixed `HEAD`.
 - Environment-style branches such as `develop`, `dev`, `staging`, or `qa` are force-updated to the repo's current fixed `HEAD`, unless inventory proves they contain active work that must be preserved.
 - Feature branches with meaningful unique work are rebuilt on top of the repo's fixed `HEAD` by cherry-picking or rebasing the branch-specific commits.
@@ -472,13 +474,49 @@ e87bd5b woopsie
 694a41d cicd
 ```
 
-- [ ] **Step 3: Cherry-pick reviewed Hopecard commits onto `rewrite/feat_hopecard-integration`**
+- [ ] **Step 3: Replay reviewed Hopecard commits onto `rewrite/feat_hopecard-integration` while preserving timeline and messages**
 
 Run:
 
 ```powershell
 Push-Location "C:\Codes\secret-ops\trini-thrive-be"
 git switch "rewrite/feat_hopecard-integration"
+function Invoke-TimelinePreservingReplay {
+  param(
+    [Parameter(Mandatory = $true)][string]$Commit,
+    [Parameter(Mandatory = $true)][string]$BranchName
+  )
+
+  $authorDate = git show -s --format=%aI $Commit
+  $authorName = git show -s --format=%an $Commit
+  $authorEmail = git show -s --format=%ae $Commit
+  $committerDate = git show -s --format=%cI $Commit
+  $committerName = git show -s --format=%cn $Commit
+  $committerEmail = git show -s --format=%ce $Commit
+
+  git cherry-pick --no-commit $Commit
+  if ($LASTEXITCODE -ne 0) {
+    throw "Cherry-pick stopped at $Commit in $BranchName. Resolve conflicts into the NestJS monorepo layout, stage the resolved files, then set GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_AUTHOR_DATE, GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL, and GIT_COMMITTER_DATE to the original values before running git commit -C $Commit."
+  }
+
+  $env:GIT_AUTHOR_NAME = $authorName
+  $env:GIT_AUTHOR_EMAIL = $authorEmail
+  $env:GIT_AUTHOR_DATE = $authorDate
+  $env:GIT_COMMITTER_NAME = $committerName
+  $env:GIT_COMMITTER_EMAIL = $committerEmail
+  $env:GIT_COMMITTER_DATE = $committerDate
+  git commit -C $Commit
+  Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
+  if ($LASTEXITCODE -ne 0) {
+    throw "Timeline-preserving commit failed for $Commit in $BranchName."
+  }
+}
+
 $hopecardCommits = @(
   'f18ccc7',
   '44b4756',
@@ -490,10 +528,7 @@ $hopecardCommits = @(
   '314feb2'
 )
 foreach ($commit in $hopecardCommits) {
-  git cherry-pick $commit
-  if ($LASTEXITCODE -ne 0) {
-    throw "Cherry-pick stopped at $commit in trini-thrive-be/feat/hopecard-integration. Resolve conflicts into the NestJS monorepo layout, run the touched tests, then run git cherry-pick --continue."
-  }
+  Invoke-TimelinePreservingReplay -Commit $commit -BranchName 'trini-thrive-be/feat/hopecard-integration'
 }
 Pop-Location
 ```
@@ -502,16 +537,53 @@ Expected:
 
 ```text
 The Hopecard branch contains fixed NestJS monorepo history plus reviewed Hopecard commits.
-Cherry-pick conflicts, if any, are explicit and resolved inside the monorepo structure.
+Each replayed commit keeps the original author date, committer date, author identity, committer identity, and commit message.
+Cherry-pick conflicts, if any, are explicit and resolved inside the monorepo structure before the timeline-preserving commit is created.
 ```
 
-- [ ] **Step 4: Cherry-pick reviewed Hopecard commits onto `rewrite/Develop`**
+- [ ] **Step 4: Replay reviewed Hopecard commits onto `rewrite/Develop` while preserving timeline and messages**
 
 Run:
 
 ```powershell
 Push-Location "C:\Codes\secret-ops\trini-thrive-be"
 git switch "rewrite/Develop"
+function Invoke-TimelinePreservingReplay {
+  param(
+    [Parameter(Mandatory = $true)][string]$Commit,
+    [Parameter(Mandatory = $true)][string]$BranchName
+  )
+
+  $authorDate = git show -s --format=%aI $Commit
+  $authorName = git show -s --format=%an $Commit
+  $authorEmail = git show -s --format=%ae $Commit
+  $committerDate = git show -s --format=%cI $Commit
+  $committerName = git show -s --format=%cn $Commit
+  $committerEmail = git show -s --format=%ce $Commit
+
+  git cherry-pick --no-commit $Commit
+  if ($LASTEXITCODE -ne 0) {
+    throw "Cherry-pick stopped at $Commit in $BranchName. Resolve conflicts into the NestJS monorepo layout, stage the resolved files, then set GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_AUTHOR_DATE, GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL, and GIT_COMMITTER_DATE to the original values before running git commit -C $Commit."
+  }
+
+  $env:GIT_AUTHOR_NAME = $authorName
+  $env:GIT_AUTHOR_EMAIL = $authorEmail
+  $env:GIT_AUTHOR_DATE = $authorDate
+  $env:GIT_COMMITTER_NAME = $committerName
+  $env:GIT_COMMITTER_EMAIL = $committerEmail
+  $env:GIT_COMMITTER_DATE = $committerDate
+  git commit -C $Commit
+  Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+  Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
+  if ($LASTEXITCODE -ne 0) {
+    throw "Timeline-preserving commit failed for $Commit in $BranchName."
+  }
+}
+
 $developCommits = @(
   'f18ccc7',
   '44b4756',
@@ -523,10 +595,7 @@ $developCommits = @(
   '314feb2'
 )
 foreach ($commit in $developCommits) {
-  git cherry-pick $commit
-  if ($LASTEXITCODE -ne 0) {
-    throw "Cherry-pick stopped at $commit in trini-thrive-be/Develop. Resolve conflicts into the NestJS monorepo layout, run the touched tests, then run git cherry-pick --continue."
-  }
+  Invoke-TimelinePreservingReplay -Commit $commit -BranchName 'trini-thrive-be/Develop'
 }
 Pop-Location
 ```
@@ -535,10 +604,57 @@ Expected:
 
 ```text
 The Develop branch contains fixed NestJS monorepo history plus reviewed Hopecard commits.
+Each replayed commit keeps the original author date, committer date, author identity, committer identity, and commit message.
 Commits unique to Develop beyond the Hopecard branch are reviewed separately before replay.
 ```
 
-- [ ] **Step 5: Inspect additional `Develop` merge-only history before push**
+- [ ] **Step 5: Verify replayed commit metadata before inspecting additional `Develop` history**
+
+Run this for each rewrite branch after replay:
+
+```powershell
+Push-Location "C:\Codes\secret-ops\trini-thrive-be"
+
+$branchesToVerify = @(
+  @{
+    Name = 'rewrite/feat_hopecard-integration'
+    OriginalCommits = @('f18ccc7','44b4756','0a6a173','9ed76c8','4652a34','358b234','83173ce','314feb2')
+  },
+  @{
+    Name = 'rewrite/Develop'
+    OriginalCommits = @('f18ccc7','44b4756','0a6a173','9ed76c8','4652a34','358b234','83173ce','314feb2')
+  }
+)
+
+foreach ($branch in $branchesToVerify) {
+  git switch $branch.Name
+  $rewrittenCommits = git rev-list --reverse "origin/main..HEAD"
+  if ($rewrittenCommits.Count -ne $branch.OriginalCommits.Count) {
+    throw "$($branch.Name) replay count mismatch. Expected $($branch.OriginalCommits.Count), got $($rewrittenCommits.Count)."
+  }
+
+  for ($index = 0; $index -lt $branch.OriginalCommits.Count; $index++) {
+    $original = $branch.OriginalCommits[$index]
+    $rewritten = $rewrittenCommits[$index]
+    $originalMeta = [string]::Join("`n", (git show -s --format='%aI|%cI|%an|%ae|%cn|%ce|%B' $original))
+    $rewrittenMeta = [string]::Join("`n", (git show -s --format='%aI|%cI|%an|%ae|%cn|%ce|%B' $rewritten))
+    if ($originalMeta -ne $rewrittenMeta) {
+      throw "$($branch.Name) metadata mismatch for original $original and rewritten $rewritten."
+    }
+  }
+}
+
+Pop-Location
+```
+
+Expected:
+
+```text
+Each rewritten commit matches the original commit's author date, committer date, author name, author email, committer name, committer email, and full commit message.
+Commit hashes differ because the commits now sit on the fixed NestJS monorepo base.
+```
+
+- [ ] **Step 6: Inspect additional `Develop` merge-only history before push**
 
 Run:
 
@@ -557,7 +673,7 @@ If the diff is empty or only duplicates replayed Hopecard work, no additional De
 If the diff contains production work, add the exact commit hashes to the Execution Log before replaying them.
 ```
 
-- [ ] **Step 6: Resolve conflicts using NestJS monorepo paths**
+- [ ] **Step 7: Resolve conflicts using NestJS monorepo paths**
 
 If conflicts occur, preserve the NestJS monorepo layout:
 
@@ -572,7 +688,7 @@ libs/supabase
 
 Do not restore the old non-monorepo layout.
 
-- [ ] **Step 7: Run repo verification on `rewrite/feat_hopecard-integration`**
+- [ ] **Step 8: Run repo verification on `rewrite/feat_hopecard-integration`**
 
 Run:
 
@@ -595,7 +711,7 @@ All commands exit 0.
 If a feature branch intentionally lacks e2e compatibility, record the failing command and root cause before pushing.
 ```
 
-- [ ] **Step 8: Run repo verification on `rewrite/Develop`**
+- [ ] **Step 9: Run repo verification on `rewrite/Develop`**
 
 Run:
 
@@ -618,7 +734,7 @@ All commands exit 0.
 If a feature branch intentionally lacks e2e compatibility, record the failing command and root cause before pushing.
 ```
 
-- [ ] **Step 9: Replace original remote feature branches with lease protection**
+- [ ] **Step 10: Replace original remote feature branches with lease protection**
 
 Run:
 
