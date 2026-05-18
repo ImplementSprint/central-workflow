@@ -1164,6 +1164,10 @@ ENABLE_SONAR_CI=false
 
 The backend central workflow honors this variable by skipping the backend Sonar job while keeping tests, security scans, Docker, k6, and summary gates active.
 
+### Execution Note: Grafana k6 Concurrency
+
+The backend central workflow serializes service-level k6 jobs with `max-parallel: 1`. This prevents a two-service backend monorepo from starting both Grafana Cloud tests at the same time and hitting low-concurrency Grafana Cloud project limits.
+
 ## Phase 6: Normal Flow Restoration
 
 ### Task 8: Resume Normal Branch Flow

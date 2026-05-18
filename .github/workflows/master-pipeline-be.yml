@@ -468,6 +468,7 @@ jobs:
       (needs.render-deploy.result == 'success' || needs.render-deploy.result == 'skipped')
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         service: ${{ fromJson(needs.active-systems.outputs.active_systems_json) }}
     uses: ./.github/workflows/grafana-k6.yml
