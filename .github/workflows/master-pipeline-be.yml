@@ -478,7 +478,15 @@ jobs:
       environment: ${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'test' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'uat' || 'production' }}
       branch: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
       require-api-center-check: ${{ inputs.require_api_center_check }}
-    secrets: inherit
+    secrets:
+      RENDER_DEPLOY_HOOK_URL_TEST: ${{ secrets.RENDER_DEPLOY_HOOK_URL_TEST }}
+      RENDER_DEPLOY_HOOK_URL_UAT: ${{ secrets.RENDER_DEPLOY_HOOK_URL_UAT }}
+      RENDER_DEPLOY_HOOK_URL_MAIN: ${{ secrets.RENDER_DEPLOY_HOOK_URL_MAIN }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      RENDER_HEALTHCHECK_URL_TEST: ${{ secrets.RENDER_HEALTHCHECK_URL_TEST }}
+      RENDER_HEALTHCHECK_URL_UAT: ${{ secrets.RENDER_HEALTHCHECK_URL_UAT }}
+      RENDER_HEALTHCHECK_URL_MAIN: ${{ secrets.RENDER_HEALTHCHECK_URL_MAIN }}
+      RENDER_HEALTHCHECK_URL: ${{ secrets.RENDER_HEALTHCHECK_URL }}
 
   grafana-k6:
     name: "Backend Grafana k6 — ${{ matrix.service.name }}"
@@ -502,7 +510,9 @@ jobs:
       script-path: ${{ matrix.service.k6_script_path || inputs.k6_script_path }}
       target-base-url: ${{ matrix.service.k6_base_url || inputs.k6_base_url }}
       run-only-on-branch: ${{ matrix.service.k6_run_only_on_branch || inputs.k6_run_only_on_branch }}
-    secrets: inherit
+    secrets:
+      K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+      K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
 
   version-test:
     name: "Version TEST — ${{ matrix.service.name }}"
@@ -766,4 +776,6 @@ jobs:
       sonar-status: ${{ needs.backend-sonar.result }}
       grafana-status: ${{ needs.grafana-k6.result }}
       pipeline-result: ${{ needs.pipeline-summary.result == 'success' && 'success' || needs.pipeline-summary.result == 'cancelled' && 'cancelled' || 'failure' }}
-    secrets: inherit
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
