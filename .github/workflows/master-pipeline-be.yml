@@ -307,6 +307,7 @@ jobs:
     if: >-
       always() &&
       inputs.enable_sonar == true &&
+      vars.ENABLE_SONAR_CI != 'false' &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped')
     runs-on: ubuntu-latest

@@ -1154,6 +1154,16 @@ enable_k6=true
 
 Expected: each service uses its own k6 script path or cleanly skips if branch rules do not include the current branch.
 
+### Execution Note: SonarCloud Opt-Out
+
+Greenovate's SonarCloud project currently rejects CI scanner runs while Automatic Analysis is enabled. Until Automatic Analysis is disabled in SonarCloud, set the GitHub repository variable below for Greenovate only:
+
+```text
+ENABLE_SONAR_CI=false
+```
+
+The backend central workflow honors this variable by skipping the backend Sonar job while keeping tests, security scans, Docker, k6, and summary gates active.
+
 ## Phase 6: Normal Flow Restoration
 
 ### Task 8: Resume Normal Branch Flow
