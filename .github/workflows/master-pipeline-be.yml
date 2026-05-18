@@ -460,7 +460,7 @@ jobs:
     needs: [active-systems, backend-build, backend-security, backend-sonar, render-deploy]
     if: >
       always() &&
-      inputs.enable_k6 == true &&
+      fromJSON(format('{0}', inputs.enable_k6)) == true &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') &&
       (needs.backend-security.result == 'success' || needs.backend-security.result == 'skipped') &&
