@@ -37,6 +37,8 @@ Every other remote branch in the six tribe backend repos must be inventoried and
 
 Use these rules exactly:
 
+- The canonical fixed base keeps the agreed history shape: the NestJS monorepo microservices conversion is the first fixed-base commit, and the fixed-base tip is the final hardening/fixes commit.
+- Extra feature branches are rebuilt on top of that fixed base. This means a preserved feature branch may have Hopecard or branch-specific commits after the two fixed-base commits, but it must not reintroduce the old non-monorepo backend structure.
 - Branches with no meaningful unique work are force-updated to the repo's current fixed `HEAD`.
 - Environment-style branches such as `develop`, `dev`, `staging`, or `qa` are force-updated to the repo's current fixed `HEAD`, unless inventory proves they contain active work that must be preserved.
 - Feature branches with meaningful unique work are rebuilt on top of the repo's fixed `HEAD` by cherry-picking or rebasing the branch-specific commits.
