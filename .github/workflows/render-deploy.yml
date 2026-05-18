@@ -217,6 +217,12 @@ jobs:
             interval_seconds=10
           fi
 
+          echo "🔍 Healthcheck URL diagnostics (empty = secret not set or not passed):"
+          echo "  RENDER_HEALTHCHECK_URL_TEST   : $([ -n "${RENDER_HEALTHCHECK_URL_TEST}" ] && echo 'SET' || echo 'EMPTY')"
+          echo "  RENDER_HEALTHCHECK_URL_UAT    : $([ -n "${RENDER_HEALTHCHECK_URL_UAT}" ] && echo 'SET' || echo 'EMPTY')"
+          echo "  RENDER_HEALTHCHECK_URL_MAIN   : $([ -n "${RENDER_HEALTHCHECK_URL_MAIN}" ] && echo 'SET' || echo 'EMPTY')"
+          echo "  RENDER_HEALTHCHECK_URL        : $([ -n "${RENDER_HEALTHCHECK_URL}" ] && echo 'SET' || echo 'EMPTY')"
+
           health_seed_url=""
           if [ -n "${HEALTHCHECK_URL}" ]; then
             health_seed_url="${HEALTHCHECK_URL}"
