@@ -130,6 +130,29 @@ on:
         description: "Preview-only mode (skip deploy/tag push, print PR body)"
         type: boolean
         default: false
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      SONAR_ORGANIZATION:
+        required: false
+      SONAR_PROJECT_KEY:
+        required: false
+      GH_PR_TOKEN:
+        required: false
+      K6_CLOUD_TOKEN:
+        required: false
+      K6_CLOUD_PROJECT_ID:
+        required: false
+      VERCEL_TOKEN:
+        required: false
+      VERCEL_ORG_ID:
+        required: false
+      VERCEL_PROJECT_ID:
+        required: false
+      SLACK_WEBHOOK_URL:
+        required: false
+      DISCORD_WEBHOOK_URL:
+        required: false
 
 permissions:
   contents: write

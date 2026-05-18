@@ -139,7 +139,16 @@ on:
         required: false
       SONAR_ORGANIZATION:
         required: false
-
+      GH_PR_TOKEN:
+        required: false
+      K6_CLOUD_TOKEN:
+        required: false
+      K6_CLOUD_PROJECT_ID:
+        required: false
+      SLACK_WEBHOOK_URL:
+        required: false
+      DISCORD_WEBHOOK_URL:
+        required: false
 
 permissions:
   contents: write

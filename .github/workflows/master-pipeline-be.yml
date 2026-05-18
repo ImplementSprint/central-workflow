@@ -33,6 +33,39 @@ on:
       dry_run:
         type: boolean
         default: false
+    secrets:
+      SONAR_TOKEN:
+        required: false
+      SONAR_ORGANIZATION:
+        required: false
+      SONAR_PROJECT_KEY:
+        required: false
+      GH_PR_TOKEN:
+        required: false
+      K6_CLOUD_TOKEN:
+        required: false
+      K6_CLOUD_PROJECT_ID:
+        required: false
+      RENDER_DEPLOY_HOOK_URL_TEST:
+        required: false
+      RENDER_DEPLOY_HOOK_URL_UAT:
+        required: false
+      RENDER_DEPLOY_HOOK_URL_MAIN:
+        required: false
+      RENDER_DEPLOY_HOOK_URL:
+        required: false
+      RENDER_HEALTHCHECK_URL_TEST:
+        required: false
+      RENDER_HEALTHCHECK_URL_UAT:
+        required: false
+      RENDER_HEALTHCHECK_URL_MAIN:
+        required: false
+      RENDER_HEALTHCHECK_URL:
+        required: false
+      SLACK_WEBHOOK_URL:
+        required: false
+      DISCORD_WEBHOOK_URL:
+        required: false
 
 permissions:
   contents: read
