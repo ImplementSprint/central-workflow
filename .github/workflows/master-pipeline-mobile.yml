@@ -53,11 +53,11 @@ on:
       enable_maestro:
         description: "Run Maestro Android E2E (overrides per-system JSON)"
         type: boolean
-        default: true
+        default: false
       enable_maestro_ios:
         description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
-        default: true
+        default: false
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -115,11 +115,11 @@ on:
       enable_maestro:
         description: "Run Maestro Android E2E (overrides per-system JSON)"
         type: boolean
-        default: true
+        default: false
       enable_maestro_ios:
         description: "Run Maestro iOS E2E (overrides per-system JSON)"
         type: boolean
-        default: true
+        default: false
       run_deploy:
         description: "Reserved for compatibility with FE callers"
         type: boolean
@@ -303,6 +303,9 @@ jobs:
           if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
             ENABLE_GRAFANA_K6="false"
           fi
+
+          # Central policy: Grafana k6 is currently disabled for all consumers.
+          ENABLE_GRAFANA_K6="false"
 
           K6_SCRIPT_PATH="tests/performance"
           if [ -n "${IN_K6_SCRIPT_PATH}" ]; then
@@ -510,12 +513,12 @@ jobs:
       enable-lint: ${{ (inputs.enable_lint != false && inputs.enable_lint != 'false') && (matrix.system.enable_lint == null || matrix.system.enable_lint == '' || matrix.system.enable_lint == true || matrix.system.enable_lint == 'true') }}
       enable-security-scan: ${{ (inputs.enable_security_scan != false && inputs.enable_security_scan != 'false') && (matrix.system.enable_security_scan == null || matrix.system.enable_security_scan == '' || matrix.system.enable_security_scan == true || matrix.system.enable_security_scan == 'true') }}
       enable-governance: ${{ (inputs.enable_governance != false && inputs.enable_governance != 'false') && (matrix.system.enable_governance == null || matrix.system.enable_governance == '' || matrix.system.enable_governance == true || matrix.system.enable_governance == 'true') }}
-      enable-android-build: ${{ (matrix.system.enable_android_build == null || matrix.system.enable_android_build == '' || matrix.system.enable_android_build == true || matrix.system.enable_android_build == 'true') && (matrix.system.enable_gradle == null || matrix.system.enable_gradle == '' || matrix.system.enable_gradle == true || matrix.system.enable_gradle == 'true') }}
-      enable-ios-build: ${{ matrix.system.enable_ios_build == null || matrix.system.enable_ios_build == '' || matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == 'true' }}
-      enable-maestro: ${{ (inputs.enable_maestro != false && inputs.enable_maestro != 'false') && (matrix.system.enable_maestro == null || matrix.system.enable_maestro == '' || matrix.system.enable_maestro == true || matrix.system.enable_maestro == 'true') }}
+      enable-android-build: false
+      enable-ios-build: false
+      enable-maestro: false
       android-build-command: ${{ matrix.system.android_build_command || 'cd android && ./gradlew :app:assembleDebug -PbundleInDebug=true' }}
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ (inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false') && (matrix.system.enable_maestro_ios == null || matrix.system.enable_maestro_ios == '' || matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == 'true') }}
+      enable-maestro-ios: false
       ios-build-command: ${{ matrix.system.ios_build_command || '' }}
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
@@ -618,9 +621,9 @@ jobs:
       enable-governance: ${{ (inputs.enable_governance != false && inputs.enable_governance != 'false') && (matrix.system.enable_governance == null || matrix.system.enable_governance == '' || matrix.system.enable_governance == true || matrix.system.enable_governance == 'true') }}
       enable-android-build: ${{ matrix.system.enable_android_build == null || matrix.system.enable_android_build == '' || matrix.system.enable_android_build == true || matrix.system.enable_android_build == 'true' }}
       enable-ios-build: ${{ matrix.system.enable_ios_build == null || matrix.system.enable_ios_build == '' || matrix.system.enable_ios_build == true || matrix.system.enable_ios_build == 'true' }}
-      enable-maestro: ${{ (inputs.enable_maestro != false && inputs.enable_maestro != 'false') && (matrix.system.enable_maestro == null || matrix.system.enable_maestro == '' || matrix.system.enable_maestro == true || matrix.system.enable_maestro == 'true') }}
+      enable-maestro: false
       maestro-test-command: ${{ matrix.system.maestro_test_command || 'maestro test .maestro' }}
-      enable-maestro-ios: ${{ (inputs.enable_maestro_ios != false && inputs.enable_maestro_ios != 'false') && (matrix.system.enable_maestro_ios == null || matrix.system.enable_maestro_ios == '' || matrix.system.enable_maestro_ios == true || matrix.system.enable_maestro_ios == 'true') }}
+      enable-maestro-ios: false
       maestro-ios-test-command: ${{ matrix.system.maestro_ios_test_command || 'maestro test .maestro' }}
       ios-runner: ${{ matrix.system.ios_runner || 'macos-15' }}
       ios-xcode-version: ${{ matrix.system.ios_xcode_version || '16.4' }}

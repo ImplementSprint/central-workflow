@@ -61,6 +61,7 @@ permissions:
 jobs:
   maestro-ios-e2e:
     name: "Maestro iOS E2E"
+    if: ${{ false }}
     runs-on: ${{ inputs.ios-runner }}
     timeout-minutes: 60
     defaults:

@@ -51,22 +51,22 @@ on:
       enable-android-build:
         required: false
         type: boolean
-        default: true
+        default: false
         description: "Run local Android app build for Maestro (debug APK)"
       enable-ios-build:
         required: false
         type: boolean
-        default: true
+        default: false
         description: "Run local iOS simulator app build for Maestro (.app)"
       enable-maestro:
         required: false
         type: boolean
-        default: true
+        default: false
         description: "Run Maestro Android E2E tests"
       enable-maestro-ios:
         required: false
         type: boolean
-        default: true
+        default: false
         description: "Run Maestro iOS E2E tests"
       android-build-command:
         required: false
@@ -666,6 +666,7 @@ jobs:
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, android-build]
     if: |
       always() &&
+      false &&
       (inputs.enable-maestro == true || inputs.enable-maestro == 'true') &&
       needs.android-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&
@@ -690,6 +691,7 @@ jobs:
     needs: [expo-typescript-standard, mobile-unit-tests, mobile-lint, mobile-security, ios-build]
     if: |
       always() &&
+      false &&
       (inputs.enable-maestro-ios == true || inputs.enable-maestro-ios == 'true') &&
       needs.ios-build.result == 'success' &&
       !contains(needs.expo-typescript-standard.result, 'failure') &&

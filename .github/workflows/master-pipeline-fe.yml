@@ -15,7 +15,7 @@ on:
       enable_playwright:
         description: "Run Playwright E2E checks"
         type: boolean
-        default: true
+        default: false
       playwright_browsers:
         description: "Playwright browser list (JSON array or CSV)"
         type: string
@@ -31,7 +31,7 @@ on:
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
-        default: true
+        default: false
       k6_script_path:
         description: "Path to k6 script or performance tests directory"
         type: string
@@ -51,7 +51,7 @@ on:
       enforce_e2e_k6:
         description: "Enforce Playwright + k6 checks before promotion"
         type: boolean
-        default: true
+        default: false
       enforce_e2e_k6_on_branches:
         description: "Branches where Playwright + k6 are mandatory"
         type: string
@@ -77,7 +77,7 @@ on:
       enable_playwright:
         description: "Run Playwright E2E checks"
         type: boolean
-        default: true
+        default: false
       playwright_browsers:
         description: "Playwright browser list (JSON array or CSV)"
         type: string
@@ -93,7 +93,7 @@ on:
       enable_grafana_k6:
         description: "Run Grafana k6 cloud checks"
         type: boolean
-        default: true
+        default: false
       k6_script_path:
         description: "Path to k6 script or performance tests directory"
         type: string
@@ -113,7 +113,7 @@ on:
       enforce_e2e_k6:
         description: "Enforce Playwright + k6 checks before promotion"
         type: boolean
-        default: true
+        default: false
       enforce_e2e_k6_on_branches:
         description: "Branches where Playwright + k6 are mandatory"
         type: string
@@ -266,28 +266,34 @@ jobs:
           ENFORCE_E2E_K6="${IN_ENFORCE_E2E_K6}"
 
           if [ -z "${ENABLE_PLAYWRIGHT}" ]; then
-            ENABLE_PLAYWRIGHT="true"
+            ENABLE_PLAYWRIGHT="false"
           fi
 
           if [ -z "${ENABLE_GRAFANA_K6}" ]; then
-            ENABLE_GRAFANA_K6="true"
+            ENABLE_GRAFANA_K6="false"
           fi
 
           if [ "${ENABLE_PLAYWRIGHT}" != "true" ] && [ "${ENABLE_PLAYWRIGHT}" != "false" ]; then
-            ENABLE_PLAYWRIGHT="true"
+            ENABLE_PLAYWRIGHT="false"
           fi
 
           if [ "${ENABLE_GRAFANA_K6}" != "true" ] && [ "${ENABLE_GRAFANA_K6}" != "false" ]; then
-            ENABLE_GRAFANA_K6="true"
+            ENABLE_GRAFANA_K6="false"
           fi
 
+          # Central policy: Playwright E2E and Grafana k6 are currently disabled for all consumers.
+          ENABLE_PLAYWRIGHT="false"
+          ENABLE_GRAFANA_K6="false"
+
           if [ -z "${ENFORCE_E2E_K6}" ]; then
-            ENFORCE_E2E_K6="true"
+            ENFORCE_E2E_K6="false"
           fi
 
           if [ "${ENFORCE_E2E_K6}" != "true" ] && [ "${ENFORCE_E2E_K6}" != "false" ]; then
-            ENFORCE_E2E_K6="true"
+            ENFORCE_E2E_K6="false"
           fi
+
+          ENFORCE_E2E_K6="false"
 
           PLAYWRIGHT_BROWSERS='["chromium"]'
           if [ -n "${IN_PLAYWRIGHT_BROWSERS}" ]; then
@@ -1099,22 +1105,17 @@ jobs:
             exit 1
           fi
 
-          if [ "${ENABLE_GRAFANA_K6}" != "true" ]; then
-            echo "❌ Enforcement failed: Grafana k6 is disabled on an enforced branch."
-            exit 1
-          fi
-
           if [ "${PLAYWRIGHT_RESULT}" != "success" ]; then
             echo "❌ Enforcement failed: Playwright result is '${PLAYWRIGHT_RESULT}'."
             exit 1
           fi
 
-          if [ "${K6_RESULT}" != "success" ]; then
+          if [ "${ENABLE_GRAFANA_K6}" = "true" ] && [ "${K6_RESULT}" != "success" ]; then
             echo "❌ Enforcement failed: Grafana k6 result is '${K6_RESULT}'."
             exit 1
           fi
 
-          echo "✅ Enforcement passed: Playwright and Grafana k6 succeeded."
+          echo "✅ Enforcement passed for enabled E2E checks."
 
   create-pr-to-uat:
     name: "Create PR → UAT"

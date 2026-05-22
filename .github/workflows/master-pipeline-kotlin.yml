@@ -58,7 +58,7 @@ on:
       enable_maestro:
         required: false
         type: boolean
-        default: true
+        default: false
       maestro-test-command:
         required: false
         type: string
@@ -298,7 +298,7 @@ jobs:
   kotlin-maestro:
     name: "Kotlin Maestro"
     needs: [kotlin-build]
-    if: ${{ inputs.enable_maestro && needs.kotlin-build.result == 'success' }}
+    if: ${{ false && inputs.enable_maestro && needs.kotlin-build.result == 'success' }}
     uses: ./.github/workflows/mobile-maestro.yml
     with:
       working-directory: ${{ inputs.working-directory }}

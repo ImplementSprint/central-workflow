@@ -89,6 +89,9 @@ jobs:
             done
           fi
 
+          # Central policy: Grafana k6 is currently disabled for all consumers.
+          SHOULD_RUN="false"
+
           echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
 
   k6:

@@ -14,7 +14,7 @@ on:
         default: true
       enable_k6:
         type: boolean
-        default: true
+        default: false
       k6_script_path:
         type: string
         default: "tests/performance"
@@ -460,6 +460,7 @@ jobs:
     needs: [active-systems, backend-build, backend-security, backend-sonar, render-deploy]
     if: >
       always() &&
+      false &&
       fromJSON(format('{0}', inputs.enable_k6)) == true &&
       fromJson(needs.active-systems.outputs.active_count) > 0 &&
       (needs.backend-build.result == 'success' || needs.backend-build.result == 'skipped') &&

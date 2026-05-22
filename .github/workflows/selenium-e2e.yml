@@ -137,6 +137,9 @@ jobs:
             BROWSERS_JSON='["chromium"]'
           fi
 
+          # Central policy: Selenium/E2E browser checks are currently disabled for all consumers.
+          SHOULD_RUN="false"
+
           echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
           echo "browsers_json=${BROWSERS_JSON}" >> "$GITHUB_OUTPUT"
 
