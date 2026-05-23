@@ -436,7 +436,6 @@ jobs:
     needs: [active-systems, docker-build-main]
     if: >
       always() &&
-      false &&
       inputs.run_deploy == true &&
       (
         (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat' || github.base_ref == 'main')) ||
