@@ -1,4 +1,4 @@
-name: "Master Pipeline â€” Backend"
+name: "Master Pipeline — Backend"
 
 on:
   workflow_call:
@@ -59,7 +59,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             HEAD_BRANCH="${{ github.head_ref }}"
             if [ "${HEAD_BRANCH}" = "test" ] || [ "${HEAD_BRANCH}" = "uat" ] || [ "${HEAD_BRANCH}" = "main" ]; then
-              echo "â­ï¸ Skipping PR sync for promotion branch '${HEAD_BRANCH}'."
+              echo "⏭️ Skipping PR sync for promotion branch '${HEAD_BRANCH}'."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -105,7 +105,7 @@ jobs:
           fi
 
           if [ -z "${SYSTEMS_JSON_VAR}" ]; then
-            echo "âŒ Missing required repository variable BACKEND_MULTI_SYSTEMS_JSON or BACKEND_SINGLE_SYSTEMS_JSON."
+            echo "❌ Missing required repository variable BACKEND_MULTI_SYSTEMS_JSON or BACKEND_SINGLE_SYSTEMS_JSON."
             exit 1
           fi
 
@@ -119,7 +119,7 @@ jobs:
           elif [ "${SYSTEMS_JSON_TYPE}" = "array" ]; then
             SYSTEMS_JSON=$(echo "${SYSTEMS_JSON}" | jq -c .)
           else
-            echo "âŒ Backend systems JSON must be an object (single) or array (single/multi)."
+            echo "❌ Backend systems JSON must be an object (single) or array (single/multi)."
             exit 1
           fi
 
@@ -139,7 +139,7 @@ jobs:
           ')
 
           if [ -n "${INVALID_BACKEND_STACKS}" ]; then
-            echo "âŒ Unsupported backend_stack values detected: ${INVALID_BACKEND_STACKS}. Allowed values: nestjs, nodejs."
+            echo "❌ Unsupported backend_stack values detected: ${INVALID_BACKEND_STACKS}. Allowed values: nestjs, nodejs."
             exit 1
           fi
 
@@ -265,14 +265,14 @@ jobs:
           echo '${{ needs.active-systems.outputs.active_systems_json }}' |
           jq -r '.[].dir' | while read DIR; do
             if [ ! -d "$DIR" ]; then
-              echo "âŒ Missing backend directory: $DIR"
+              echo "❌ Missing backend directory: $DIR"
               exit 1
             fi
           done
-          echo "âœ… All backend directories exist."
+          echo "✅ All backend directories exist."
 
   backend-build:
-    name: "Backend Build â€” ${{ matrix.service.name }}"
+    name: "Backend Build — ${{ matrix.service.name }}"
     needs: [active-systems, validate-directories]
     if: fromJson(needs.active-systems.outputs.active_count) > 0
     strategy:
@@ -288,7 +288,7 @@ jobs:
     secrets: inherit
 
   backend-security:
-    name: "Backend Security Scan â€” ${{ matrix.service.name }}"
+    name: "Backend Security Scan — ${{ matrix.service.name }}"
     needs: [active-systems, backend-build]
     if: inputs.enable_security_scan == true
     strategy:
@@ -302,7 +302,7 @@ jobs:
     secrets: inherit
 
   backend-sonar:
-    name: "SonarCloud â€” Backend Monorepo Analysis"
+    name: "SonarCloud — Backend Monorepo Analysis"
     needs: [active-systems, backend-build]
     if: >-
       always() &&
@@ -325,7 +325,7 @@ jobs:
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
           if [ -z "${SONAR_TOKEN}" ] || [ -z "${SONAR_ORGANIZATION}" ] || [ -z "${SONAR_PROJECT_KEY}" ]; then
-            echo "âŒ SonarCloud preflight failed: one or more required secrets are empty."
+            echo "❌ SonarCloud preflight failed: one or more required secrets are empty."
             exit 1
           fi
 
@@ -334,15 +334,15 @@ jobs:
           BODY=$(echo "${RESPONSE}" | sed '$d')
           TOTAL=$(echo "${BODY}" | jq -r '.paging.total // 0')
 
-          echo "ðŸ”Ž Sonar preflight: org='${SONAR_ORGANIZATION}', project='${SONAR_PROJECT_KEY}', http=${HTTP_CODE}, total=${TOTAL}"
+          echo "🔎 Sonar preflight: org='${SONAR_ORGANIZATION}', project='${SONAR_PROJECT_KEY}', http=${HTTP_CODE}, total=${TOTAL}"
 
           if [ "${HTTP_CODE}" -ne 200 ] || [ "${TOTAL}" -lt 1 ]; then
-            echo "âŒ SonarCloud preflight failed: project not found or token has no access."
+            echo "❌ SonarCloud preflight failed: project not found or token has no access."
             echo "Check SONAR_ORGANIZATION, SONAR_PROJECT_KEY, and SONAR_TOKEN permissions for this repository."
             exit 1
           fi
 
-          echo "âœ… SonarCloud preflight passed."
+          echo "✅ SonarCloud preflight passed."
 
       - name: Download Coverage Artifacts
         continue-on-error: true
@@ -364,7 +364,7 @@ jobs:
             DEST="${DIR:+${DIR}/}coverage"
             mkdir -p "${DEST}"
             cp -r "${artifact_dir}/." "${DEST}/"
-            echo "Staged ${SERVICE_NAME} coverage â†’ ${DEST}/"
+            echo "Staged ${SERVICE_NAME} coverage → ${DEST}/"
           done
 
       - name: Run SonarCloud Scan
@@ -379,7 +379,7 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
   docker-build-main:
-    name: "Backend Docker Build â€” ${{ matrix.service.name }}"
+    name: "Backend Docker Build — ${{ matrix.service.name }}"
     permissions:
       contents: read
       packages: write
@@ -406,7 +406,7 @@ jobs:
     secrets: inherit
 
   deploy-preview:
-    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'UAT' }} Deploy â€” ${{ matrix.service.name }}"
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || 'UAT' }} Deploy — ${{ matrix.service.name }}"
     needs: [active-systems, docker-build-main]
     if: >
       always() &&
@@ -432,10 +432,11 @@ jobs:
     secrets: inherit
 
   render-deploy:
-    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'UAT' || 'PROD' }} Render Deploy â€” ${{ matrix.service.name }}"
+    name: "${{ (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'test' && 'TEST' || (github.event_name == 'pull_request' && github.base_ref || github.ref_name) == 'uat' && 'UAT' || 'PROD' }} Render Deploy — ${{ matrix.service.name }}"
     needs: [active-systems, docker-build-main]
     if: >
       always() &&
+      false &&
       inputs.run_deploy == true &&
       (
         (github.event_name == 'pull_request' && (github.base_ref == 'test' || github.base_ref == 'uat' || github.base_ref == 'main')) ||
@@ -457,7 +458,7 @@ jobs:
     secrets: inherit
 
   grafana-k6:
-    name: "Backend Grafana k6 â€” ${{ matrix.service.name }}"
+    name: "Backend Grafana k6 — ${{ matrix.service.name }}"
     needs: [active-systems, backend-build, backend-security, backend-sonar, render-deploy]
     if: >
       always() &&
@@ -483,7 +484,7 @@ jobs:
     secrets: inherit
 
   version-test:
-    name: "Version TEST â€” ${{ matrix.service.name }}"
+    name: "Version TEST — ${{ matrix.service.name }}"
     permissions:
       contents: write
     needs: [active-systems, backend-build, backend-sonar]
@@ -503,7 +504,7 @@ jobs:
       stream: ${{ matrix.service.version_stream }}
 
   version-uat:
-    name: "Version UAT â€” ${{ matrix.service.name }}"
+    name: "Version UAT — ${{ matrix.service.name }}"
     permissions:
       contents: write
     needs: [active-systems, backend-build, backend-sonar]
@@ -523,7 +524,7 @@ jobs:
       stream: ${{ matrix.service.version_stream }}
 
   version-main:
-    name: "Version MAIN â€” ${{ matrix.service.name }}"
+    name: "Version MAIN — ${{ matrix.service.name }}"
     permissions:
       contents: write
     needs: [active-systems, backend-build, backend-sonar]
@@ -647,7 +648,7 @@ jobs:
           echo "uat->main ahead count: ${UAT_TO_MAIN_AHEAD}"
 
   pr-to-uat:
-    name: "Create PR â†’ UAT"
+    name: "Create PR → UAT"
     permissions:
       contents: read
       pull-requests: write
@@ -683,7 +684,7 @@ jobs:
       PR_TOKEN: ${{ secrets.GH_PR_TOKEN != '' && secrets.GH_PR_TOKEN || github.token }}
 
   pr-to-main:
-    name: "Create PR â†’ Main"
+    name: "Create PR → Main"
     permissions:
       contents: read
       pull-requests: write
