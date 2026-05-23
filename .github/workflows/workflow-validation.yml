@@ -333,6 +333,42 @@ jobs:
 
           echo "✅ Backend caller template validated."
 
+  validate-missing-config-noop-policy:
+    name: "Validate Missing Config No-op Policy"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Assert master pipelines pass with no configured systems
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          assert_contains() {
+            local file="$1"
+            local expected="$2"
+            if ! grep -Fq "$expected" "$file"; then
+              echo "Expected '$expected' in $file"
+              exit 1
+            fi
+          }
+
+          assert_contains ".github/workflows/master-pipeline-fe.yml" "No FE systems JSON configured; skipping pipeline."
+          assert_contains ".github/workflows/master-pipeline-mobile.yml" "No MOBILE systems JSON configured; skipping pipeline."
+          assert_contains ".github/workflows/master-pipeline-be.yml" "No BACKEND systems JSON configured; skipping pipeline."
+
+          assert_contains ".github/workflows/master-pipeline-fe.yml" "systems_json=[]"
+          assert_contains ".github/workflows/master-pipeline-mobile.yml" "systems_json=[]"
+          assert_contains ".github/workflows/master-pipeline-be.yml" "systems_json=[]"
+
+          assert_contains ".github/workflows/master-pipeline-fe.yml" "pipeline_mode=skip"
+          assert_contains ".github/workflows/master-pipeline-mobile.yml" "pipeline_mode=skip"
+          assert_contains ".github/workflows/master-pipeline-be.yml" "pipeline_mode=skip"
+
+          echo "Missing-config no-op policy validated."
+
   simulate-backend-config-matrix:
     name: "Simulate Backend Config Matrix"
     runs-on: ubuntu-latest

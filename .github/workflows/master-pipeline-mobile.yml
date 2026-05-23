@@ -154,7 +154,6 @@ concurrency:
 jobs:
   systems-config:
     name: "Resolve Mobile Systems Configuration"
-    if: ${{ github.repository != 'ImplementSprint/central-workflow' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -229,8 +228,11 @@ jobs:
           fi
 
           if [ -z "${SYSTEMS_JSON_VAR}" ]; then
-            echo "❌ Missing required repository variable MOBILE_MULTI_SYSTEMS_JSON or MOBILE_SINGLE_SYSTEMS_JSON."
-            exit 1
+            echo "No MOBILE systems JSON configured; skipping pipeline."
+            echo "systems_json=[]" >> "$GITHUB_OUTPUT"
+            echo "systems_label=Skipped (no MOBILE systems configured)" >> "$GITHUB_OUTPUT"
+            echo "pipeline_mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           SYSTEMS_JSON="${SYSTEMS_JSON_VAR}"
@@ -1169,8 +1171,8 @@ jobs:
           DETAILS=""
 
           if [ "${ACTIVE_COUNT}" -eq 0 ]; then
-            OVERALL="skipped"
-            DETAILS="No active mobile systems detected."
+            OVERALL="success"
+            DETAILS="No active mobile systems detected; treating as a passing no-op."
           else
             FAILED=false
             CANCELLED=false

@@ -105,8 +105,11 @@ jobs:
           fi
 
           if [ -z "${SYSTEMS_JSON_VAR}" ]; then
-            echo "❌ Missing required repository variable BACKEND_MULTI_SYSTEMS_JSON or BACKEND_SINGLE_SYSTEMS_JSON."
-            exit 1
+            echo "No BACKEND systems JSON configured; skipping pipeline."
+            echo "systems_json=[]" >> "$GITHUB_OUTPUT"
+            echo "systems_label=Skipped (no BACKEND systems configured)" >> "$GITHUB_OUTPUT"
+            echo "pipeline_mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           SYSTEMS_JSON="${SYSTEMS_JSON_VAR}"
