@@ -94,8 +94,8 @@ jobs:
 
       - name: Install Dependencies
         env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PR_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_PR_TOKEN || github.token }}
         run: npm ci --ignore-scripts
 
       - name: Display Selected Backend Stack
@@ -209,8 +209,8 @@ jobs:
 
       - name: Install Dependencies
         env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PR_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.GH_PR_TOKEN || github.token }}
         run: npm ci --ignore-scripts
 
       - name: Display Selected Backend Stack
