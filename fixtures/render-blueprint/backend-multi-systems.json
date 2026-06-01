@@ -11,6 +11,7 @@
     "dockerfile_path": "apps/api/Dockerfile",
     "k6_script_path": "tests/performance/api-smoke.js",
     "render_service_type": "web",
+    "render_plan": "free",
     "healthcheck_path": "/api/v1/health"
   },
   {
@@ -24,7 +25,8 @@
     "test_command": "npm run test:cov -- --selectProjects location-service",
     "dockerfile_path": "apps/location-service/Dockerfile",
     "k6_script_path": "tests/performance/location-service-smoke.js",
-    "render_service_type": "private",
+    "render_service_type": "web",
+    "render_plan": "free",
     "healthcheck_path": "/api/v1/health"
   }
 ]

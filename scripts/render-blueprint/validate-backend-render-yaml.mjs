@@ -35,6 +35,7 @@ function parseServiceBlocks(yamlText) {
       current = {
         name: "",
         type: typeMatch[1].trim(),
+        plan: "",
         dockerfilePath: "",
         healthCheckPath: "",
       };
@@ -45,7 +46,7 @@ function parseServiceBlocks(yamlText) {
       continue;
     }
 
-    const fieldMatch = line.match(/^    (name|dockerfilePath|healthCheckPath):\s+(.+)\s*$/);
+    const fieldMatch = line.match(/^    (name|plan|dockerfilePath|healthCheckPath):\s+(.+)\s*$/);
 
     if (fieldMatch) {
       current[fieldMatch[1]] = fieldMatch[2].trim();
@@ -91,6 +92,8 @@ for (const system of systems) {
 
   const renderService = renderByName.get(system.name);
   const expectedDockerfilePath = `./${dockerfile}`;
+  const expectedType = system.render_service_type === "private" ? "pserv" : system.render_service_type || (system.name === "api" ? "web" : "private");
+  const expectedPlan = String(system.render_plan || (renderService.type === "web" ? "free" : "starter")).toLowerCase();
 
   if (renderService.dockerfilePath !== expectedDockerfilePath) {
     throw new Error(
@@ -99,6 +102,20 @@ for (const system of systems) {
   }
 
   const expectedHealthPath = system.healthcheck_path || "/api/v1/health";
+
+  if (expectedType === "web" && renderService.type !== "web") {
+    throw new Error(`${system.name} should be type web for the configured Render plan`);
+  }
+
+  if (renderService.type === "pserv" && renderService.plan === "free") {
+    throw new Error(`${system.name} is type pserv and cannot use Render plan free`);
+  }
+
+  if (renderService.plan && renderService.plan !== expectedPlan) {
+    throw new Error(
+      `${system.name} plan mismatch: expected ${expectedPlan}, got ${renderService.plan}`,
+    );
+  }
 
   if (renderService.type === "pserv" && renderService.healthCheckPath) {
     throw new Error(`${system.name} is type pserv and must not set healthCheckPath`);

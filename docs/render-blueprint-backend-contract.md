@@ -15,6 +15,8 @@ Every deployable service must have:
 
 Render Blueprint `healthCheckPath` is only valid on public `web` services. Private services (`type: pserv`) may still expose an internal health route for application checks, but their Blueprint service entry must not declare `healthCheckPath`.
 
+School/demo tribe environments that must stay at zero Render cost should set deployable services to `render_service_type: "web"` and `render_plan: "free"` in systems JSON so the generated Blueprint includes `type: web` and `plan: free`. Do not use `plan: free` with `type: pserv`; Render private services require a paid plan.
+
 Shared libraries under `libs/` are not deployable services and must not appear in either service list.
 
 ## Environments

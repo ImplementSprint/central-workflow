@@ -2,6 +2,7 @@ services:
   - type: web
     name: api
     runtime: docker
+    plan: free
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
     healthCheckPath: /api/v1/health
@@ -11,11 +12,13 @@ services:
       - key: APICENTER_TRIBE_SECRET
         sync: false
 
-  - type: pserv
+  - type: web
     name: location-service
     runtime: docker
+    plan: free
     dockerfilePath: ./apps/location-service/Dockerfile
     dockerContext: .
+    healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_ENV
         value: production

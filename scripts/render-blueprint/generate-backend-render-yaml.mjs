@@ -40,6 +40,16 @@ function normalizeRelativePath(value) {
   return value.replace(/^\.\/+/, "");
 }
 
+function renderPlan(system, serviceType) {
+  const raw = String(system.render_plan || (serviceType === "web" ? "free" : "starter")).toLowerCase();
+
+  if (serviceType === "pserv" && raw === "free") {
+    throw new Error(`Render plan free is only supported for web services: ${system.name}`);
+  }
+
+  return raw;
+}
+
 const lines = ["services:"];
 
 for (const system of systems) {
@@ -48,10 +58,12 @@ for (const system of systems) {
   const healthPath = system.healthcheck_path || "/api/v1/health";
   const dockerContext = system.render_docker_context || system.dir || ".";
   const serviceType = renderType(system);
+  const servicePlan = renderPlan(system, serviceType);
 
   lines.push(`  - type: ${serviceType}`);
   lines.push(`    name: ${name}`);
   lines.push("    runtime: docker");
+  lines.push(`    plan: ${servicePlan}`);
   lines.push(`    dockerfilePath: ./${dockerfilePath}`);
   lines.push(`    dockerContext: ${dockerContext}`);
   if (serviceType === "web") {
