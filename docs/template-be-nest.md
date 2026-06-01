@@ -125,6 +125,15 @@ How to fill each field:
 
 NestJS backend templates are monorepo workspaces by default. Use `BACKEND_MULTI_SYSTEMS_JSON` with one entry per deployable Nest app. The central workflow installs from `install_dir`, tests with `test_command`, builds containers from `dockerfile_path`, passes `GITHUB_TOKEN` to Docker BuildKit as a secret for private package installs, and versions each service through `version_stream`.
 
+### Render Blueprint Setup
+
+1. Add `BACKEND_MULTI_SYSTEMS_JSON` with one entry per deployable app.
+2. Add `render.yaml` with one Render service per deployable app.
+3. Create Render environment groups for test, uat, and production.
+4. Put runtime secrets in Render environment groups, not in GitHub Actions.
+5. Connect the repo as a Render Blueprint once per environment.
+6. Run central workflow validation before enabling Render auto-sync.
+
 ## GitHub Repository Secrets
 
 Set in: Settings -> Secrets and variables -> Actions -> Secrets

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "api",
+    "dir": ".",
+    "install_dir": ".",
+    "project": "api",
+    "image": "api",
+    "backend_stack": "nestjs",
+    "version_stream": "api",
+    "test_command": "npm run test:cov -- --selectProjects api",
+    "dockerfile_path": "apps/api/Dockerfile",
+    "k6_script_path": "tests/performance/api-smoke.js",
+    "render_service_type": "web",
+    "healthcheck_path": "/api/v1/health"
+  },
+  {
+    "name": "location-service",
+    "dir": ".",
+    "install_dir": ".",
+    "project": "location-service",
+    "image": "location-service",
+    "backend_stack": "nestjs",
+    "version_stream": "location-service",
+    "test_command": "npm run test:cov -- --selectProjects location-service",
+    "dockerfile_path": "apps/location-service/Dockerfile",
+    "k6_script_path": "tests/performance/location-service-smoke.js",
+    "render_service_type": "private",
+    "healthcheck_path": "/api/v1/health"
+  }
+]

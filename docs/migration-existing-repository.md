@@ -96,6 +96,16 @@ Why: this validates systems detection, lint/test/security paths, and secrets res
 - Ensure every system object has the correct `backend_stack` (`nestjs` or `nodejs`).
 - Wrong `backend_stack` can route to an incompatible build path.
 
+Backend Render Blueprint migration order:
+
+1. Add or verify `BACKEND_MULTI_SYSTEMS_JSON`.
+2. Generate `render.yaml`.
+3. Validate `render.yaml` against systems JSON.
+4. Create Render env groups and enter secret values.
+5. Connect the repo Blueprint in Render.
+6. Run central workflow dry-run with deploy disabled.
+7. Enable Render Blueprint sync after CI is stable.
+
 ### Mobile
 
 - `mobile_stack` must be accurate (`expo`, `react-native`, `kotlin`).

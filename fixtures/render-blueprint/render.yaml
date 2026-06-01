@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APICENTER_TRIBE_SECRET
+        sync: false
+
+  - type: pserv
+    name: location-service
+    runtime: docker
+    dockerfilePath: ./apps/location-service/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APICENTER_TRIBE_SECRET
+        sync: false

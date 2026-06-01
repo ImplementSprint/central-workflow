@@ -47,6 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f docs/workflow-contract-registry.md
+          test -f docs/render-blueprint-backend-contract.md
           test -f docs/release-reference-policy.md
           test -f docs/tribe-github-packages-onboarding.md
           test -f docs/central-workflow-improvement-decisions.md
@@ -117,6 +118,22 @@ jobs:
             echo "Found stale central-workflow refs in consumer fixtures."
             exit 1
           fi
+
+  validate-render-blueprint-fixture:
+    name: "Validate Render Blueprint Fixture"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Validate generated Render Blueprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/render-blueprint/generate-backend-render-yaml.mjs fixtures/render-blueprint/backend-multi-systems.json > /tmp/generated-render.yaml
+          diff -u fixtures/render-blueprint/render.yaml /tmp/generated-render.yaml
+          node scripts/render-blueprint/validate-backend-render-yaml.mjs fixtures/render-blueprint/backend-multi-systems.json fixtures/render-blueprint/render.yaml
 
   validate-mobile-callers:
     name: "Validate Mobile Caller Templates"

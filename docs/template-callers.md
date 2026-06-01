@@ -111,6 +111,8 @@ NestJS monorepo:
 
 NestJS backend templates are monorepo workspaces by default. Use `BACKEND_MULTI_SYSTEMS_JSON` with one entry per deployable Nest app. The central workflow installs from `install_dir`, tests with `test_command`, builds containers from `dockerfile_path`, and versions each service through `version_stream`.
 
+For Blueprint-managed backend repos, the caller workflow does not need one deploy hook secret per service. Render owns service sync from `render.yaml`; central workflow validates CI and Blueprint alignment.
+
 Node:
 ```json
 {
