@@ -563,6 +563,7 @@ jobs:
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.exclusions=**/tests/performance/**
+            -Dsonar.qualitygate.wait=${{ github.event_name == 'pull_request' && github.base_ref == 'main' && 'true' || 'false' }}
 
   version-test:
     name: "Version Tag — TEST (${{ matrix.system.name }})"
